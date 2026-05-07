@@ -1,0 +1,41 @@
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-05T18:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "55555555-5555-5555-5555-555555555555"
+  monorepo: true
+
+prd_warnings: []
+
+products:
+  auth:
+    product_identity:
+      name: "Auth Service"
+      one_liner: "OIDC-compliant identity for the platform."
+    problem_opportunity:
+      problem_statement: "We need a single identity layer across all products."
+    users_personas:
+      primary_users: ["Internal services", "End users via SSO"]
+    use_cases:
+      core_workflows: ["Sign in", "Sign out", "Refresh token"]
+    functional_requirements:
+      must_have_features: ["OIDC", "Refresh tokens", "Admin console"]
+    technical_constraints:
+      primary_language: go
+      runtime_platform: server
+
+  billing:
+    product_identity:
+      name: "Billing"
+      one_liner: "Usage-based billing for platform tenants."
+    problem_opportunity:
+      problem_statement: "We currently bill manually; doesn't scale."
+    users_personas:
+      primary_users: ["Tenant admins", "Finance team"]
+    use_cases:
+      core_workflows: ["View invoice", "Pay invoice"]
+    functional_requirements:
+      must_have_features: ["Invoice generation", "Stripe integration"]
+    technical_constraints:
+      primary_language: typescript
+      runtime_platform: server

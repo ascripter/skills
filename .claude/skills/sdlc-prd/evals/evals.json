@@ -1,0 +1,92 @@
+{
+  "skill_name": "sdlc-prd",
+  "evals": [
+    {
+      "id": 1,
+      "name": "empty-project-cold-interview",
+      "prompt": "I want to start a new project but haven't written a single file yet. Run sdlc-prd and walk me through the PRD from scratch. For every multiple-choice question, just pick the first option. For free-text questions, give me a one-line plausible answer. Skip the optional themes during the suggestion phase. Then write PRD.yaml and validate it.",
+      "expected_output": "A PRD.yaml at the project root with all required fields filled, all optional fields null, prd_warnings empty, validator exits 0, and CLAUDE.md is created with the pointer block.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "partial-context-prefill",
+      "prompt": "Run sdlc-prd on this project. There is a README.md and package.json already. Confirm the pre-filled values when they look right (use 'ok' for found items, 'confirm' for inferred items). For any question that's not pre-filled, pick the first option or give a one-liner. Skip optional themes.",
+      "expected_output": "Pre-fills include name='acme-tasks' (found from package.json) and primary_language='javascript' (inferred). Each pre-fill is correctly tagged with the right confidence value (confirmed/inferred). PRD.yaml validates clean.",
+      "files": [
+        "evals/fixtures/partial-context/README.md",
+        "evals/fixtures/partial-context/package.json"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "resume-from-state",
+      "prompt": "Run sdlc-prd. There's an existing in-progress state file from a previous session. Resume it, then complete the remaining required themes. Pick the first option for each question.",
+      "expected_output": "The skill detects state, offers resume/restart/discard, resumes correctly from the last completed theme. partial_answers from state are preserved. Final PRD.yaml validates clean.",
+      "files": [
+        "evals/fixtures/resume-from-state/.claude/skills-state/sdlc-prd.state.yaml"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "existing-prd-merge",
+      "prompt": "Run sdlc-prd. PRD.yaml already exists at the project root. Update only the timeline_milestones and success_metrics themes. Leave everything else alone. Use first-option answers.",
+      "expected_output": "Existing keys preserved verbatim except for the two updated themes. Custom keys not in our schema are preserved. metadata.last_updated is bumped. CLAUDE.md timestamp is updated, no duplicate block.",
+      "files": [
+        "evals/fixtures/existing-prd/PRD.yaml",
+        "evals/fixtures/existing-prd/CLAUDE.md"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "validation-failure-recovery",
+      "prompt": "Run sdlc-prd. There is a PRD.yaml at the root that has a corrupt enum value (primary_language: 'cobol'). After scanning, write or merge as usual, then run validation. When it fails, show me the error and offer to re-enter just the failing field. I'll pick 'python' when prompted.",
+      "expected_output": "Validator exits 1 with a clear field-level error pointing at technical_constraints.primary_language. Skill offers interactive re-entry. After fix, validator passes (exit 0).",
+      "files": [
+        "evals/fixtures/validation-failure/PRD.yaml"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "required-field-skipped",
+      "prompt": "Run sdlc-prd on an empty project. Cold interview. When the skill asks for product name (required), reply 'skip'. Continue normally with first-option answers for everything else.",
+      "expected_output": "PRD.yaml has product_identity.name = null. prd_warnings contains an entry referencing 'product_identity.name'. Validator reports a warning (not an error) because the skip is acknowledged. Exit 0.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "name": "claude-md-injection-and-update",
+      "prompt": "Run sdlc-prd twice in succession on an empty project. First run: cold interview, first-option answers, skip optional themes. Second run: re-invoke immediately, restart the session, change just the product name. Both runs should leave CLAUDE.md in the project root with exactly one Product Requirements block.",
+      "expected_output": "After run 1: CLAUDE.md created with the pointer block and a timestamp. After run 2: same CLAUDE.md, still exactly one Product Requirements block, but with the timestamp updated to the second run's time.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "name": "idea-only-no-files",
+      "prompt": "Run sdlc-prd with these arguments and nothing on disk: 'A tool that helps designers compose AI workflows visually, runs offline, targets solo creators.' Verify Phase 3 (idea capture) summarizes the idea back to the user, then proceeds to the structural monorepo question, then to the required-themes interview. Use first-option answers for everything; skip optional themes. The product_identity batch must be asked LAST and must propose synthesized candidate names rooted in the idea text (e.g. workflow/composer themes), not asked cold.",
+      "expected_output": "Phase 3 produces a 2-10 sentence summary of the idea + asks 'add anything?'. Phase 4 asks the monorepo question (single-product is correctly defaulted, but must be confirmed). Phase 6 asks problem_opportunity first, product_identity LAST. The product_identity batch presents at least 2 candidate names as ⚠ inferred, derived from the idea. PRD.yaml validates clean. product_identity.idea_text contains the original args verbatim.",
+      "files": []
+    },
+    {
+      "id": 9,
+      "name": "monorepo-cold-asked-first",
+      "prompt": "Run sdlc-prd on an empty project with no monorepo signals. Verify the monorepo question is asked in Phase 4 (structural questions) BEFORE any theme batch starts. Answer 'multi' to switch into multi-product mode, then provide product slugs 'auth' and 'billing'. Use first-option answers for the rest of the interview, skip optional themes.",
+      "expected_output": "The monorepo question is asked early, before any theme content. After 'multi' is chosen, the agent asks for product slugs. PRD.yaml is written in the namespaced shape (products.auth.<themes>, products.billing.<themes>) — NOT the single-product shape. Validator passes.",
+      "files": []
+    },
+    {
+      "id": 10,
+      "name": "conditional-promotion-security",
+      "prompt": "Run sdlc-prd. During the optional-themes step-through (Phase 7), address the security_compliance theme and answer data_sensitivity='regulated'. Then continue. Verify that auth_model and regulatory_requirements are now treated as required (the agent surfaces the promotion to the user transparently and won't accept null/skip without a prd_warning). Pick first-option answers for the promoted questions.",
+      "expected_output": "When data_sensitivity is set to 'regulated', the agent explicitly tells the user that security_compliance.auth_model and security_compliance.regulatory_requirements are now required. The questions are asked. If the user tries to skip them, prd_warnings is populated. PRD.yaml validates with both fields populated.",
+      "files": []
+    },
+    {
+      "id": 11,
+      "name": "product-identity-asked-last-with-synthesis",
+      "prompt": "Run sdlc-prd on an empty project. Provide this idea as $ARGUMENTS: 'A CLI tool that lints terraform files for security misconfigurations, targeting devops engineers.' Walk through all required themes with first-option answers. When the agent reaches the product_identity batch (must be the LAST required theme), verify it: (a) summarizes what's been said so far, (b) proposes at least 2 candidate names as ⚠ inferred items rooted in the prior answers (e.g. terraform/lint/security themes), (c) refuses batch-accept shortcuts on the ⚠ items.",
+      "expected_output": "product_identity is asked AFTER problem_opportunity, users_personas, use_cases, functional_requirements, technical_constraints. The batch opens with 'Based on what you've told me ...' synthesis preamble. At least 2 ⚠-inferred name candidates are presented. If the user types 'ok' or '1a, 2b, 3a' to batch-accept, the agent refuses and re-prompts for explicit confirmation per item. PRD.yaml validates clean.",
+      "files": []
+    }
+  ]
+}

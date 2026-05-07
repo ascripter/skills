@@ -1,0 +1,42 @@
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-05T18:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "11111111-1111-1111-1111-111111111111"
+  monorepo: false
+
+prd_warnings: []
+
+product_identity:
+  name: "Acme Tasks"
+  name_confidence: confirmed
+  one_liner: "Track team work without the noise."
+  one_liner_confidence: confirmed
+
+problem_opportunity:
+  problem_statement: "Existing trackers are too heavyweight for small teams."
+  problem_statement_confidence: confirmed
+
+users_personas:
+  primary_users:
+    - "Engineering team leads"
+    - "Indie developers"
+  primary_users_confidence: confirmed
+
+use_cases:
+  core_workflows:
+    - "Add a task in under 3 seconds"
+    - "Mark tasks done from the keyboard"
+
+functional_requirements:
+  must_have_features:
+    - "Quick add"
+    - "Keyboard navigation"
+
+technical_constraints:
+  primary_language: typescript
+  primary_language_rationale: "Team is fluent and our other tools use it."
+  primary_language_confidence: confirmed
+  runtime_platform: web
+  runtime_platform_rationale: "Reach is the priority."
+  runtime_platform_confidence: confirmed

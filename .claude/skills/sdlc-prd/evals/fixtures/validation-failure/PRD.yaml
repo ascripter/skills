@@ -1,0 +1,31 @@
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-01T12:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "cccccccc-cccc-cccc-cccc-cccccccccccc"
+  monorepo: false
+
+prd_warnings: []
+
+product_identity:
+  name: "Corrupted Product"
+  name_confidence: confirmed
+  one_liner: "A PRD with one bad enum value, on purpose."
+  one_liner_confidence: confirmed
+
+problem_opportunity:
+  problem_statement: "The validator should catch the bad enum value below."
+
+users_personas:
+  primary_users: ["Engineers"]
+
+use_cases:
+  core_workflows: ["Run the validator", "Watch it fail"]
+
+functional_requirements:
+  must_have_features: ["Catch bad enum values"]
+
+technical_constraints:
+  # Intentionally bad: COBOL is not in the PrimaryLanguage enum
+  primary_language: cobol
+  runtime_platform: cli

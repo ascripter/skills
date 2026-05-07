@@ -1,0 +1,55 @@
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-04-01T09:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+  monorepo: false
+
+prd_warnings: []
+
+# A custom key not in our schema — must be preserved across merges.
+custom_team_metadata:
+  squad: "platform"
+  jira_epic: "PLAT-1024"
+
+product_identity:
+  name: "Existing Product"
+  name_confidence: confirmed
+  one_liner: "An existing product whose PRD must survive a re-run."
+  one_liner_confidence: confirmed
+
+problem_opportunity:
+  problem_statement: "Users have been waiting too long for a structured PRD."
+  problem_statement_confidence: confirmed
+
+users_personas:
+  primary_users:
+    - "Product managers"
+    - "Engineering leads"
+  primary_users_confidence: confirmed
+
+use_cases:
+  core_workflows:
+    - "Generate a PRD without rote typing"
+    - "Re-run safely without losing custom keys"
+
+functional_requirements:
+  must_have_features:
+    - "Pre-fill from project files"
+    - "Multiple-choice question batches"
+
+technical_constraints:
+  primary_language: python
+  primary_language_rationale: "Team is Python-first."
+  primary_language_confidence: confirmed
+  runtime_platform: cli
+  runtime_platform_rationale: "It's a CLI tool, that's what it ships as."
+  runtime_platform_confidence: confirmed
+
+# Already populated optional theme — must NOT be overwritten on merge unless
+# explicitly changed in the new session.
+business_model:
+  monetization: open_source
+  monetization_confidence: confirmed
+  license_type: mit
+  license_type_confidence: confirmed

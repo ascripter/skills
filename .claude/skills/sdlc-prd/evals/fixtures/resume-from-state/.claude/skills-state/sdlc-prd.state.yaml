@@ -1,0 +1,28 @@
+session_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+skill_version: "1.0"
+started_at: "2026-05-04T10:00:00Z"
+last_updated: "2026-05-04T10:23:17Z"
+status: in_progress
+monorepo: false
+products: []
+pre_fill_confirmed: true
+suggestion_phase_done: false
+completed_themes:
+  - product_identity
+  - problem_opportunity
+skipped_themes: []
+pending_themes:
+  - users_personas
+  - use_cases
+  - functional_requirements
+  - technical_constraints
+current_theme: users_personas
+partial_answers:
+  product_identity:
+    name: "Resumable"
+    name_confidence: confirmed
+    one_liner: "A demo product to test resume behavior."
+    one_liner_confidence: confirmed
+  problem_opportunity:
+    problem_statement: "We need to verify state persistence across sessions."
+    problem_statement_confidence: confirmed

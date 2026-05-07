@@ -1,0 +1,234 @@
+# =============================================================================
+# PRD.yaml — Canonical Schema Reference
+# =============================================================================
+# This file documents the full structure of PRD.yaml. It is *not* a runtime
+# config — it is the human-readable source of truth for the schema that
+# `validate_prd.py` enforces.
+#
+# Two top-level shapes are supported:
+#   1. SINGLE-PRODUCT (the default): theme blocks live at the top level.
+#   2. MULTI-PRODUCT (monorepo):    themes live under `products.<slug>.<theme>`.
+#      In multi-product mode, the top-level theme blocks MUST be omitted.
+#
+# Conventions used throughout:
+#   - `null` (not omission) means "explicitly unanswered". Downstream agents
+#     can detect gaps without ambiguity.
+#   - For trade-off fields, a sibling `<field>_rationale` (string) captures
+#     the *why*. Downstream agents weight decisions accordingly.
+#   - For pre-filled or uncertain answers, a sibling `<field>_confidence`
+#     captures certainty as one of: confirmed | inferred | assumption.
+#       * confirmed  — user explicitly stated
+#       * inferred   — derived from a project file scan, accepted by user
+#       * assumption — user picked a placeholder, expect to revisit
+#   - Enum values are lowercase snake_case strings. See `validate_prd.py`
+#     for the authoritative enum definitions.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# metadata — always at top level, present in both single- and multi-product mode
+# -----------------------------------------------------------------------------
+metadata:
+  prd_version: "1.0"                       # schema version this file conforms to
+  last_updated: "2026-05-05T12:00:00Z"     # ISO-8601 UTC timestamp of last write
+  generated_by: sdlc-prd                # always literal string "sdlc-prd"
+  session_id: "00000000-0000-0000-0000-000000000000"  # UUID of the interview session
+  monorepo: false                          # true => use the `products:` shape below
+
+# prd_warnings — populated by the writer, not the user.
+# Each entry references a required field that was left null, so downstream
+# agents can decide whether to proceed, prompt, or stop.
+prd_warnings:
+  - "product_identity.name is null (required)"
+
+# =============================================================================
+# SINGLE-PRODUCT MODE — themes at top level
+# (omit the entire `products:` key in this mode)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# product_identity — what is this product, in one breath?
+# (Asked LAST among required themes so the agent can synthesize candidates
+# from everything answered in earlier themes.)
+# -----------------------------------------------------------------------------
+product_identity:
+  idea_text: null             # original free-text idea description from Phase 3 (string|null, multi-line)
+  name: null                  # Product name as it appears to users (string)
+  slug: null                  # url-safe identifier, kebab-case (string)
+  one_liner: null             # ≤ 140 chars, plain language, no jargon (string)
+  tagline: null               # marketing tagline, optional (string|null)
+  vision: null                # 1–3 sentences: where this product is going (string|null)
+  mission: null               # 1–3 sentences: what it does for users today (string|null)
+
+# -----------------------------------------------------------------------------
+# problem_opportunity — what hurts and why this is the moment to fix it
+# -----------------------------------------------------------------------------
+problem_opportunity:
+  problem_statement: null     # 1–3 sentences naming the user pain (string)
+  who_has_pain: null          # short list of affected groups (list[string])
+  current_workarounds: null   # how people cope today (list[string])
+  why_now: null               # market/tech/regulatory trigger, if any (string|null)
+
+# -----------------------------------------------------------------------------
+# users_personas — who we are building for
+# -----------------------------------------------------------------------------
+users_personas:
+  primary_users: null         # list of primary persona descriptors (list[string])
+  secondary_users: null       # nice-to-have but not core (list[string])
+  user_goals: null            # what success looks like for them (list[string])
+  user_frustrations: null     # what frustrates them today (list[string])
+  expertise_level: null       # one of: novice | intermediate | expert | mixed (enum)
+
+# -----------------------------------------------------------------------------
+# use_cases — the jobs this product is hired to do
+# -----------------------------------------------------------------------------
+use_cases:
+  core_workflows: null        # 3–7 happy-path workflows (list[string])
+  primary_jobs_to_be_done: null  # JTBD statements (list[string])
+  secondary_jobs: null        # supporting JTBD (list[string])
+  edge_cases: null            # explicit edge cases worth handling (list[string])
+
+# -----------------------------------------------------------------------------
+# functional_requirements — what the product must, should, won't do
+# -----------------------------------------------------------------------------
+functional_requirements:
+  must_have_features: null    # MVP features (list[string])
+  nice_to_have_features: null # post-MVP backlog (list[string])
+  out_of_scope: null          # explicit non-goals (list[string])
+  integrations_required: null # external systems we must talk to (list[string])
+  ai_features: null           # AI-driven capabilities, if any (list[string])
+
+# -----------------------------------------------------------------------------
+# non_functional_requirements — qualities, not features
+# -----------------------------------------------------------------------------
+non_functional_requirements:
+  performance_targets: null   # e.g. "p95 < 200ms", "10k rps" (list[string])
+  scalability: null           # one of: small | medium | large | hyperscale (enum)
+  reliability: null           # one of: best_effort | high | mission_critical (enum)
+  availability_sla: null      # e.g. "99.9%", "business hours" (string|null)
+  accessibility: null         # one of: none_yet | wcag_aa | wcag_aaa (enum)
+
+# -----------------------------------------------------------------------------
+# technical_constraints — the tech we are committed to (or not)
+# Note: several fields here capture rationale because trade-offs matter.
+# -----------------------------------------------------------------------------
+technical_constraints:
+  primary_language: null      # one of: python | typescript | javascript | go | rust |
+                              #         java | csharp | ruby | other | undecided (enum)
+  primary_language_rationale: null  # one sentence on *why* this language (string|null)
+  primary_language_confidence: null # confirmed | inferred | assumption (enum)
+  framework: null             # framework name(s) (list[string]|null)
+  runtime_platform: null      # one of: web | mobile_ios | mobile_android |
+                              #         desktop | cli | server | embedded |
+                              #         browser_extension | other | undecided (enum)
+  runtime_platform_rationale: null  # (string|null)
+  deployment_target: null     # one of: cloud_aws | cloud_gcp | cloud_azure |
+                              #         self_hosted | on_prem | edge |
+                              #         serverless | hybrid | undecided (enum)
+  deployment_target_rationale: null  # (string|null)
+  existing_systems: null      # systems we must integrate with (list[string])
+  browser_support: null       # e.g. ["chrome>=120", "firefox>=115"] (list[string]|null)
+
+# -----------------------------------------------------------------------------
+# data_model — what data lives here, who owns it, how much
+# -----------------------------------------------------------------------------
+data_model:
+  key_entities: null          # primary domain entities (list[string])
+  data_ownership: null        # one of: user_owned | org_owned | platform_owned |
+                              #         third_party | mixed (enum)
+  data_volume_estimate: null  # one of: kilobytes | megabytes | gigabytes |
+                              #         terabytes | petabytes | unknown (enum)
+  storage_preferences: null   # e.g. ["postgres", "s3"] (list[string]|null)
+  storage_preferences_rationale: null  # (string|null)
+
+# -----------------------------------------------------------------------------
+# security_compliance — what protects the data and the users
+# -----------------------------------------------------------------------------
+security_compliance:
+  auth_model: null            # one of: none | api_key | oauth2 | oidc | saml |
+                              #         jwt | session_cookie | passkeys | custom (enum)
+  auth_model_rationale: null  # (string|null)
+  data_sensitivity: null      # one of: public | internal | confidential |
+                              #         restricted | regulated (enum)
+  regulatory_requirements: null  # e.g. ["gdpr","hipaa","soc2"] (list[string])
+  encryption_at_rest: null    # boolean
+  audit_logging: null         # boolean
+
+# -----------------------------------------------------------------------------
+# business_model — how (and whether) this makes money
+# -----------------------------------------------------------------------------
+business_model:
+  monetization: null          # one of: free | freemium | paid | subscription |
+                              #         usage_based | enterprise | open_source |
+                              #         internal_tool | undecided (enum)
+  monetization_rationale: null  # (string|null)
+  pricing_model: null         # human-readable summary (string|null)
+  license_type: null          # one of: proprietary | mit | apache_2 | gpl_v3 |
+                              #         agpl_v3 | bsd_3_clause | mpl_2 |
+                              #         cc_by | cc_by_sa | other | undecided (enum)
+  license_type_rationale: null  # (string|null)
+  target_market: null         # short description of go-to-market (string|null)
+
+# -----------------------------------------------------------------------------
+# stakeholders — who decides, who builds, who blocks
+# -----------------------------------------------------------------------------
+stakeholders:
+  product_owner: null         # name or role (string|null)
+  primary_contributors: null  # list of names/roles (list[string])
+  decision_maker: null        # who has final say on scope/timeline (string|null)
+  external_dependencies: null # external teams/vendors we depend on (list[string])
+
+# -----------------------------------------------------------------------------
+# timeline_milestones — when must this be real
+# -----------------------------------------------------------------------------
+timeline_milestones:
+  mvp_scope: null             # 1–3 sentence MVP description (string|null)
+  target_mvp_date: null       # ISO-8601 date or descriptive text (string|null)
+  planned_phases: null        # ordered list of phases (list[string])
+  hard_deadlines: null        # immovable dates and what they block (list[string])
+
+# -----------------------------------------------------------------------------
+# success_metrics — how we will know it worked
+# -----------------------------------------------------------------------------
+success_metrics:
+  primary_kpis: null          # 2–5 measurable KPIs (list[string])
+  acceptance_criteria: null   # what makes a feature "done" (list[string])
+  definition_of_done: null    # team-level DoD (list[string])
+  user_satisfaction_target: null  # e.g. "NPS > 30", "CSAT 4.2/5" (string|null)
+
+# -----------------------------------------------------------------------------
+# risks_assumptions — what could go wrong, what we are taking on faith
+# -----------------------------------------------------------------------------
+risks_assumptions:
+  top_risks: null             # ranked list of risks (list[string])
+  key_assumptions: null       # what we are betting is true (list[string])
+  blockers: null              # current blockers (list[string])
+  dependencies: null          # critical external dependencies (list[string])
+
+# -----------------------------------------------------------------------------
+# open_questions — things still being figured out
+# -----------------------------------------------------------------------------
+open_questions:
+  undecided_decisions: null   # decisions explicitly punted (list[string])
+  parking_lot: null           # ideas to revisit later (list[string])
+
+# =============================================================================
+# MULTI-PRODUCT MODE (monorepo) — uncomment and use *instead of* the top-level
+# theme blocks above. Each entry under `products:` mirrors the single-product
+# shape (every theme above can appear under `products.<slug>.<theme>`).
+# =============================================================================
+#
+# products:
+#   auth:
+#     product_identity:
+#       name: "Auth Service"
+#       slug: "auth"
+#       one_liner: "..."
+#       ...
+#     problem_opportunity: { ... }
+#     # ...all other themes...
+#   billing:
+#     product_identity:
+#       name: "Billing"
+#       slug: "billing"
+#       ...
+#     # ...

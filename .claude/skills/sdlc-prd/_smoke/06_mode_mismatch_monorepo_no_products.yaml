@@ -1,0 +1,9 @@
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-05T18:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "66666666-6666-6666-6666-666666666666"
+  # monorepo claimed but no `products:` map — should fail
+  monorepo: true
+
+prd_warnings: []

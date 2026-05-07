@@ -1,0 +1,1114 @@
+# =============================================================================
+# product-questions.yaml — Question inventory for the sdlc-prd skill
+# =============================================================================
+# This file is a *guide*, not a rigid script. The skill batches questions by
+# theme (3–5 per batch), skips questions already answered by the project scan,
+# and skips questions irrelevant to the detected project type.
+#
+# Field reference for each entry:
+#   theme              — grouping label; matches a top-level key in PRD.yaml
+#   id                 — unique slug, kebab-case
+#   prd_path           — dotted path where the answer is written in PRD.yaml
+#                        (e.g. "product_identity.name")
+#   question           — the prompt shown to the user
+#   hint               — why this matters for downstream agents (kept short)
+#   suggested_answers  — 3–5 plausible options shown as a numbered list
+#   free_text_allowed  — if true, a final "Other / type your own" option appears
+#   required           — true => must be answered (or explicitly nulled with a
+#                        warning) before the skill can complete
+#   required_if        — optional expression; when it evaluates true against
+#                        already-answered fields, the question is promoted to
+#                        required even if `required: false`. The agent must
+#                        re-evaluate this at the start of each new theme batch.
+#                        Examples below.
+#   capture_rationale  — if true, after the choice, ask one follow-up:
+#                        "In one sentence — why?". Stored at <prd_path>_rationale.
+#   confidence_field   — if true, a sibling <prd_path>_confidence is written
+#                        (most fields use this; set false to opt out)
+#
+# Theme order below is the canonical interview order. Required themes come
+# first; product_identity is intentionally LAST among the required themes so
+# that the agent can synthesize name/slug/one_liner candidates from earlier
+# answers (problem, users, features, tech) instead of asking cold. Optional
+# themes follow, surfaced one-by-one in the optional-themes step-through.
+# =============================================================================
+
+themes:
+  - id: problem_opportunity
+    title: "Problem & Opportunity"
+    required: true
+    description: "What hurts, and why fix it now?"
+
+  - id: users_personas
+    title: "Users & Personas"
+    required: true
+    description: "Who are we building for?"
+
+  - id: use_cases
+    title: "Use Cases & Jobs to Be Done"
+    required: true
+    description: "What jobs is the product hired to do?"
+
+  - id: functional_requirements
+    title: "Functional Requirements"
+    required: true
+    description: "What must, should, and won't the product do?"
+
+  - id: technical_constraints
+    title: "Technical Constraints"
+    required: true
+    description: "What stack, platform, deployment are we committed to?"
+
+  - id: product_identity
+    title: "Product Identity"
+    required: true
+    synthesis: true
+    description: >
+      What is this thing, in one breath? Asked LAST among required themes
+      so the agent can synthesize name/slug/one_liner candidates from
+      everything answered so far (problem, users, workflows, features, tech).
+
+  - id: non_functional_requirements
+    title: "Non-Functional Requirements"
+    required: false
+    description: "Performance, reliability, accessibility — the qualities."
+
+  - id: data_model
+    title: "Data Model"
+    required: false
+    description: "What data lives here, who owns it, how much?"
+
+  - id: security_compliance
+    title: "Security & Compliance"
+    required: false
+    description: "What protects users and the data they trust us with?"
+
+  - id: business_model
+    title: "Business Model"
+    required: false
+    description: "How (and whether) this makes money."
+
+  - id: stakeholders
+    title: "Stakeholders & Team"
+    required: false
+    description: "Who decides, who builds, who blocks?"
+
+  - id: timeline_milestones
+    title: "Timeline & Milestones"
+    required: false
+    description: "When must this be real?"
+
+  - id: success_metrics
+    title: "Success Metrics"
+    required: false
+    description: "How will we know it worked?"
+
+  - id: risks_assumptions
+    title: "Risks & Assumptions"
+    required: false
+    description: "What could go wrong, what are we betting on?"
+
+  - id: open_questions
+    title: "Open Questions"
+    required: false
+    description: "What is still undecided?"
+
+questions:
+
+  # ---------------------------------------------------------------------------
+  # Problem & Opportunity
+  # ---------------------------------------------------------------------------
+  - theme: problem_opportunity
+    id: problem_statement
+    prd_path: problem_opportunity.problem_statement
+    question: "What user pain or unmet need does this product address? (1–3 sentences)"
+    hint: "The grounding fact for every feature decision downstream."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: problem_opportunity
+    id: who_has_pain
+    prd_path: problem_opportunity.who_has_pain
+    question: "Who specifically feels this pain? (Pick one or more, or describe.)"
+    hint: "Helps agents make persona-specific UX trade-offs."
+    suggested_answers:
+      - "End consumers"
+      - "Small business operators"
+      - "Engineers / developers"
+      - "Internal team / coworkers"
+      - "Enterprise IT buyers"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: problem_opportunity
+    id: current_workarounds
+    prd_path: problem_opportunity.current_workarounds
+    question: "How do affected people cope today? (Pick all that apply.)"
+    hint: "Anchors the 'why-better-than-status-quo' argument."
+    suggested_answers:
+      - "Manual / spreadsheet work"
+      - "Stitching together multiple existing tools"
+      - "A direct competitor's product"
+      - "Internal scripts or one-offs"
+      - "They simply don't — the need goes unmet"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: problem_opportunity
+    id: why_now
+    prd_path: problem_opportunity.why_now
+    question: "Why is this the right moment to build this? (Optional — market shift, new tech, regulation, etc.)"
+    hint: "Helps agents reason about urgency and competitive pressure."
+    suggested_answers:
+      - "New AI capability makes it possible"
+      - "Regulatory change forces it"
+      - "Competitor moved and we need to respond"
+      - "Internal cost of status quo crossed a threshold"
+      - "No specific trigger — just time to do it"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Users & Personas
+  # ---------------------------------------------------------------------------
+  - theme: users_personas
+    id: primary_users
+    prd_path: users_personas.primary_users
+    question: "Who are the primary users? (Pick all that apply, or describe.)"
+    hint: "Primary users define the default UX bias."
+    suggested_answers:
+      - "Software engineers / developers"
+      - "Data analysts or scientists"
+      - "Product / project managers"
+      - "Designers"
+      - "Non-technical end users"
+    free_text_allowed: true
+    required: true
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: users_personas
+    id: secondary_users
+    prd_path: users_personas.secondary_users
+    question: "Any secondary users we should keep in mind? (Optional — pick or describe.)"
+    hint: "Secondary users get acknowledged but not optimized for in v1."
+    suggested_answers:
+      - "Admins / IT operators"
+      - "External auditors or compliance reviewers"
+      - "Customer support agents"
+      - "Executives consuming summaries"
+      - "None right now"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: users_personas
+    id: user_goals
+    prd_path: users_personas.user_goals
+    question: "What does success look like for a user after using this? (Pick all that apply.)"
+    hint: "Drives the framing of error states, success states, and CTAs."
+    suggested_answers:
+      - "Save significant time on a recurring task"
+      - "Get an answer they couldn't easily get before"
+      - "Coordinate with their team more reliably"
+      - "Avoid a costly mistake"
+      - "Have fun / feel delighted"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: users_personas
+    id: user_frustrations
+    prd_path: users_personas.user_frustrations
+    question: "What frustrates these users about today's options? (Pick all that apply.)"
+    hint: "Pain points are sharp signals for what to over-invest in."
+    suggested_answers:
+      - "Existing tools are too complex"
+      - "Existing tools are too limited"
+      - "They are too expensive"
+      - "They don't integrate with the rest of the workflow"
+      - "They are unreliable"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: users_personas
+    id: expertise_level
+    prd_path: users_personas.expertise_level
+    question: "Typical user expertise level in this domain?"
+    hint: "Drives how much hand-holding the UX needs."
+    suggested_answers:
+      - "novice"
+      - "intermediate"
+      - "expert"
+      - "mixed"
+    free_text_allowed: false
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  # ---------------------------------------------------------------------------
+  # Use Cases & Jobs to Be Done
+  # ---------------------------------------------------------------------------
+  - theme: use_cases
+    id: core_workflows
+    prd_path: use_cases.core_workflows
+    question: "What are the 3–7 happy-path workflows? (List them as short verb phrases.)"
+    hint: "Each becomes a candidate feature surface and a test scenario."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: use_cases
+    id: primary_jobs_to_be_done
+    prd_path: use_cases.primary_jobs_to_be_done
+    question: "What are the primary 'jobs' the product is hired to do? (JTBD format: 'When ___, I want to ___, so I can ___'.)"
+    hint: "JTBD framing keeps agents from designing features in isolation from intent."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: use_cases
+    id: secondary_jobs
+    prd_path: use_cases.secondary_jobs
+    question: "Any secondary jobs worth supporting? (Optional.)"
+    hint: "Helps agents avoid accidentally blocking adjacent use cases."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: use_cases
+    id: edge_cases
+    prd_path: use_cases.edge_cases
+    question: "Any edge cases that must be handled gracefully from day one? (Pick or describe.)"
+    hint: "Calling these out early prevents agents from treating them as afterthoughts."
+    suggested_answers:
+      - "Offline use / poor connectivity"
+      - "Very large inputs (>1GB / >100k items)"
+      - "Concurrent users editing the same data"
+      - "Untrusted user input / abuse"
+      - "Long-running operations (minutes+)"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Functional Requirements
+  # ---------------------------------------------------------------------------
+  - theme: functional_requirements
+    id: must_have_features
+    prd_path: functional_requirements.must_have_features
+    question: "What features are *must-have* for the first usable release? (List 3–10.)"
+    hint: "Defines the MVP. Anything not on this list is deferrable."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: functional_requirements
+    id: nice_to_have_features
+    prd_path: functional_requirements.nice_to_have_features
+    question: "Nice-to-have features for a later release? (Optional.)"
+    hint: "Lets agents propose extension points without scope creep."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: functional_requirements
+    id: out_of_scope
+    prd_path: functional_requirements.out_of_scope
+    question: "What is *explicitly out of scope*? (List, or skip.)"
+    hint: "Crucial. Agents over-build when scope boundaries are vague."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: functional_requirements
+    id: integrations_required
+    prd_path: functional_requirements.integrations_required
+    question: "Which external systems must this integrate with? (Pick or describe.)"
+    hint: "Integrations drive auth, schema, and reliability requirements."
+    suggested_answers:
+      - "GitHub / GitLab"
+      - "Slack / Teams"
+      - "Google Workspace"
+      - "Stripe / payment processor"
+      - "None"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: functional_requirements
+    id: ai_features
+    prd_path: functional_requirements.ai_features
+    question: "Any AI-powered capabilities planned? (Pick or describe.)"
+    hint: "AI features have outsized cost, latency, and eval implications."
+    suggested_answers:
+      - "LLM chat / Q&A"
+      - "Summarization / extraction"
+      - "Embeddings / semantic search"
+      - "Agentic workflows"
+      - "None — no AI features"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  # ---------------------------------------------------------------------------
+  # Technical Constraints (rationale captured on stack-shaping fields)
+  # ---------------------------------------------------------------------------
+  - theme: technical_constraints
+    id: primary_language
+    prd_path: technical_constraints.primary_language
+    question: "Primary programming language?"
+    hint: "Determines available libraries, hiring pool, runtime characteristics."
+    suggested_answers:
+      - "python"
+      - "typescript"
+      - "javascript"
+      - "go"
+      - "rust"
+      - "java"
+      - "csharp"
+      - "ruby"
+      - "other"
+      - "undecided"
+    free_text_allowed: true
+    required: true
+    capture_rationale: true
+    confidence_field: true
+
+  - theme: technical_constraints
+    id: framework
+    prd_path: technical_constraints.framework
+    question: "Primary framework(s), if any? (Pick or describe.)"
+    hint: "Frameworks lock in many downstream decisions; worth surfacing early."
+    suggested_answers:
+      - "React / Next.js"
+      - "Vue / Nuxt"
+      - "Svelte / SvelteKit"
+      - "Django / FastAPI / Flask"
+      - "Rails"
+      - "None / standard library only"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: technical_constraints
+    id: runtime_platform
+    prd_path: technical_constraints.runtime_platform
+    question: "Where does the product run?"
+    hint: "Drives UI assumptions, packaging, distribution model."
+    suggested_answers:
+      - "web"
+      - "mobile_ios"
+      - "mobile_android"
+      - "desktop"
+      - "cli"
+      - "server"
+      - "embedded"
+      - "browser_extension"
+      - "other"
+      - "undecided"
+    free_text_allowed: true
+    required: true
+    capture_rationale: true
+    confidence_field: true
+
+  - theme: technical_constraints
+    id: deployment_target
+    prd_path: technical_constraints.deployment_target
+    question: "Deployment target?"
+    hint: "Affects every infra and ops decision downstream."
+    suggested_answers:
+      - "cloud_aws"
+      - "cloud_gcp"
+      - "cloud_azure"
+      - "self_hosted"
+      - "on_prem"
+      - "edge"
+      - "serverless"
+      - "hybrid"
+      - "undecided"
+    free_text_allowed: true
+    required: false
+    capture_rationale: true
+    confidence_field: true
+
+  - theme: technical_constraints
+    id: existing_systems
+    prd_path: technical_constraints.existing_systems
+    question: "Any existing systems we must coexist with or migrate from? (Pick or describe.)"
+    hint: "Coexistence constraints often dwarf greenfield design considerations."
+    suggested_answers:
+      - "Legacy in-house system"
+      - "A specific SaaS product (describe)"
+      - "Database we cannot replace yet"
+      - "Identity provider (describe)"
+      - "None — greenfield"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: technical_constraints
+    id: browser_support
+    prd_path: technical_constraints.browser_support
+    question: "Browser support requirements? (Web only — skip if not web.)"
+    hint: "Directly informs polyfills, CSS, and bundler config."
+    suggested_answers:
+      - "Modern evergreen only (last 2 versions)"
+      - "Chrome + Firefox + Safari latest"
+      - "Including Safari 14+"
+      - "Including IE11 (legacy enterprise)"
+      - "Not applicable"
+    free_text_allowed: true
+    required: false
+    required_if: "runtime_platform == 'web'"
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Product Identity (asked LAST among required themes — synthesized from
+  # everything answered above; the agent should propose name/slug/one_liner
+  # candidates as ⚠ inferred pre-fills, not ask cold)
+  # ---------------------------------------------------------------------------
+  - theme: product_identity
+    id: name
+    prd_path: product_identity.name
+    question: "What is the product's name?"
+    hint: "Used by downstream agents in copy, branding, and code identifiers."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    capture_rationale: false
+    confidence_field: true
+    synthesis: true
+
+  - theme: product_identity
+    id: slug
+    prd_path: product_identity.slug
+    question: "Preferred URL/package slug? (kebab-case)"
+    hint: "Used for repo names, package names, URL paths."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: true
+    synthesis: true
+
+  - theme: product_identity
+    id: one_liner
+    prd_path: product_identity.one_liner
+    question: "Describe the product in one sentence (≤ 140 chars), as if to a smart friend who doesn't work in your industry."
+    hint: "Used everywhere: docs intros, README headers, agent context."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    capture_rationale: false
+    confidence_field: true
+    synthesis: true
+
+  - theme: product_identity
+    id: tagline
+    prd_path: product_identity.tagline
+    question: "Marketing tagline (optional). Punchy, ≤ 8 words."
+    hint: "Optional. Skip if you don't have one yet."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+    synthesis: true
+
+  - theme: product_identity
+    id: vision
+    prd_path: product_identity.vision
+    question: "Where is this product going in 1–3 years? (1–3 sentences)"
+    hint: "Vision shapes architectural choices that have long horizons."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+    synthesis: true
+
+  # ---------------------------------------------------------------------------
+  # Non-Functional Requirements
+  # ---------------------------------------------------------------------------
+  - theme: non_functional_requirements
+    id: performance_targets
+    prd_path: non_functional_requirements.performance_targets
+    question: "Any specific performance targets? (Pick or describe.)"
+    hint: "Concrete targets prevent over- or under-engineering."
+    suggested_answers:
+      - "p95 response under 200ms"
+      - "p95 response under 1s"
+      - "Best-effort, no hard targets"
+      - "Throughput-driven (state your number)"
+      - "Latency-driven (state your number)"
+    free_text_allowed: true
+    required: false
+    required_if: "scalability in ['large', 'hyperscale']"
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: non_functional_requirements
+    id: scalability
+    prd_path: non_functional_requirements.scalability
+    question: "Expected scale?"
+    hint: "Frames architecture decisions: monolith vs. distributed."
+    suggested_answers:
+      - "small"        # < 100 users
+      - "medium"       # 100s–10k users
+      - "large"        # 10k–1M users
+      - "hyperscale"   # > 1M users
+    free_text_allowed: false
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: non_functional_requirements
+    id: reliability
+    prd_path: non_functional_requirements.reliability
+    question: "Reliability tier?"
+    hint: "Mission-critical implies redundancy, formal SLOs, oncall."
+    suggested_answers:
+      - "best_effort"
+      - "high"
+      - "mission_critical"
+    free_text_allowed: false
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: non_functional_requirements
+    id: availability_sla
+    prd_path: non_functional_requirements.availability_sla
+    question: "Availability target? (Optional.)"
+    hint: "An explicit SLA shapes infra spend and oncall rotations."
+    suggested_answers:
+      - "99.9% (≈9h/year downtime)"
+      - "99.95%"
+      - "99.99% (≈53min/year downtime)"
+      - "Business hours only"
+      - "No formal target"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: non_functional_requirements
+    id: accessibility
+    prd_path: non_functional_requirements.accessibility
+    question: "Accessibility commitment?"
+    hint: "WCAG levels affect component choices, colors, keyboard handling."
+    suggested_answers:
+      - "none_yet"
+      - "wcag_aa"
+      - "wcag_aaa"
+    free_text_allowed: false
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Data Model
+  # ---------------------------------------------------------------------------
+  - theme: data_model
+    id: key_entities
+    prd_path: data_model.key_entities
+    question: "What are the primary domain entities? (e.g. User, Project, Invoice)"
+    hint: "Seeds the schema, API resources, and authorization boundaries."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: data_model
+    id: data_ownership
+    prd_path: data_model.data_ownership
+    question: "Who owns the data?"
+    hint: "Drives auth model, deletion semantics, export obligations."
+    suggested_answers:
+      - "user_owned"
+      - "org_owned"
+      - "platform_owned"
+      - "third_party"
+      - "mixed"
+    free_text_allowed: false
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: data_model
+    id: data_volume_estimate
+    prd_path: data_model.data_volume_estimate
+    question: "Rough total data volume at maturity?"
+    hint: "MB vs. TB changes everything about storage and indexing strategy."
+    suggested_answers:
+      - "kilobytes"
+      - "megabytes"
+      - "gigabytes"
+      - "terabytes"
+      - "petabytes"
+      - "unknown"
+    free_text_allowed: false
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: data_model
+    id: storage_preferences
+    prd_path: data_model.storage_preferences
+    question: "Preferred storage technologies? (Pick or describe.)"
+    hint: "Even soft preferences here save downstream agents from re-litigating."
+    suggested_answers:
+      - "PostgreSQL"
+      - "MySQL / MariaDB"
+      - "SQLite"
+      - "Redis"
+      - "S3 / object storage"
+      - "No preference — recommend"
+    free_text_allowed: true
+    required: false
+    capture_rationale: true
+    confidence_field: true
+
+  # ---------------------------------------------------------------------------
+  # Security & Compliance
+  # ---------------------------------------------------------------------------
+  - theme: security_compliance
+    id: auth_model
+    prd_path: security_compliance.auth_model
+    question: "Authentication model?"
+    hint: "Auth choice cascades into session handling, mobile flows, integrations."
+    suggested_answers:
+      - "none"
+      - "api_key"
+      - "oauth2"
+      - "oidc"
+      - "saml"
+      - "jwt"
+      - "session_cookie"
+      - "passkeys"
+      - "custom"
+    free_text_allowed: true
+    required: false
+    required_if: "data_sensitivity in ['restricted', 'regulated']"
+    capture_rationale: true
+    confidence_field: true
+
+  - theme: security_compliance
+    id: data_sensitivity
+    prd_path: security_compliance.data_sensitivity
+    question: "Highest data sensitivity tier handled?"
+    hint: "Restricted/regulated data implies encryption, audit, segregation."
+    suggested_answers:
+      - "public"
+      - "internal"
+      - "confidential"
+      - "restricted"
+      - "regulated"
+    free_text_allowed: false
+    required: false
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: security_compliance
+    id: regulatory_requirements
+    prd_path: security_compliance.regulatory_requirements
+    question: "Any regulatory regimes that apply? (Pick all that apply.)"
+    hint: "GDPR/HIPAA/PCI/SOC2 each impose specific concrete obligations."
+    suggested_answers:
+      - "gdpr"
+      - "ccpa"
+      - "hipaa"
+      - "pci_dss"
+      - "soc2"
+      - "iso_27001"
+      - "none"
+    free_text_allowed: true
+    required: false
+    required_if: "data_sensitivity in ['restricted', 'regulated']"
+    capture_rationale: false
+    confidence_field: true
+
+  - theme: security_compliance
+    id: encryption_at_rest
+    prd_path: security_compliance.encryption_at_rest
+    question: "Is encryption at rest required?"
+    hint: "Boolean — drives storage backend selection and key management."
+    suggested_answers:
+      - "true"
+      - "false"
+    free_text_allowed: false
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: security_compliance
+    id: audit_logging
+    prd_path: security_compliance.audit_logging
+    question: "Is audit logging required for sensitive actions?"
+    hint: "Boolean — affects every mutating endpoint."
+    suggested_answers:
+      - "true"
+      - "false"
+    free_text_allowed: false
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Business Model
+  # ---------------------------------------------------------------------------
+  - theme: business_model
+    id: monetization
+    prd_path: business_model.monetization
+    question: "How does this product make (or save) money?"
+    hint: "Drives auth tiers, billing surface, feature flagging needs."
+    suggested_answers:
+      - "free"
+      - "freemium"
+      - "paid"
+      - "subscription"
+      - "usage_based"
+      - "enterprise"
+      - "open_source"
+      - "internal_tool"
+      - "undecided"
+    free_text_allowed: true
+    required: false
+    capture_rationale: true
+    confidence_field: true
+
+  - theme: business_model
+    id: pricing_model
+    prd_path: business_model.pricing_model
+    question: "Pricing model summary, if known? (One sentence.)"
+    hint: "Per-seat vs per-usage vs flat radically changes UX surfaces."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    required_if: "monetization not in ['internal_tool', 'open_source', 'free']"
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: business_model
+    id: license_type
+    prd_path: business_model.license_type
+    question: "License type?"
+    hint: "License affects what dependencies can be used and how code can ship."
+    suggested_answers:
+      - "proprietary"
+      - "mit"
+      - "apache_2"
+      - "gpl_v3"
+      - "agpl_v3"
+      - "bsd_3_clause"
+      - "mpl_2"
+      - "cc_by"
+      - "cc_by_sa"
+      - "other"
+      - "undecided"
+    free_text_allowed: true
+    required: false
+    capture_rationale: true
+    confidence_field: true
+
+  - theme: business_model
+    id: target_market
+    prd_path: business_model.target_market
+    question: "Target market in one sentence? (Optional.)"
+    hint: "B2B vs B2C vs internal radically changes UX assumptions."
+    suggested_answers:
+      - "B2B SaaS"
+      - "B2C consumer app"
+      - "Developer tool"
+      - "Internal-only"
+      - "Open source community tool"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Stakeholders
+  # ---------------------------------------------------------------------------
+  - theme: stakeholders
+    id: product_owner
+    prd_path: stakeholders.product_owner
+    question: "Who owns this product? (Name, role, or 'me'.)"
+    hint: "Used by agents when summarizing and when conflicts arise."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: stakeholders
+    id: primary_contributors
+    prd_path: stakeholders.primary_contributors
+    question: "Who are the primary contributors? (List names or roles.)"
+    hint: "Helps agents tailor reviews and PR descriptions."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: stakeholders
+    id: decision_maker
+    prd_path: stakeholders.decision_maker
+    question: "Who has final say on scope and timeline?"
+    hint: "Useful for agents when escalating trade-offs."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: stakeholders
+    id: external_dependencies
+    prd_path: stakeholders.external_dependencies
+    question: "Any external teams or vendors we depend on? (Pick or describe.)"
+    hint: "External dependencies are common silent blockers."
+    suggested_answers:
+      - "Another internal team (describe)"
+      - "Specific SaaS vendor (describe)"
+      - "Open source maintainer responsiveness"
+      - "Regulatory approval"
+      - "None"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Timeline & Milestones
+  # ---------------------------------------------------------------------------
+  - theme: timeline_milestones
+    id: mvp_scope
+    prd_path: timeline_milestones.mvp_scope
+    question: "What is the MVP, in 1–3 sentences?"
+    hint: "Tightest possible scope an agent should default to building first."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: timeline_milestones
+    id: target_mvp_date
+    prd_path: timeline_milestones.target_mvp_date
+    question: "Target MVP date? (Specific date, quarter, or 'no fixed date'.)"
+    hint: "Calibrates how aggressive scope cuts should be."
+    suggested_answers:
+      - "Within 2 weeks"
+      - "Within 1 month"
+      - "Within 1 quarter"
+      - "Within 6 months"
+      - "No fixed date"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: timeline_milestones
+    id: planned_phases
+    prd_path: timeline_milestones.planned_phases
+    question: "Planned post-MVP phases, if any? (Ordered list.)"
+    hint: "Lets agents plan extension points without front-loading complexity."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: timeline_milestones
+    id: hard_deadlines
+    prd_path: timeline_milestones.hard_deadlines
+    question: "Any *immovable* deadlines, and what they block? (List or 'none'.)"
+    hint: "Hard deadlines justify trade-offs that would otherwise be wrong."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Success Metrics
+  # ---------------------------------------------------------------------------
+  - theme: success_metrics
+    id: primary_kpis
+    prd_path: success_metrics.primary_kpis
+    question: "Top 2–5 KPIs that matter? (Pick or describe.)"
+    hint: "Anchors what agents should optimize for when trading off."
+    suggested_answers:
+      - "Weekly active users"
+      - "Conversion rate"
+      - "Time-to-value (first useful action)"
+      - "Retention (e.g. D7, D30)"
+      - "Revenue / ARR"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: success_metrics
+    id: acceptance_criteria
+    prd_path: success_metrics.acceptance_criteria
+    question: "What makes a feature 'done' for this product? (Pick all that apply.)"
+    hint: "Becomes the implicit checklist for every PR an agent opens."
+    suggested_answers:
+      - "Has tests"
+      - "Has docs"
+      - "Reviewed by a human"
+      - "Passes accessibility check"
+      - "Performance budget respected"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: success_metrics
+    id: definition_of_done
+    prd_path: success_metrics.definition_of_done
+    question: "Team-level Definition of Done items? (Pick or describe.)"
+    hint: "Distinguishes 'feature works' from 'release-ready'."
+    suggested_answers:
+      - "Deployed to staging"
+      - "Smoke-tested in prod"
+      - "Telemetry/analytics added"
+      - "Runbook updated"
+      - "Stakeholder sign-off"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: success_metrics
+    id: user_satisfaction_target
+    prd_path: success_metrics.user_satisfaction_target
+    question: "User satisfaction target, if any? (NPS, CSAT, etc. — Optional.)"
+    hint: "If you have one, agents should weight UX work accordingly."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Risks & Assumptions
+  # ---------------------------------------------------------------------------
+  - theme: risks_assumptions
+    id: top_risks
+    prd_path: risks_assumptions.top_risks
+    question: "Top risks that could derail this? (Pick all that apply, or describe.)"
+    hint: "Risks the team has named are risks the team can manage."
+    suggested_answers:
+      - "Unproven user demand"
+      - "Technical complexity / unknowns"
+      - "Regulatory uncertainty"
+      - "Resourcing / staffing"
+      - "Dependency on external party"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: risks_assumptions
+    id: key_assumptions
+    prd_path: risks_assumptions.key_assumptions
+    question: "What are we taking on faith? (Pick or describe.)"
+    hint: "Naming assumptions lets agents flag when reality contradicts them."
+    suggested_answers:
+      - "Users will pay for this"
+      - "Technical approach will scale"
+      - "Integrations will remain stable"
+      - "Team will stay intact"
+      - "Regulatory landscape will not shift"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: risks_assumptions
+    id: blockers
+    prd_path: risks_assumptions.blockers
+    question: "Active blockers right now? (List or 'none'.)"
+    hint: "Lets agents avoid doing work that depends on a blocked path."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: risks_assumptions
+    id: dependencies
+    prd_path: risks_assumptions.dependencies
+    question: "Critical external dependencies? (Pick or describe.)"
+    hint: "Agents should weight critical-path work above dependency-light work."
+    suggested_answers:
+      - "Third-party API availability"
+      - "Legal/compliance review"
+      - "Design review"
+      - "Infra provisioning"
+      - "None / self-contained"
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  # ---------------------------------------------------------------------------
+  # Open Questions
+  # ---------------------------------------------------------------------------
+  - theme: open_questions
+    id: undecided_decisions
+    prd_path: open_questions.undecided_decisions
+    question: "Any decisions you are explicitly punting for now? (List, or 'none'.)"
+    hint: "Agents should treat these as decisions-still-to-make, not silence."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+
+  - theme: open_questions
+    id: parking_lot
+    prd_path: open_questions.parking_lot
+    question: "Anything in the parking lot to revisit later? (Ideas, half-baked thoughts, optional.)"
+    hint: "A safe place to capture ideas without committing to them."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
