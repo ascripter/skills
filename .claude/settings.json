@@ -1,0 +1,57 @@
+{
+  "defaultMode": "auto",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit(/src/**)",
+      "Write(/src/**)",
+      "Edit(/tests/**)",
+      "Write(/tests/**)",
+      "Edit(.claude/settings.json)",
+      "Write(.claude/settings.json)",
+      "Edit(.claude/rules/**)",
+      "Write(.claude/rules/**)",
+      "Edit(pyproject.toml)",
+      "Write(pyproject.toml)",
+      "Edit(CLAUDE.md)",
+      "Write(CLAUDE.md)",
+      "Edit(README.md)",
+      "Write(README.md)",
+      "Edit(.env.example)",
+      "Write(.env.example)",
+      "Write(sdlc-prd-workspace/**)",
+      "Edit(sdlc-prd-workspace/**)",
+      "Bash(mkdir *)",
+      "Bash(python *)",
+      "Bash(uv sync)",
+      "Bash(uv add *)",
+      "Bash(uv run pytest *)",
+      "Bash(uv run mypy *)",
+      "Bash(git status)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git branch *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Edit(.env)",
+      "Write(.env)",
+      "Read(**/*.key)",
+      "Edit(**/*.key)",
+      "Write(**/*.key)",
+      "Read(**/*.pem)",
+      "Edit(**/*.pem)",
+      "Write(**/*.pem)",
+      "Read(secrets/**)",
+      "Edit(secrets/**)",
+      "Write(secrets/**)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(rm -rf *)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "context7"
+  ]
+}
