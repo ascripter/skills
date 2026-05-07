@@ -10,7 +10,7 @@ description: >
 disable-model-invocation: true
 model: opusplan
 effort: xhigh
-allowed-tools: Read, Write, Bash, Glob, Grep
+allowed-tools: Read, Write(PRD.yaml), Write(CLAUDE.md), Write(.claude/skills-state/sdlc-prd.state.yaml), Bash, Glob, Grep
 ---
 
 > **Invocation note**: this skill is normally fronted by the
