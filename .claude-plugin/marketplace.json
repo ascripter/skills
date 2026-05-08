@@ -10,10 +10,7 @@
     {
       "name": "sdlc",
       "description": "SDLC pipeline: prd → arch → ux → data → arch <container> → work → deploy",
-      "source": {
-        "type": "path",
-        "path": "./sdlc"
-      },
+      "source": "./sdlc",
       "version": "0.1.0"
     }
   ]
