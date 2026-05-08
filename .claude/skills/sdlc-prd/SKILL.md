@@ -21,7 +21,7 @@ allowed-tools: Read, Write(PRD.yaml), Write(CLAUDE.md), Write(.claude/skills-sta
 # sdlc-prd
 
 Guides the user through a structured interview that produces a validated
-`PRD.yaml` at the project root, so downstream AI agents have a single
+`docs/PRD.yaml` at the project root, so downstream AI agents have a single
 unambiguous source of product truth.
 
 ## What this skill does (at a glance)
@@ -67,7 +67,7 @@ at any time without losing progress.
 |---|---|
 | `SKILL.md` | This file — the workflow itself. |
 | `product-questions.yaml` | The full question inventory, grouped by theme. |
-| `PRD.schema.yaml` | Human-readable canonical schema for `PRD.yaml`. |
+| `PRD.schema.yaml` | Human-readable canonical schema for `docs/PRD.yaml`. |
 | `validate_prd.py` | Pydantic v2 validator, called after every write. |
 | `references/interview-mechanics.md` | Batch format, parsing, type discipline, synthesis batch, conditional promotions. Read on entering Phase 6 or Phase 7. |
 | `references/merge-validate.md` | Merge logic for existing PRD.yaml, validator exit-code recovery, CLAUDE.md pointer rules. Read on entering Phase 8. |
@@ -77,7 +77,7 @@ Runtime files (NOT inside this skill directory):
 
 | File | Purpose |
 |---|---|
-| `PRD.yaml` (project root) | Output artifact consumed by downstream agents. |
+| `docs/PRD.yaml` (project root) | Output artifact consumed by downstream agents. |
 | `.claude/skills-state/sdlc-prd.state.yaml` | Session state for resumability. |
 | `CLAUDE.md` (project root) | Pointer block injected on completion. |
 
@@ -100,7 +100,7 @@ Before doing anything else, check for `.claude/skills-state/sdlc-prd.state.yaml`
   > "I found an unfinished session from `<last_updated>`. Would you like to
   > **resume**, **restart** (discard previous answers), or **discard** (delete
   > state and exit)?"
-- If `status: complete` or `status: aborted` and `PRD.yaml` exists, treat
+- If `status: complete` or `status: aborted` and `docs/PRD.yaml` exists, treat
   this as an update flow — see Phase 8's *merge* behavior.
 - If no state file, continue to Phase 2.
 
@@ -109,7 +109,7 @@ Before doing anything else, check for `.claude/skills-state/sdlc-prd.state.yaml`
 Recursively read discoverable files in (in priority order):
 
 1. Project root: `README*`, `package.json`, `pyproject.toml`, `Cargo.toml`,
-   `go.mod`, `Makefile`, `*.config.*`, any existing `PRD.yaml`, any
+   `go.mod`, `Makefile`, `*.config.*`, any existing `docs/PRD.yaml`, any
    `BRD.yaml`, any `*idea*.md`, `*vision*.md`, `*pitch*.md`.
 2. `docs/`, `doc/`, `project/` — read all readable text files.
 3. Any additional config files at the root (`.env.example`, `tsconfig.json`,
@@ -173,7 +173,7 @@ governed by the Phase 5 hallucination guard.
 
 **Persist** the user's free-text idea verbatim into:
 - `state.idea_text` — for the agent to re-read during later phases.
-- `product_identity.idea_text` — written to `PRD.yaml` so downstream agents
+- `product_identity.idea_text` — written to `docs/PRD.yaml` so downstream agents
   see the original brief.
 
 ### Phase 4 — Structural questions
@@ -287,7 +287,7 @@ After all optional themes are addressed (now/skipped/todo'd), set
 
 ### Phase 8 — Write & validate
 
-Write or merge `PRD.yaml` at the project root, then run:
+Write or merge `docs/PRD.yaml` at the project root, then run:
 
 ```bash
 python .claude/skills/sdlc-prd/validate_prd.py --path PRD.yaml
@@ -348,13 +348,13 @@ Rules:
 - On user `EXIT`: set `status: aborted`, write current `partial_answers`,
   confirm to user that state was saved, then stop.
 - On Phase 9 completion: set `status: complete` but keep the file.
-- The validator ignores this file — it validates only `PRD.yaml`.
+- The validator ignores this file — it validates only `docs/PRD.yaml`.
 
 **Source of truth on resume:**
 
-- `PRD.yaml` (if present) is the on-disk source of truth for *answers*.
+- `docs/PRD.yaml` (if present) is the on-disk source of truth for *answers*.
 - The state file is the source of truth for *interview progress*.
-- On resume: load `PRD.yaml` first as the baseline, then layer the state's
+- On resume: load `docs/PRD.yaml` first as the baseline, then layer the state's
   `partial_answers` on top.
 - If they conflict on the same key, ask the user which to keep — never
   silently overwrite. (See Phase 8.)

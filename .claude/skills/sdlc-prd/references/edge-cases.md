@@ -5,7 +5,7 @@ the happy path.
 
 - **No project files found**: skip Phase 2; Phase 3 takes Branch B (cold
   idea capture). Phase 4 onward proceeds normally.
-- **`PRD.yaml` exists but no state file**: this is an update flow. Show
+- **`docs/PRD.yaml` exists but no state file**: this is an update flow. Show
   `metadata.last_updated`, ask: "Run an update interview, or abort?"
 - **Conflicting signals across scanned files** (e.g. README says
   "TypeScript" but `package.json` has no TS deps): surface the conflict
@@ -21,7 +21,7 @@ the happy path.
   `partial_answers`, confirm to user that state was saved before exiting.
 - **Very large projects (>500 readable files)**: limit scan to the
   priority list and tell the user what was skipped.
-- **No write permission on `PRD.yaml` or `CLAUDE.md`**: report the path
+- **No write permission on `docs/PRD.yaml` or `CLAUDE.md`**: report the path
   and the OS error verbatim. Do not retry silently.
 - **User wants to skip Phase 3 idea capture**: respected. They can type
   `ok` on Branch A or a one-word answer on Branch B. The interview

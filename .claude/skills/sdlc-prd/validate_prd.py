@@ -25,8 +25,7 @@ try:
     import yaml
 except ImportError:
     print(
-        "ERROR: pyyaml is required.\n"
-        "Install with:  pip install pyyaml",
+        "ERROR: pyyaml is required.\n" "Install with:  pip install pyyaml",
         file=sys.stderr,
     )
     sys.exit(3)
@@ -35,8 +34,7 @@ try:
     from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 except ImportError:
     print(
-        "ERROR: pydantic v2 is required.\n"
-        "Install with:  pip install 'pydantic>=2'",
+        "ERROR: pydantic v2 is required.\n" "Install with:  pip install 'pydantic>=2'",
         file=sys.stderr,
     )
     sys.exit(3)
@@ -45,6 +43,7 @@ except ImportError:
 # =============================================================================
 # Enums (kept in lockstep with PRD.schema.yaml)
 # =============================================================================
+
 
 class Confidence(str, Enum):
     confirmed = "confirmed"
@@ -340,6 +339,7 @@ class OpenQuestions(_ThemeBase):
 # Top-level models
 # =============================================================================
 
+
 class Metadata(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -405,20 +405,27 @@ class PRD(BaseModel):
     @model_validator(mode="after")
     def _check_mode(self) -> "PRD":
         single_themes = [
-            self.product_identity, self.problem_opportunity, self.users_personas,
-            self.use_cases, self.functional_requirements,
-            self.non_functional_requirements, self.technical_constraints,
-            self.data_model, self.security_compliance, self.business_model,
-            self.stakeholders, self.timeline_milestones, self.success_metrics,
-            self.risks_assumptions, self.open_questions,
+            self.product_identity,
+            self.problem_opportunity,
+            self.users_personas,
+            self.use_cases,
+            self.functional_requirements,
+            self.non_functional_requirements,
+            self.technical_constraints,
+            self.data_model,
+            self.security_compliance,
+            self.business_model,
+            self.stakeholders,
+            self.timeline_milestones,
+            self.success_metrics,
+            self.risks_assumptions,
+            self.open_questions,
         ]
         any_single = any(t is not None for t in single_themes)
 
         if self.metadata.monorepo:
             if not self.products:
-                raise ValueError(
-                    "metadata.monorepo is true but `products` is missing or empty"
-                )
+                raise ValueError("metadata.monorepo is true but `products` is missing or empty")
             if any_single:
                 raise ValueError(
                     "monorepo mode set but top-level theme blocks are present; "
@@ -501,6 +508,7 @@ def check_required(prd: PRD) -> tuple[List[str], List[str]]:
 # CLI
 # =============================================================================
 
+
 def _format_pydantic_errors(err: ValidationError) -> List[str]:
     formatted: List[str] = []
     for e in err.errors():
@@ -563,14 +571,12 @@ def validate_file(path: Path) -> int:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Validate PRD.yaml against the sdlc-prd schema."
-    )
+    parser = argparse.ArgumentParser(description="Validate PRD.yaml against the sdlc-prd schema.")
     parser.add_argument(
         "--path",
         type=Path,
-        default=Path("PRD.yaml"),
-        help="Path to PRD.yaml (default: ./PRD.yaml)",
+        default=Path("docs", "PRD.yaml"),
+        help="Path to PRD.yaml (default: ./docs/PRD.yaml)",
     )
     args = parser.parse_args(argv)
     return validate_file(args.path)

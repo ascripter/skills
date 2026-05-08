@@ -5,7 +5,7 @@
       "id": 1,
       "name": "empty-project-cold-interview",
       "prompt": "I want to start a new project but haven't written a single file yet. Run sdlc-prd and walk me through the PRD from scratch. For every multiple-choice question, just pick the first option. For free-text questions, give me a one-line plausible answer. Skip the optional themes during the suggestion phase. Then write PRD.yaml and validate it.",
-      "expected_output": "A PRD.yaml at the project root with all required fields filled, all optional fields null, prd_warnings empty, validator exits 0, and CLAUDE.md is created with the pointer block.",
+      "expected_output": "A docs/PRD.yaml with all required fields filled, all optional fields null, prd_warnings empty, validator exits 0, and CLAUDE.md is created with the pointer block.",
       "files": []
     },
     {
@@ -30,27 +30,27 @@
     {
       "id": 4,
       "name": "existing-prd-merge",
-      "prompt": "Run sdlc-prd. PRD.yaml already exists at the project root. Update only the timeline_milestones and success_metrics themes. Leave everything else alone. Use first-option answers.",
+      "prompt": "Run sdlc-prd. `docs/PRD.yaml` already exists. Update only the timeline_milestones and success_metrics themes. Leave everything else alone. Use first-option answers.",
       "expected_output": "Existing keys preserved verbatim except for the two updated themes. Custom keys not in our schema are preserved. metadata.last_updated is bumped. CLAUDE.md timestamp is updated, no duplicate block.",
       "files": [
-        "evals/fixtures/existing-prd/PRD.yaml",
+        "evals/fixtures/existing-prd/docs/PRD.yaml",
         "evals/fixtures/existing-prd/CLAUDE.md"
       ]
     },
     {
       "id": 5,
       "name": "validation-failure-recovery",
-      "prompt": "Run sdlc-prd. There is a PRD.yaml at the root that has a corrupt enum value (primary_language: 'cobol'). After scanning, write or merge as usual, then run validation. When it fails, show me the error and offer to re-enter just the failing field. I'll pick 'python' when prompted.",
+      "prompt": "Run sdlc-prd. There is a `docs/PRD.yaml` at the root that has a corrupt enum value (primary_language: 'cobol'). After scanning, write or merge as usual, then run validation. When it fails, show me the error and offer to re-enter just the failing field. I'll pick 'python' when prompted.",
       "expected_output": "Validator exits 1 with a clear field-level error pointing at technical_constraints.primary_language. Skill offers interactive re-entry. After fix, validator passes (exit 0).",
       "files": [
-        "evals/fixtures/validation-failure/PRD.yaml"
+        "evals/fixtures/validation-failure/docs/PRD.yaml"
       ]
     },
     {
       "id": 6,
       "name": "required-field-skipped",
       "prompt": "Run sdlc-prd on an empty project. Cold interview. When the skill asks for product name (required), reply 'skip'. Continue normally with first-option answers for everything else.",
-      "expected_output": "PRD.yaml has product_identity.name = null. prd_warnings contains an entry referencing 'product_identity.name'. Validator reports a warning (not an error) because the skip is acknowledged. Exit 0.",
+      "expected_output": "docs/PRD.yaml has product_identity.name = null. prd_warnings contains an entry referencing 'product_identity.name'. Validator reports a warning (not an error) because the skip is acknowledged. Exit 0.",
       "files": []
     },
     {

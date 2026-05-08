@@ -5,7 +5,7 @@ pointer). Read this when entering Phase 8.
 
 ## Merging into an existing PRD.yaml
 
-If `PRD.yaml` already exists at the project root:
+If `docs/PRD.yaml` already exists at the project root:
 
 - Load it as the baseline.
 - Merge the session's confirmed answers on top:
@@ -15,7 +15,7 @@ If `PRD.yaml` already exists at the project root:
   - **Keys the session would remove** (rare; only if the user explicitly
     cleared a value) — ask the user to confirm before deleting.
 
-If the user manually edited `PRD.yaml` between sessions and the state file
+If the user manually edited `docs/PRD.yaml` between sessions and the state file
 disagrees on a specific key, surface the conflict — do NOT silently pick
 one:
 
@@ -30,7 +30,7 @@ are tolerated.
 
 ## Writing the file
 
-Write `PRD.yaml` with:
+Write `docs/PRD.yaml` with:
 
 - Inline YAML comments on each top-level key (use `PRD.schema.yaml` as a
   template).
@@ -40,7 +40,7 @@ Write `PRD.yaml` with:
 ## Running the validator
 
 ```bash
-python .claude/skills/sdlc-prd/validate_prd.py --path PRD.yaml
+python .claude/skills/sdlc-prd/validate_prd.py --path docs/PRD.yaml
 ```
 
 Exit codes:
@@ -50,7 +50,7 @@ Exit codes:
 | 0 | Valid | ✓ pass; warnings (if any) are informational. Proceed to Phase 9. |
 | 1 | Schema invalid | Show field-level errors verbatim. Ask: "Want to re-enter just those fields, or finish with errors?" Re-run validation after re-entry. |
 | 2 | Cannot read/parse the file | Surface to user (missing file, bad YAML, permission error). Do not retry silently. |
-| 3 | Missing dependency | Validator prints `pip install` instructions for `pydantic>=2` or `pyyaml`. Do **not** auto-install — ask the user to install and re-run. |
+| 3 | Missing dependency | For `pydantic>=2` or `pyyaml`, validator prints `pip install` instructions AND alternatively `pyproject.toml` edit instructions, then calling `uv sync`. Do **not** auto-install — ask the user to install and re-run. |
 
 ## CLAUDE.md pointer (Phase 9)
 
@@ -60,7 +60,7 @@ as the sole content:
 
 ```markdown
 ## Product Requirements
-`PRD.yaml` in the project root contains the full structured product requirements. Load when working on features, architecture, API design, or user-facing decisions. Last updated by `sdlc-prd` skill on <ISO-8601 timestamp>.
+`PRD.yaml` in `docs/` contains the full structured product requirements. Load when working on features, architecture, API design, or user-facing decisions. Last updated by `sdlc-prd` skill on <ISO-8601 timestamp>.
 ```
 
 **Detection rule**: the block is identified by the heading
