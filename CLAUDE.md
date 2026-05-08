@@ -7,3 +7,4 @@ A repo containing a collection of skills and agents.
 - `CLAUDE.md` - This configuration file
 - `.claude/` - Claude Code configuration directory
 - `.claude/skills/` - Custom skills directory
+- `pyproject.toml` - Python dependencies (`pip install -e .`)
