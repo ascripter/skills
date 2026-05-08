@@ -1,6 +1,6 @@
 {
   "name": "ascripter-skills",
-  "description": "ascripter's skill marketplace. Install via `claude plugin marketplace add ascripter-skills`.",
+  "description": "ascripter's skill marketplace. Install via `claude plugin marketplace add ascripter/skills`.",
   "version": "1.0.0",
   "owner": {
     "name": "Andreas Pfrengle",
