@@ -14,5 +14,7 @@
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "context7"
-  ]
+  ],
+  "outputStyle": "default",
+  "prefersReducedMotion": false
 }

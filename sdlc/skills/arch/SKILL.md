@@ -2,10 +2,10 @@
 name: sdlc-arch
 description: >
   Manual architecture-authoring skill for C4-style spec-driven
-  development, downstream of sdlc-prd. Use /sdlc-arch [container]
+  development, downstream of sdlc-prd. Use /sdlc:arch [container]
   [component] [code] to create, refine, or resume machine-readable
   architecture specs and state for the current repository. Use
-  /sdlc-arch -d [container] [--auto] to re-derive typed dependency
+  /sdlc:arch -d [container] [--auto] to re-derive typed dependency
   edges from existing artifacts. Reads docs/PRD.yaml and (for sub-node
   invocations) docs/ARCH.yaml, docs/UX.yaml, docs/DATA.yaml as
   preconditions.
@@ -32,7 +32,7 @@ artifacts directly — they should not have to reconstruct knowledge from
 conversation history.
 
 The skill is **manual-only** (`disable-model-invocation: true`). It will
-only run when the user explicitly types `/sdlc-arch`.
+only run when the user explicitly types `/sdlc:arch`.
 
 The skill is **downstream of sdlc-prd**: it requires a validated
 `docs/PRD.yaml` before running (Step 0.5 below). The only other
@@ -62,23 +62,23 @@ subtree. Optional `--auto` flag skips the confirmation prompt:
 
 | Form                                         | Scope                                |
 |----------------------------------------------|--------------------------------------|
-| `/sdlc-arch -d`                              | whole graph, interactive             |
-| `/sdlc-arch -d <container>`                  | container subtree, interactive       |
-| `/sdlc-arch -d --auto`                       | whole graph, no prompt; emit report  |
-| `/sdlc-arch -d <container> --auto`           | container subtree, no prompt; report |
+| `/sdlc:arch -d`                              | whole graph, interactive             |
+| `/sdlc:arch -d <container>`                  | container subtree, interactive       |
+| `/sdlc:arch -d --auto`                       | whole graph, no prompt; emit report  |
+| `/sdlc:arch -d <container> --auto`           | container subtree, no prompt; report |
 
 ### Step 0 — Echo signature, validate
 
 Always emit the signature block exactly once. Each line is a bullet:
 
 ```
-- /sdlc-arch
-- /sdlc-arch <container>
-- /sdlc-arch <container> <component>
-- /sdlc-arch <container> <component> <code>
-- /sdlc-arch -d
-- /sdlc-arch -d <container>
-- /sdlc-arch -d [<container>] --auto
+- /sdlc:arch
+- /sdlc:arch <container>
+- /sdlc:arch <container> <component>
+- /sdlc:arch <container> <component> <code>
+- /sdlc:arch -d
+- /sdlc:arch -d <container>
+- /sdlc:arch -d [<container>] --auto
 ```
 
 If invocation is **valid**, replace the leading `-` of the matching
@@ -110,20 +110,20 @@ Validation rules:
 **Invocation kind**:
 - *Root*: interview-family with zero positional args.
 - *Sub-node*: interview-family with 1+ args, OR any dependency-family
-  invocation (including bare `/sdlc-arch -d` — that needs
+  invocation (including bare `/sdlc:arch -d` — that needs
   `docs/ARCH.yaml` to be meaningful).
 
 **Always required** — run for every invocation:
 
 1. If `docs/PRD.yaml` does not exist → abort:
    ```
-   No docs/PRD.yaml found. Call /sdlc-prd first to define product
+   No docs/PRD.yaml found. Call /sdlc:prd first to define product
    requirements.
    ```
-2. Run `python .claude/skills/sdlc-prd/validate_prd.py --path docs/PRD.yaml`:
+2. Run `python "${CLAUDE_SKILL_DIR}/../prd/validate_prd.py" --path docs/PRD.yaml`:
    - exit 0 → proceed.
-   - exit 1 → abort: `docs/PRD.yaml doesn't validate the schema. Run /sdlc-prd to fix.` (include validator stderr).
-   - exit 2 → abort: `docs/PRD.yaml exists but could not be read or parsed. Run /sdlc-prd to recreate it.`
+   - exit 1 → abort: `docs/PRD.yaml doesn't validate the schema. Run /sdlc:prd to fix.` (include validator stderr).
+   - exit 2 → abort: `docs/PRD.yaml exists but could not be read or parsed. Run /sdlc:prd to recreate it.`
    - exit 3 → abort: `PRD validation requires pydantic v2 and pyyaml. Install them, then retry.`
 
 **Additional checks for sub-node invocations only**:
@@ -133,15 +133,15 @@ Validation rules:
    ```
    Sub-node invocation requires upstream SDLC artifacts. Missing: <path>
    Complete upstream skills first:
-     docs/PRD.yaml  -> /sdlc-prd
-     docs/ARCH.yaml -> /sdlc-arch  (root invocation, no arguments)
+     docs/PRD.yaml  -> /sdlc:prd
+     docs/ARCH.yaml -> /sdlc:arch  (root invocation, no arguments)
      docs/UX.yaml   -> /sdlc-ux    (skill not yet implemented)
      docs/DATA.yaml -> /sdlc-data  (skill not yet implemented)
    ```
 4. Schema-validate `docs/ARCH.yaml` via
-   `python .claude/skills/sdlc-arch/scripts/validate_artifacts.py docs/ARCH.yaml`:
+   `python "${CLAUDE_SKILL_DIR}/scripts/validate_artifacts.py" docs/ARCH.yaml`:
    - exit 0 → proceed.
-   - exit 1 → abort: `docs/ARCH.yaml doesn't validate the architecture schema. Run /sdlc-arch (no arguments) to fix it.`
+   - exit 1 → abort: `docs/ARCH.yaml doesn't validate the architecture schema. Run /sdlc:arch (no arguments) to fix it.`
    - exit 2 → warn "validation skipped (deps missing)" and continue.
 
 Note: `docs/UX.yaml` and `docs/DATA.yaml` are checked for existence
@@ -347,7 +347,7 @@ After writing, validate every file touched in Step 4 against the JSON
 Schema bundled with the skill:
 
 ```
-python .claude/skills/sdlc-arch/scripts/validate_artifacts.py <path-1> [<path-2> ...]
+python "${CLAUDE_SKILL_DIR}/scripts/validate_artifacts.py" <path-1> [<path-2> ...]
 ```
 
 The validator dispatches on filename (`sdlc-arch.state.yaml`) or
@@ -495,7 +495,7 @@ level. Narrative selection guidance: `references/pattern-selection.md`.
 
 ## Example session
 
-See `references/example-session.md` for a full `/sdlc-arch` session
+See `references/example-session.md` for a full `/sdlc:arch` session
 walkthrough showing Step 0 signature output, a container-level
 interview, edge derivation, and confirmation.
 

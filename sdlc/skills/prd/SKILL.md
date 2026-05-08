@@ -1,5 +1,5 @@
 ---
-name: sdlc-prd
+name: prd
 description: >
   Create or update PRD.yaml for a software product. Scans project files,
   captures the user's idea in free text, asks the structural monorepo
@@ -8,13 +8,12 @@ description: >
   validates PRD.yaml for downstream agent consumption. ONLY stop when no
   open questions remain or the user types EXIT.
 disable-model-invocation: true
-model: opusplan
-effort: xhigh
-allowed-tools: Read, Write(PRD.yaml), Write(CLAUDE.md), Write(.claude/skills-state/sdlc-prd.state.yaml), Bash, Glob, Grep
+context: fork
+agent: sdlc-product-manager
 ---
 
 > **Invocation note**: this skill is normally fronted by the
-> `.claude/agents/sdlc-prd.md` subagent so the long interview runs in
+> `sdlc/agents/prd.md` subagent so the long interview runs in
 > its own context. The skill body below is the single source of truth for
 > the workflow regardless of which path invokes it (agent or inline).
 
@@ -28,7 +27,7 @@ unambiguous source of product truth.
 
 ```
                   +----- existing state? -----+
-   /sdlc-prd --|                            |
+   /sdlc:prd --|                            |
                   +----- no state ------+      |
                                         v      v
          scan project --> capture idea (free text + summary)
@@ -290,7 +289,7 @@ After all optional themes are addressed (now/skipped/todo'd), set
 Write or merge `docs/PRD.yaml` at the project root, then run:
 
 ```bash
-python .claude/skills/sdlc-prd/validate_prd.py --path PRD.yaml
+python "${CLAUDE_SKILL_DIR}/validate_prd.py" --path PRD.yaml
 ```
 
 For full merge logic (conflict handling, key preservation, deletion

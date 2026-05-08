@@ -1,0 +1,20 @@
+{
+  "name": "local-skills",
+  "description": "Local skill marketplace. Install via `claude plugin marketplace add <path-to-repo>`.",
+  "version": "1.0.0",
+  "owner": {
+    "name": "Andreas Pfrengle",
+    "email": "a.pfrengle@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "sdlc",
+      "description": "SDLC pipeline: prd → arch → ux → data → arch <container> → work → deploy",
+      "source": {
+        "type": "path",
+        "path": "./sdlc"
+      },
+      "version": "0.1.0"
+    }
+  ]
+}

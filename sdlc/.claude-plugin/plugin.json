@@ -1,0 +1,7 @@
+{
+  "name": "sdlc",
+  "description": "SDLC pipeline: prd → arch → ux → data → arch <container> → work → deploy",
+  "version": "0.1.0",
+  "skills": "./skills/",
+  "agents": ["./agents/"]
+}
