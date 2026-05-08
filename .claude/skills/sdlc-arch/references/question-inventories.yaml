@@ -1,0 +1,226 @@
+# Reusable mandatory question sets per node level.
+#
+# The skill loads only the inventory for the active node level and asks
+# unanswered mandatory questions in batches of 3-5.
+#
+# Asking order:
+# - Questions are asked in the order they appear in this file (YAML
+#   list order). The skill does not reorder them. When some questions
+#   are skipped (already answered or `skip-if-answer-empty` triggers),
+#   the remaining questions are renumbered consecutively for display
+#   ("1.", "2.", ...) so the user always sees a clean numbering.
+#
+# Required vs optional:
+# - `required: true` — must be answered before a node can be marked
+#   `complete`.
+# - `required: false` — enriches the artifact but does not gate
+#   completion. Ask only if the user has not already addressed it.
+#
+# Conditional skips (rare):
+# - `skip-if-answer-empty: <question-id>` — if the named question has
+#   no substantive answer (empty or "n/a"), skip this question. Use
+#   sparingly; most "conditionality" is hierarchical and handled by
+#   the C4 level.
+#
+# Each entry has:
+#   id          stable identifier
+#   topic       short topic label, used for grouping in batches
+#   question    the prompt as the user will see it
+#   required    true | false
+
+root-context:
+  - id: ctx-system-name
+    topic: system identity
+    question: What is the canonical name of this system?
+    required: true
+  - id: ctx-system-purpose
+    topic: system identity
+    question: In one sentence, what does this system do for its users?
+    required: true
+  - id: ctx-actors
+    topic: actors
+    question: Who are the primary users or actor types?
+    required: true
+  - id: ctx-external-systems
+    topic: environment
+    question: Which external systems does this system depend on or feed?
+    required: true
+  - id: ctx-in-scope
+    topic: scope
+    question: What is explicitly in scope for this system?
+    required: true
+  - id: ctx-out-of-scope
+    topic: scope
+    question: What is explicitly out of scope?
+    required: true
+  - id: ctx-key-workflows
+    topic: behavior
+    question: What are the key workflows this system must support?
+    required: true
+  - id: ctx-quality-attributes
+    topic: quality
+    question: Which quality attributes and constraints matter (availability, latency, compliance, cost)?
+    required: true
+  - id: ctx-deployment-topology
+    topic: deployment
+    question: >
+      What is the deployment topology — single region or multi-region,
+      cloud / on-prem / hybrid, single tenant or multi-tenant?
+    required: true
+  - id: ctx-data-residency
+    topic: compliance
+    question: >
+      Are there data residency, sovereignty, or jurisdictional
+      requirements (e.g. EU-only, must avoid cross-border transfer)?
+    required: true
+  - id: ctx-secrets-management
+    topic: security
+    question: >
+      How will secrets and credentials be managed (vault, cloud KMS,
+      env vars, config service)?
+    required: true
+  - id: ctx-sla-targets
+    topic: quality
+    question: >
+      What SLA / SLO targets apply per primary workflow (availability,
+      latency, error budget)?
+    required: true
+  - id: ctx-architecture-pattern
+    topic: pattern
+    question: >
+      Which architectural pattern best fits this system?
+      Use references/pattern-selection.yaml to weigh options against team
+      count, deployment independence, scale asymmetry, integration count,
+      async needs, and ops maturity. Also consult
+      `ai-builder-considerations` in that file because the project will
+      be built primarily by AI. Recommend one, but do not impose it.
+    required: true
+  - id: ctx-required-containers
+    topic: containers
+    question: Which containers are needed to deliver the system at the chosen pattern?
+    required: true
+
+container:
+  - id: cnt-purpose
+    topic: identity
+    question: What is the purpose of this container?
+    required: true
+  - id: cnt-callers
+    topic: callers
+    question: Who calls or uses this container, and how?
+    required: true
+  - id: cnt-inputs-outputs
+    topic: interface
+    question: What inputs does it accept and what outputs does it produce?
+    required: true
+  - id: cnt-technology
+    topic: technology
+    question: What runtime, language, and key frameworks does it use?
+    required: true
+  - id: cnt-persistence
+    topic: persistence
+    question: Does it own persistent state? If so, where and what shape?
+    required: true
+  - id: cnt-dependencies
+    topic: dependencies
+    question: Which other containers does it depend on, and with what relationship type?
+    required: true
+  - id: cnt-failure-modes
+    topic: reliability
+    question: What are the dominant failure modes, and how are they handled?
+    required: true
+  - id: cnt-scaling
+    topic: performance
+    question: What are the scaling and performance expectations?
+    required: true
+  - id: cnt-security
+    topic: security
+    question: Which security and privacy concerns apply (PII, secrets, auth)?
+    required: true
+  - id: cnt-observability
+    topic: observability
+    question: How is it observed (logs, metrics, traces, alerts)?
+    required: true
+  - id: cnt-ownership
+    topic: ownership
+    question: Who owns it and how often does it change?
+    required: true
+  - id: cnt-required-components
+    topic: components
+    question: Which components must exist inside this container?
+    required: true
+
+component:
+  - id: cmp-purpose
+    topic: identity
+    question: What is the purpose of this component?
+    required: true
+  - id: cmp-scope
+    topic: scope
+    question: What is its responsibility scope, and what is explicitly out of scope?
+    required: true
+  - id: cmp-inputs-outputs
+    topic: interface
+    question: What are its inputs and outputs?
+    required: true
+  - id: cmp-dependencies
+    topic: dependencies
+    question: Which other components or external clients does it depend on?
+    required: true
+  - id: cmp-failure-modes
+    topic: reliability
+    question: What are its failure modes?
+    required: true
+  - id: cmp-required-code
+    topic: code
+    question: Which code units must exist inside it?
+    required: true
+
+code:
+  - id: cod-purpose
+    topic: identity
+    question: What is the purpose of this code unit?
+    required: true
+  - id: cod-kind
+    topic: kind
+    question: >
+      What kind is it? One of:
+      interface, class, function, handler, job, workflow, schema, event,
+      api-endpoint, query, command.
+    required: true
+  - id: cod-inputs
+    topic: interface
+    question: What are its inputs (types and sources)?
+    required: true
+  - id: cod-outputs
+    topic: interface
+    question: What are its outputs (types and sinks)?
+    required: true
+  - id: cod-invariants
+    topic: invariants
+    question: Which invariants must hold before, during, or after execution?
+    required: false
+  - id: cod-dependencies
+    topic: dependencies
+    question: What does it depend on (other code units, repositories, clients)?
+    required: true
+  - id: cod-errors
+    topic: reliability
+    question: What error behavior does it exhibit (raises, retries, partial success)?
+    required: true
+  - id: cod-side-effects
+    topic: side-effects
+    question: Which side effects does it produce (writes, events, external calls)?
+    required: false
+  - id: cod-observability
+    topic: observability
+    question: How is it observed (log lines, metrics, span names)?
+    required: false
+  - id: cod-auth
+    topic: security
+    question: Does it touch auth or security boundaries? If so, how?
+    required: false
+  - id: cod-versioning
+    topic: versioning
+    question: Are there versioning or compatibility constraints (API contract, schema, event)?
+    required: false

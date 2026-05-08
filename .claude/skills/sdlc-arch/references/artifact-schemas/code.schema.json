@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sdlc-arch/code.schema.json",
+  "title": "Per-code-unit artifact (docs/ARCH__<container>__<component>__<code>.yaml)",
+  "description": "Optional split-out file used when the parent component file exceeds the size threshold.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "doc-kind",
+    "c4-level",
+    "container",
+    "component",
+    "code",
+    "node-path",
+    "updated-by",
+    "updated-at",
+    "summary"
+  ],
+  "properties": {
+    "doc-kind": { "type": "string", "const": "architecture" },
+    "c4-level": { "type": "string", "const": "code" },
+    "container": { "$ref": "#/$defs/canonicalRef" },
+    "component": { "$ref": "#/$defs/canonicalRef" },
+    "code": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical", "kind"],
+      "properties": {
+        "canonical": { "$ref": "#/$defs/kebabName" },
+        "aliases": { "type": "array", "items": { "type": "string" } },
+        "kind": { "$ref": "#/$defs/codeKind" }
+      }
+    },
+    "node-path": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/kebabName" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "updated-by": { "type": "string" },
+    "updated-at": { "type": "string", "format": "date-time" },
+    "summary": { "type": "string" },
+    "inputs": { "type": "array", "items": { "type": "string" } },
+    "outputs": { "type": "array", "items": { "type": "string" } },
+    "invariants": { "type": "array", "items": { "type": "string" } },
+    "errors": { "type": "array", "items": { "type": "string" } },
+    "side-effects": { "type": "array", "items": { "type": "string" } },
+    "observability": { "type": "array", "items": { "type": "string" } },
+    "auth": { "type": "string" },
+    "versioning": { "type": "string" },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "kebabName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "canonicalRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical"],
+      "properties": {
+        "canonical": { "$ref": "#/$defs/kebabName" },
+        "aliases": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "codeKind": {
+      "type": "string",
+      "enum": [
+        "interface",
+        "class",
+        "function",
+        "handler",
+        "job",
+        "workflow",
+        "schema",
+        "event",
+        "api-endpoint",
+        "query",
+        "command"
+      ]
+    }
+  }
+}

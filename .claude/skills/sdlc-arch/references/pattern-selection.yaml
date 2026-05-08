@@ -1,0 +1,243 @@
+# Architecture pattern selection matrix.
+#
+# Use at the root/context level when choosing or revisiting the
+# system-wide pattern. Do not hard-bias toward any single pattern. If
+# project shape is unclear, ask targeted questions before recommending.
+
+inputs-to-weigh:
+  - team-count
+  - ownership-boundaries
+  - independent-deployment-need
+  - scale-asymmetry-across-capabilities
+  - domain-complexity
+  - external-integration-count
+  - async-workflow-need
+  - plugin-or-extensibility-need
+  - ops-maturity
+  - observability-tolerance
+
+patterns:
+  - pattern: layered
+    description: >
+      Strict horizontal layers (presentation, application, domain,
+      persistence) with one-directional dependencies. Often the default
+      shape of small CRUD systems.
+    best-when:
+      - small team
+      - low domain complexity
+      - few external integrations
+      - synchronous request/response only
+    tradeoffs:
+      - simple to learn and onboard to
+      - tends to leak business logic into presentation or persistence over time
+      - hard to evolve toward async or event-driven workloads
+    disqualifiers:
+      - significant async workflow need
+      - multiple bounded contexts owned by separate teams
+
+  - pattern: client-server
+    description: >
+      A single client-facing application talking to a single server-side
+      application. A subset of layered, often used for early-stage products.
+    best-when:
+      - one client surface
+      - one backend
+      - small team
+    tradeoffs:
+      - very low overhead
+      - does not scale to multiple bounded contexts or independent teams
+    disqualifiers:
+      - more than one independently deployable backend
+      - significant async or batch processing
+
+  - pattern: modular-monolith
+    description: >
+      A single deployable backend internally split into well-isolated
+      modules, each owning its own domain and data, communicating via
+      in-process APIs and optionally async events.
+    best-when:
+      - several bounded contexts
+      - one team or a few closely cooperating teams
+      - desire to keep ops simple
+      - clear module boundaries are achievable
+    tradeoffs:
+      - simpler ops than microservices
+      - requires discipline to keep modules from becoming a tangled monolith
+      - independent deploy still requires extra investment
+    disqualifiers:
+      - hard requirement for independent deploy of each module
+      - dramatically different scaling needs per module
+
+  - pattern: event-driven
+    description: >
+      Producers publish events; consumers react asynchronously via a
+      broker. Often combined with another structural pattern such as
+      modular-monolith or microservices.
+    best-when:
+      - significant async workflow needs
+      - many cross-context side effects
+      - desire to decouple producers from consumers
+    tradeoffs:
+      - excellent decoupling and scalability
+      - debugging and tracing are harder
+      - eventual consistency must be acceptable
+    disqualifiers:
+      - strict synchronous response requirements end-to-end
+      - low ops maturity for distributed tracing
+
+  - pattern: microservices
+    description: >
+      Many independently deployable services, each owning a bounded
+      context and its own data. Services communicate over the network
+      (sync or async).
+    best-when:
+      - multiple teams owning distinct bounded contexts
+      - independent deployment matters
+      - dramatically different scaling needs per capability
+      - high ops maturity
+    tradeoffs:
+      - true independence of teams and deploy cadence
+      - service sprawl, debugging overhead, organizational coordination cost
+      - higher infrastructure and observability investment
+    disqualifiers:
+      - small team or single-team ownership
+      - low ops maturity
+      - tight cross-service data invariants
+
+  - pattern: microkernel
+    description: >
+      A small core with a plugin model where features are loaded as
+      discrete plugins. Common for IDEs, ETL platforms, and extensible
+      CLIs.
+    best-when:
+      - extensibility / plugin model is a primary value
+      - third-party developers will extend the system
+      - core can be kept small and stable
+    tradeoffs:
+      - clean extensibility surface
+      - plugin contracts can become a long-term maintenance burden
+      - global behavior across plugins can be hard to reason about
+    disqualifiers:
+      - no extensibility need
+      - few or no third-party extensions expected
+
+  - pattern: hexagonal
+    description: >
+      Domain at the center; ports define interfaces; adapters connect
+      domain to external technology. Often combined with layered or
+      modular-monolith.
+    best-when:
+      - domain logic must be portable across multiple delivery mechanisms or storage backends
+      - long-lived system where infrastructure is expected to change
+    tradeoffs:
+      - excellent test isolation of domain logic
+      - higher upfront design cost
+      - can feel ceremonial for small CRUD systems
+    disqualifiers:
+      - throwaway prototypes
+      - very thin or trivial domain logic
+
+guidance:
+  - >
+    Microservices are best when independent deployment and scaling across
+    many bounded contexts matter. Their cost is service sprawl, debugging
+    overhead, and organizational coordination overhead — do not adopt as
+    a default.
+  - >
+    When project shape is unclear, ask targeted questions before
+    recommending any pattern. Use `inputs-to-weigh` as the question
+    surface.
+  - >
+    Prefer the simplest pattern that satisfies known constraints.
+    Architectural complexity is a debt, not a feature.
+  - >
+    Many real systems combine patterns (e.g. modular-monolith +
+    event-driven, hexagonal + microservices). Recommend a combination
+    explicitly when one alone does not fit.
+
+# Considerations that apply when the project will be built primarily
+# by AI agents (the case this skill is designed for). These tilt — not
+# override — the recommendation. Read alongside the per-pattern
+# tradeoffs above when choosing or revisiting a pattern.
+ai-builder-considerations:
+  - axis: moving-parts
+    rule: >
+      Prefer fewer independently deployable units. Each new container
+      multiplies the surface that an AI agent must reason about during
+      generation, debugging, and refactoring.
+    tilts-toward:
+      - layered
+      - modular-monolith
+      - hexagonal
+    tilts-away-from:
+      - microservices
+
+  - axis: interface-explicitness
+    rule: >
+      Prefer patterns with explicit, contract-style boundaries (ports,
+      interfaces, schemas). LLMs reason about substitution and mocking
+      far more reliably when the seam is named than when it is implicit
+      in shared model code.
+    tilts-toward:
+      - hexagonal
+      - modular-monolith with strict module APIs
+    tilts-away-from:
+      - layered (when layer boundaries leak)
+
+  - axis: failure-locality
+    rule: >
+      Prefer patterns where a failure stays inside one deployable unit.
+      Cross-service eventual-consistency bugs are notoriously hard for
+      both humans and AI to reproduce, and the test surface is large.
+    tilts-toward:
+      - layered
+      - modular-monolith
+      - hexagonal
+    tilts-away-from:
+      - event-driven (unless ops maturity is high)
+      - microservices
+
+  - axis: tracing-and-debug
+    rule: >
+      AI agents work best when one stack trace tells the whole story.
+      Cross-process async flows require distributed tracing
+      infrastructure that small teams typically do not have.
+    tilts-toward:
+      - in-process flows
+      - synchronous calls
+    tilts-away-from:
+      - event-driven without observability investment
+
+  - axis: testability
+    rule: >
+      Prefer patterns that support pure, side-effect-free unit tests of
+      domain logic. AI generates tests far more reliably when there is
+      no I/O to mock. Hexagonal and modular-monolith with clear ports
+      score highest here.
+    tilts-toward:
+      - hexagonal
+      - modular-monolith with explicit ports
+
+  - axis: contract-stability
+    rule: >
+      Prefer patterns where interface contracts can be expressed as
+      machine-readable artifacts (OpenAPI, JSON Schema, protobuf). AI
+      can generate against these directly. Patterns that rely on
+      "shared knowledge" of an internal model degrade quickly under
+      AI-driven change.
+    tilts-toward:
+      - hexagonal
+      - microservices when each service publishes a typed contract
+
+ai-builder-default:
+  recommendation: >
+    For a greenfield project being built primarily by AI, default to
+    `modular-monolith` with hexagonal-style ports between modules,
+    optionally combined with `event-driven` for genuinely async
+    workflows. Upgrade to `microservices` only when independent
+    deployment, ownership, or scale asymmetry forces the split.
+  rationale: >
+    This combination minimizes moving parts and cross-process
+    coordination while keeping interfaces explicit enough for AI to
+    reason about substitution. It also leaves a clear migration path
+    if scale or ownership needs change later.

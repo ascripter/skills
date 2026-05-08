@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sdlc-arch/container.schema.json",
+  "title": "Container artifact (docs/ARCH__<container>.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "doc-kind",
+    "c4-level",
+    "container",
+    "node-path",
+    "updated-by",
+    "updated-at",
+    "overview",
+    "responsibilities",
+    "components"
+  ],
+  "properties": {
+    "doc-kind": { "type": "string", "const": "architecture" },
+    "c4-level": { "type": "string", "const": "container" },
+    "container": { "$ref": "#/$defs/canonicalRef" },
+    "node-path": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/kebabName" },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "updated-by": { "type": "string" },
+    "updated-at": { "type": "string", "format": "date-time" },
+    "overview": { "type": "string" },
+    "responsibilities": { "type": "array", "items": { "type": "string" } },
+    "technology": { "type": "string" },
+    "persistence": { "type": "string" },
+    "failure-modes": { "type": "array", "items": { "type": "string" } },
+    "scaling": { "type": "string" },
+    "security": { "type": "string" },
+    "observability": { "type": "string" },
+    "ownership": { "type": "string" },
+    "components": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/canonicalRef" }
+    }
+  },
+  "$defs": {
+    "kebabName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "canonicalRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical"],
+      "properties": {
+        "canonical": { "$ref": "#/$defs/kebabName" },
+        "aliases": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

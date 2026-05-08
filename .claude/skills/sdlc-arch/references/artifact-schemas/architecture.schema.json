@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sdlc-arch/architecture.schema.json",
+  "title": "Root context artifact (docs/ARCH.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "doc-kind",
+    "c4-level",
+    "node-path",
+    "updated-by",
+    "updated-at",
+    "system",
+    "boundaries",
+    "actors",
+    "external-systems",
+    "quality-attributes",
+    "architecture-pattern",
+    "containers"
+  ],
+  "properties": {
+    "doc-kind": { "type": "string", "const": "architecture" },
+    "c4-level": { "type": "string", "const": "context" },
+    "node-path": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/kebabName" },
+      "maxItems": 0
+    },
+    "updated-by": { "type": "string" },
+    "updated-at": { "type": "string", "format": "date-time" },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "purpose"],
+      "properties": {
+        "name": { "type": "string" },
+        "purpose": { "type": "string" }
+      }
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["in-scope", "out-of-scope"],
+      "properties": {
+        "in-scope": { "type": "array", "items": { "type": "string" } },
+        "out-of-scope": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "actors": { "type": "array", "items": { "type": "string" } },
+    "external-systems": { "type": "array", "items": { "type": "string" } },
+    "quality-attributes": { "type": "array", "items": { "type": "string" } },
+    "deployment-topology": { "type": "string" },
+    "data-residency": { "type": "string" },
+    "secrets-management": { "type": "string" },
+    "sla-targets": { "type": "array", "items": { "type": "string" } },
+    "architecture-pattern": { "type": "string" },
+    "containers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/canonicalRef" }
+    }
+  },
+  "$defs": {
+    "kebabName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "canonicalRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical"],
+      "properties": {
+        "canonical": { "$ref": "#/$defs/kebabName" },
+        "aliases": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

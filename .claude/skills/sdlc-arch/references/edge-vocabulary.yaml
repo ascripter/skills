@@ -1,0 +1,198 @@
+# Edge type vocabulary.
+#
+# Used by Step 3c (edge derivation) in SKILL.md to classify a candidate
+# relationship into one of the seven edge types. Each section lists
+# verbs and example phrases that map to that type, plus disambiguators
+# for verbs that could go either way.
+#
+# Matching is keyword-based and case-insensitive. After applying alias
+# normalization to the surrounding endpoint names, scan the prose for
+# verbs and phrases below.
+
+# ---------------------------------------------------------------------
+# depends_on — build-time / import dependency
+# ---------------------------------------------------------------------
+depends_on:
+  intent: |
+    Source has a build-time, link-time, or import-time dependency on
+    target. No runtime invocation implied — the dependency is
+    structural.
+  verbs:
+    - imports
+    - depends-on
+    - requires
+    - links-against
+    - bundles
+    - includes
+    - extends
+    - inherits-from
+    - uses-types-from
+  example-phrases:
+    - "imports types from <T>"
+    - "links against <T> at build time"
+    - "extends the <T> base class"
+    - "requires the <T> package as a peer dependency"
+  not:
+    - runtime calls (use calls)
+    - implementation of an interface (use implements)
+
+# ---------------------------------------------------------------------
+# calls — synchronous invocation (HTTP, RPC, in-process)
+# ---------------------------------------------------------------------
+calls:
+  intent: |
+    Source synchronously invokes target and waits for a response.
+    Includes HTTP/HTTPS, gRPC, RPC, and in-process function or method
+    calls.
+  verbs:
+    - calls
+    - invokes
+    - requests
+    - hits
+    - queries
+    - fetches-from
+    - posts-to
+    - gets-from
+    - dispatches-to
+    - sends-request-to
+  example-phrases:
+    - "POST /api/users"
+    - "calls <T>.handle()"
+    - "RPC into <T>"
+    - "synchronous gRPC to <T>"
+    - "GET /v1/orders/{id}"
+  not:
+    - data-store reads (use reads)
+    - data-store writes (use writes)
+    - async messaging (use publishes / subscribes_to)
+
+# ---------------------------------------------------------------------
+# reads — reads from a data store, cache, or config source
+# ---------------------------------------------------------------------
+reads:
+  intent: |
+    Source loads data from a persistent or in-memory store owned by
+    target. Implies no mutation of target state.
+  verbs:
+    - reads-from
+    - selects-from
+    - queries
+    - lookups
+    - fetches
+    - retrieves
+    - loads-from
+    - scans
+  example-phrases:
+    - "SELECT … FROM <T>"
+    - "reads from <T> cache"
+    - "looks up the user record in <T>"
+    - "loads config from <T>"
+  disambiguators:
+    fetch: "reads if target is a store; calls if target is a service"
+    query: "reads if target is a database/cache/config; calls if target is an API"
+  not:
+    - mutating operations (use writes)
+    - service invocation (use calls)
+
+# ---------------------------------------------------------------------
+# writes — writes to a data store, cache, or config source
+# ---------------------------------------------------------------------
+writes:
+  intent: |
+    Source persists, updates, or deletes data in target. Implies
+    mutation of target state.
+  verbs:
+    - writes-to
+    - inserts-into
+    - updates
+    - upserts
+    - deletes-from
+    - persists-to
+    - stores-in
+    - saves-to
+    - mutates
+    - sets-key-in
+  example-phrases:
+    - "INSERT INTO <T>"
+    - "writes user state to <T>"
+    - "persists the order in <T>"
+    - "SET key in <T> cache"
+  not:
+    - read-only access (use reads)
+    - emitting an event (use publishes)
+
+# ---------------------------------------------------------------------
+# publishes — emits a message to an async channel
+# ---------------------------------------------------------------------
+publishes:
+  intent: |
+    Source emits a message, event, or command to an asynchronous
+    channel (topic, queue, bus). No response is awaited.
+  verbs:
+    - publishes
+    - emits
+    - sends-to
+    - pushes-to
+    - fires
+    - dispatches-event-to
+    - enqueues-to
+    - produces-to
+  example-phrases:
+    - "publishes UserCreated to <T>"
+    - "emits to <T> topic"
+    - "enqueues a job onto <T>"
+    - "fires a domain event to <T>"
+  disambiguators:
+    send: "publishes if target is a queue/topic/bus; calls if synchronous"
+    dispatch: "publishes if async; calls if sync"
+  not:
+    - synchronous calls (use calls)
+    - data-store mutation (use writes)
+
+# ---------------------------------------------------------------------
+# subscribes_to — consumes from an async channel
+# ---------------------------------------------------------------------
+subscribes_to:
+  intent: |
+    Source consumes messages from an asynchronous channel owned by
+    target. Implies a long-running listener or polling consumer.
+  verbs:
+    - subscribes-to
+    - consumes-from
+    - listens-to
+    - polls
+    - reads-events-from
+    - handles-from
+    - drains
+  example-phrases:
+    - "subscribes to <T> topic"
+    - "consumes jobs from <T>"
+    - "listens for OrderPlaced on <T>"
+    - "polls <T> every 30s"
+  not:
+    - data-store reads (use reads)
+    - synchronous fetches (use calls)
+
+# ---------------------------------------------------------------------
+# implements — fulfills an interface or protocol contract
+# ---------------------------------------------------------------------
+implements:
+  intent: |
+    Source provides a concrete implementation of an interface, port,
+    protocol, or schema defined elsewhere.
+  verbs:
+    - implements
+    - satisfies
+    - conforms-to
+    - fulfills
+    - realizes
+    - adapts-to
+    - provides
+  example-phrases:
+    - "implements the <T> port"
+    - "conforms to the <T> protocol"
+    - "satisfies the <T> interface"
+    - "adapts to the <T> schema"
+  not:
+    - using a type imported from elsewhere (use depends_on)
+    - calling a method on it (use calls)

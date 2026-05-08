@@ -1,0 +1,459 @@
+# Container taxonomy for C4 level 2.
+#
+# Each entry is a candidate container type. Used during interviews to
+# suggest names, aliases, common responsibilities, common dependencies,
+# follow-up questions, and likely components.
+#
+# Aliases are matched tolerantly. The skill always stores and writes the
+# canonical name; an alias is never persisted as a path component.
+
+core:
+  - canonical: web-frontend
+    aliases: [frontend, web, ui, spa]
+    description: Browser-facing application that renders UI and orchestrates user interactions.
+    common-responsibilities:
+      - render views and pages
+      - manage client-side state and sessions
+      - call backend APIs
+      - handle authentication flows in the browser
+    common-dependencies:
+      - backend-api
+      - auth-provider
+    mandatory-questions:
+      - What does this frontend let users do?
+      - Who are the user types and what permissions do they have?
+      - Which backend APIs does it talk to?
+      - What is the rendering framework or runtime (React, Vue, server-rendered, etc.)?
+      - Does it persist anything client-side (localStorage, IndexedDB, cookies)?
+      - What are the failure modes (offline, API down, slow network)?
+      - What is the performance budget (TTI, bundle size, LCP)?
+      - What security or privacy concerns apply (PII, tokens, CSP)?
+      - How is it observed (RUM, error tracking, custom events)?
+      - Who owns it and how often is it released?
+      - Which components live inside it (router, views, api-client, design-system, etc.)?
+    suggested-components:
+      - routing
+      - views
+      - state-management
+      - api-client
+      - auth-integration
+      - design-system
+      - form-handling
+
+  - canonical: mobile-frontend
+    aliases: [mobile, mobile-app, native-app]
+    description: Native or cross-platform mobile application.
+    common-responsibilities:
+      - render mobile UI
+      - manage offline state
+      - call backend APIs
+      - handle device capabilities (push, camera, location)
+    common-dependencies:
+      - backend-api
+      - notification
+    mandatory-questions:
+      - Target platforms (iOS, Android, both)?
+      - Native or cross-platform framework?
+      - Online-only or offline-tolerant?
+      - Local persistence model?
+      - Push notification dependencies?
+      - Which backend APIs does it call?
+      - What are the dominant failure modes?
+      - Distribution and release cadence?
+      - How is it observed?
+      - Which components live inside it?
+    suggested-components:
+      - navigation
+      - screens
+      - state-management
+      - api-client
+      - local-storage-adapter
+      - push-handler
+      - auth-integration
+
+  - canonical: backend-api
+    aliases: [backend, api, server, web-server]
+    description: Server-side application exposing APIs to clients and other services.
+    common-responsibilities:
+      - expose HTTP, RPC, or GraphQL endpoints
+      - enforce authentication and authorization
+      - orchestrate use cases
+      - persist and retrieve data via repositories
+      - publish or consume events
+    common-dependencies:
+      - database
+      - cache
+      - queue
+      - integration-adapter
+    mandatory-questions:
+      - What is the API contract style (REST, GraphQL, gRPC)?
+      - Which clients and services call it?
+      - What use cases does it serve?
+      - What is the runtime / framework?
+      - Which persistence layers does it own?
+      - Which external integrations does it call?
+      - What is the auth model?
+      - What are the dominant failure modes (downstream outage, queue backlog)?
+      - How does it scale (horizontal, per-tenant)?
+      - How is it observed (logs, metrics, traces)?
+      - Who owns it and how often does it change?
+      - Which components live inside it?
+    suggested-components:
+      - routing-controllers
+      - application-services
+      - domain-model
+      - repositories
+      - validation
+      - auth
+      - integration-clients
+      - event-publisher
+
+  - canonical: worker
+    aliases: [job-worker, background-worker, consumer]
+    description: Long-running process that consumes jobs or events asynchronously.
+    common-responsibilities:
+      - poll or subscribe to a queue
+      - execute jobs idempotently
+      - handle retries and dead-letter routing
+    common-dependencies:
+      - queue
+      - database
+      - integration-adapter
+    mandatory-questions:
+      - Which queue or topic does it consume from?
+      - What job types does it handle?
+      - How is idempotency enforced?
+      - What is the retry and back-off policy?
+      - How is dead-letter handling configured?
+      - What is the concurrency model?
+      - What are the dominant failure modes?
+      - How is it observed?
+      - Who owns it?
+      - Which components live inside it?
+    suggested-components:
+      - queue-adapter
+      - job-handler
+      - retry-policy
+      - dead-letter-handler
+      - scheduler-orchestrator
+
+  - canonical: database
+    aliases: [db, sql-db, postgres, mysql, datastore]
+    description: Persistent data store backing one or more containers.
+    common-responsibilities:
+      - persist data
+      - enforce schema and constraints
+      - serve queries
+    common-dependencies: []
+    mandatory-questions:
+      - Engine and version?
+      - Which schema groups does it own?
+      - Read and write patterns?
+      - Index strategy?
+      - Migration tooling?
+      - Backup and retention policy?
+      - Access boundaries — which containers may read or write?
+      - Failure and recovery model?
+      - Observability?
+      - Ownership?
+    suggested-components:
+      - schema-groups
+      - migrations
+      - indexes
+      - retention-and-backups
+      - access-boundaries
+
+  - canonical: cache
+    aliases: [redis, memcached, kv-cache]
+    description: In-memory store for low-latency reads or shared transient state.
+    common-responsibilities:
+      - serve cached reads
+      - hold session, lock, or rate-limit state
+    common-dependencies: []
+    mandatory-questions:
+      - Engine?
+      - What data shapes and keys are cached?
+      - TTL strategy?
+      - Eviction policy?
+      - Consistency expectations relative to the source of truth?
+      - Failure mode when cache is unavailable (cold start, fall-through)?
+    suggested-components:
+      - cache-keys
+      - eviction-policy
+      - consistency-strategy
+
+  - canonical: blob-storage
+    aliases: [object-storage, s3, gcs, files]
+    description: Object store for large binary or document data.
+    common-responsibilities:
+      - persist objects
+      - serve signed URLs
+      - apply lifecycle policies
+    common-dependencies: []
+    mandatory-questions:
+      - Provider and bucket layout?
+      - Object key structure?
+      - Metadata policy?
+      - Lifecycle / archival policy?
+      - Access control model — who can read or write?
+      - Ingest and egress paths?
+    suggested-components:
+      - object-layout
+      - metadata-policy
+      - lifecycle-policy
+      - access-policy
+      - ingest-egress-adapter
+
+  - canonical: queue
+    aliases: [topic, broker, stream, kafka, sqs, pubsub]
+    description: Asynchronous messaging broker between producers and consumers.
+    common-responsibilities:
+      - durably hold messages
+      - support fan-out or work-queue semantics
+      - enable retry and dead-letter routing
+    common-dependencies: []
+    mandatory-questions:
+      - Broker technology?
+      - Which topics or queues are defined?
+      - Producers and consumers per topic?
+      - Message schema and versioning policy?
+      - Ordering guarantees?
+      - Retry and DLQ policy?
+      - What happens when the broker is unavailable?
+    suggested-components:
+      - topics-and-queues
+      - producer-adapters
+      - consumer-groups
+      - message-schema
+      - retry-and-dlq
+
+extended:
+  - canonical: gateway
+    aliases: [api-gateway, edge, ingress]
+    description: Single entry point that routes, authenticates, and rate-limits inbound traffic.
+    common-responsibilities:
+      - terminate TLS
+      - authenticate and rate-limit
+      - route to upstream services
+    common-dependencies:
+      - backend-api
+      - auth-provider
+    mandatory-questions:
+      - Which upstream services does it route to?
+      - What is the auth model?
+      - What is the rate limit policy?
+      - Is there a WAF or other security layer?
+      - How is it observed?
+    suggested-components:
+      - routing-rules
+      - auth-middleware
+      - rate-limiter
+      - tls-config
+
+  - canonical: auth-provider
+    aliases: [identity-provider, idp, sso]
+    description: System that issues and validates user identity and authorization tokens.
+    common-responsibilities:
+      - manage user identity
+      - issue tokens
+      - validate sessions
+    common-dependencies:
+      - database
+    mandatory-questions:
+      - In-house or hosted (Auth0, Cognito, Keycloak, etc.)?
+      - Which identity flows are supported?
+      - Token format and lifetime?
+      - Federation requirements?
+      - Audit requirements?
+    suggested-components:
+      - identity-store
+      - token-issuance
+      - session-management
+      - federation-adapters
+
+  - canonical: search
+    aliases: [search-index, elasticsearch, opensearch, meili]
+    description: Specialized index for full-text or vector search.
+    common-responsibilities:
+      - index documents
+      - serve search queries
+      - update incrementally
+    common-dependencies:
+      - database
+      - queue
+    mandatory-questions:
+      - Search engine?
+      - Which entities are indexed?
+      - Refresh and consistency model relative to the source of truth?
+      - Query patterns?
+      - Failure mode when the index is stale or unavailable?
+    suggested-components:
+      - index-definitions
+      - ingestion-pipeline
+      - query-templates
+
+  - canonical: analytics
+    aliases: [analytics-store, warehouse, lake]
+    description: Analytical data store optimized for OLAP queries.
+    common-responsibilities:
+      - hold historical data
+      - support aggregation queries
+    common-dependencies:
+      - etl-pipeline
+    mandatory-questions:
+      - Engine (BigQuery, Snowflake, Redshift, ClickHouse, etc.)?
+      - Which schemas are hosted?
+      - Refresh cadence?
+      - Cost model?
+      - Access control?
+    suggested-components:
+      - schema-groups
+      - materializations
+      - access-policies
+
+  - canonical: notification
+    aliases: [notifier, email-service, sms-service, push-service]
+    description: Delivers user-facing notifications via one or more channels.
+    common-responsibilities:
+      - render templates
+      - call channel providers
+      - track delivery
+    common-dependencies:
+      - queue
+      - integration-adapter
+    mandatory-questions:
+      - Which channels are supported (email, SMS, push, webhook)?
+      - Templating engine?
+      - Provider integrations?
+      - Throttling policy?
+      - Bounce and failure handling?
+    suggested-components:
+      - template-store
+      - channel-adapters
+      - delivery-tracker
+
+  - canonical: scheduler
+    aliases: [cron, task-scheduler, scheduled-jobs]
+    description: Triggers jobs on a time-based schedule.
+    common-responsibilities:
+      - hold schedule definitions
+      - dispatch jobs at the right time
+    common-dependencies:
+      - queue
+      - worker
+    mandatory-questions:
+      - Schedule source (cron expressions, declarative config, etc.)?
+      - Trigger target (queue, direct invocation)?
+      - Catch-up policy after downtime?
+      - Concurrency limits?
+    suggested-components:
+      - schedule-store
+      - dispatch-adapter
+      - catch-up-policy
+
+  - canonical: cli
+    aliases: [command-line, cli-tool]
+    description: Command-line interface that operators or developers run locally.
+    common-responsibilities:
+      - parse commands
+      - call into underlying services or libraries
+      - render output for terminals
+    common-dependencies:
+      - backend-api
+    mandatory-questions:
+      - Audience (developer, operator, end user)?
+      - Distribution model?
+      - Auth model?
+      - Output format (text, JSON, table)?
+      - How does it connect to backend services?
+    suggested-components:
+      - command-router
+      - output-formatter
+      - auth-integration
+      - api-client
+
+  - canonical: admin-ui
+    aliases: [back-office, internal-tool, ops-console]
+    description: Internal-facing UI for operations and administration tasks.
+    common-responsibilities:
+      - expose privileged operations
+      - audit administrative actions
+    common-dependencies:
+      - backend-api
+      - auth-provider
+    mandatory-questions:
+      - Which privileged actions are exposed?
+      - Audit logging requirements?
+      - Auth and access control?
+      - Hosting and access boundary?
+    suggested-components:
+      - routing
+      - admin-views
+      - audit-logger
+      - api-client
+
+  - canonical: etl-pipeline
+    aliases: [data-pipeline, ingestion]
+    description: Batch or streaming pipeline that moves and transforms data.
+    common-responsibilities:
+      - extract from sources
+      - transform and enrich
+      - load into a target store
+    common-dependencies:
+      - database
+      - blob-storage
+      - analytics
+      - queue
+    mandatory-questions:
+      - Sources and sinks?
+      - Batch or streaming?
+      - Orchestrator (Airflow, Dagster, custom)?
+      - Failure and replay model?
+      - Observability?
+    suggested-components:
+      - extractor
+      - transformer
+      - loader
+      - orchestrator
+
+  - canonical: ml-service
+    aliases: [model-server, inference-service]
+    description: Hosts machine learning models and serves predictions.
+    common-responsibilities:
+      - load models
+      - serve predictions
+      - monitor model quality
+    common-dependencies:
+      - blob-storage
+      - backend-api
+    mandatory-questions:
+      - Which models are served?
+      - Inference latency requirements?
+      - Model versioning model?
+      - Where do features come from?
+      - Drift and quality monitoring?
+    suggested-components:
+      - model-loader
+      - inference-handler
+      - feature-fetcher
+      - quality-monitor
+
+  - canonical: integration-adapter
+    aliases: [third-party-client, vendor-connector]
+    description: Encapsulates communication with a specific external system.
+    common-responsibilities:
+      - translate between domain and vendor formats
+      - apply retries and circuit breakers
+      - hide vendor-specific quirks
+    common-dependencies: []
+    mandatory-questions:
+      - Which external system is integrated?
+      - Protocol and auth?
+      - Rate limits and quotas?
+      - Retry and circuit-breaker policy?
+      - Failure handling and fallback?
+    suggested-components:
+      - request-builder
+      - response-mapper
+      - retry-policy
+      - circuit-breaker

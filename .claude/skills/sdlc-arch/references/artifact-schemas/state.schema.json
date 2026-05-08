@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sdlc-arch/state.schema.json",
+  "title": "sdlc-arch state file",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "mode", "current-pointer", "updated-at", "graph"],
+  "properties": {
+    "version": { "type": "string", "const": "1" },
+    "mode": { "type": "string", "enum": ["CREATE", "EDIT"] },
+    "current-pointer": { "type": "string" },
+    "updated-at": { "type": "string", "format": "date-time" },
+    "graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root"],
+      "properties": {
+        "root": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "status", "children"],
+          "properties": {
+            "kind": { "type": "string", "const": "context" },
+            "status": { "$ref": "#/$defs/status" },
+            "children": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/node" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "kebabName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["defined", "wip", "complete"]
+    },
+    "edgeType": {
+      "type": "string",
+      "enum": [
+        "depends_on",
+        "calls",
+        "reads",
+        "writes",
+        "publishes",
+        "subscribes_to",
+        "implements"
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "to"],
+      "properties": {
+        "type": { "$ref": "#/$defs/edgeType" },
+        "to": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical", "aliases", "status"],
+      "properties": {
+        "canonical": { "$ref": "#/$defs/kebabName" },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": { "$ref": "#/$defs/status" },
+        "edges": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/edge" }
+        },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      }
+    }
+  }
+}

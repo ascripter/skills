@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sdlc-arch/component.schema.json",
+  "title": "Component artifact (docs/ARCH__<container>__<component>.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "doc-kind",
+    "c4-level",
+    "container",
+    "component",
+    "node-path",
+    "updated-by",
+    "updated-at",
+    "overview",
+    "responsibilities"
+  ],
+  "properties": {
+    "doc-kind": { "type": "string", "const": "architecture" },
+    "c4-level": { "type": "string", "const": "component" },
+    "container": { "$ref": "#/$defs/canonicalRef" },
+    "component": { "$ref": "#/$defs/canonicalRef" },
+    "node-path": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/kebabName" },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "updated-by": { "type": "string" },
+    "updated-at": { "type": "string", "format": "date-time" },
+    "overview": { "type": "string" },
+    "responsibilities": { "type": "array", "items": { "type": "string" } },
+    "failure-modes": { "type": "array", "items": { "type": "string" } },
+    "code": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/codeEntry" }
+    }
+  },
+  "$defs": {
+    "kebabName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "canonicalRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical"],
+      "properties": {
+        "canonical": { "$ref": "#/$defs/kebabName" },
+        "aliases": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "codeKind": {
+      "type": "string",
+      "enum": [
+        "interface",
+        "class",
+        "function",
+        "handler",
+        "job",
+        "workflow",
+        "schema",
+        "event",
+        "api-endpoint",
+        "query",
+        "command"
+      ]
+    },
+    "codeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical", "kind"],
+      "properties": {
+        "canonical": { "$ref": "#/$defs/kebabName" },
+        "aliases": { "type": "array", "items": { "type": "string" } },
+        "kind": { "$ref": "#/$defs/codeKind" },
+        "summary": { "type": "string" },
+        "inputs": { "type": "array", "items": { "type": "string" } },
+        "outputs": { "type": "array", "items": { "type": "string" } },
+        "invariants": { "type": "array", "items": { "type": "string" } },
+        "errors": { "type": "array", "items": { "type": "string" } },
+        "side-effects": { "type": "array", "items": { "type": "string" } },
+        "observability": { "type": "array", "items": { "type": "string" } },
+        "auth": { "type": "string" },
+        "versioning": { "type": "string" },
+        "notes": { "type": "string" },
+        "split-file": { "type": "string" }
+      }
+    }
+  }
+}

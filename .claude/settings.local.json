@@ -7,7 +7,8 @@
       "Bash(dir /b .claude\\\\rules\\\\ARCHITECTURE*)",
       "Bash(echo \"Exit: $?\")",
       "Bash(xargs sed -i 's/product-req/sdlc-prd/g')",
-      "Bash(grep -v \"\\\\.pyc$\")"
+      "Bash(grep -v \"\\\\.pyc$\")",
+      "Bash(git mv *)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -1,0 +1,141 @@
+# Phase-specific prompt skeletons.
+#
+# Loaded at the start of each phase to set focus and avoid stuffing
+# irrelevant context. Each template is intentionally compact — the heavy
+# data lives in the other reference files and is loaded only when
+# needed.
+#
+# Process notation: see references/ai-directed-notation.md for the full
+# grammar. Quick recap:
+#   A -> B                 transition
+#   A ->[guard] B          guarded transition
+#   A ->[ok] B, ->[fail] C branch list
+#   loop: ... until: ...   loop with explicit exit
+# Examples used below:
+#   Discover -> Normalize -> Ask -> Evaluate ->[missing] Ask, ->[enough] Write
+#   Load -> Compare ->[conflict] AskUser -> Merge -> Persist
+#   Inventory -> Evaluate -> Decide
+
+root-context:
+  process: Discover -> Normalize -> Ask -> Evaluate ->[missing] Ask ->[enough] Write
+  focus: |
+    You are defining the C4 context level of this system. Capture the
+    system name, purpose, actors, environment, scope, key workflows,
+    quality attributes, architecture pattern, and required containers.
+  load-references:
+    - references/c4-guidance.md (context section only)
+    - references/question-inventories.yaml (root-context)
+    - references/pattern-selection.yaml (only when selecting or revisiting the pattern)
+  ask-style: |
+    Ask 3-5 unanswered mandatory questions per turn. After each batch,
+    decide whether you have enough to answer the next mandatory question
+    or whether a targeted follow-up is needed. Do not pre-load every
+    reference file.
+  write-target: docs/ARCH.yaml
+
+container:
+  process: Discover -> Normalize -> Ask -> Evaluate ->[missing] Ask ->[enough] Write
+  focus: |
+    You are defining a single container at C4 level 2. Identify its
+    purpose, callers, technology, persistence, dependencies, failure
+    modes, scaling, security, observability, ownership, and the
+    components inside it.
+  load-references:
+    - references/c4-guidance.md (container section only)
+    - references/container-taxonomy.yaml (entry matching the container's type or alias)
+    - references/question-inventories.yaml (container)
+  ask-style: |
+    Use the matching taxonomy entry to seed suggested components, common
+    dependencies, and follow-up questions. Confirm canonical name and
+    aliases before persisting. Resolve aliases to canonical before
+    writing the node-path.
+  write-target: docs/ARCH__<container>.yaml
+
+component:
+  process: Discover -> Normalize -> Ask -> Evaluate ->[missing] Ask ->[enough] Write
+  focus: |
+    You are defining a single component at C4 level 3. Identify its
+    purpose, responsibility scope, inputs, outputs, dependencies,
+    failure modes, and the code units inside it.
+  load-references:
+    - references/c4-guidance.md (component section only)
+    - references/component-taxonomy.yaml (entry matching the component's type or alias)
+    - references/question-inventories.yaml (component)
+  ask-style: |
+    Anchor on the parent container's responsibilities. Suggested code
+    units come from the component-taxonomy entry; confirm canonical
+    names with the user before writing. Resolve aliases to canonical
+    before writing the node-path.
+  write-target: docs/ARCH__<container>__<component>.yaml
+
+code:
+  process: Discover -> Normalize -> Ask -> Evaluate ->[missing] Ask ->[enough] Write
+  focus: |
+    You are defining a single code unit at C4 level 4. Capture purpose,
+    kind, inputs, outputs, invariants, dependencies, errors, side
+    effects, observability, auth impact, and versioning constraints
+    where applicable.
+  load-references:
+    - references/c4-guidance.md (code section only)
+    - references/question-inventories.yaml (code)
+  ask-style: |
+    Code-level details come almost entirely from the user. Use only the
+    parent component's responsibilities for context. Do not invent
+    invariants the user has not stated.
+  write-target: docs/ARCH__<container>__<component>.yaml (code[] entry)
+
+edit-or-revalidation:
+  process: Load -> Reflect -> AskValidity -> Preserve -> AskGaps -> Write
+  focus: |
+    You are reviewing an existing node. Reflect existing knowledge
+    first, then ask which parts are still valid, obsolete, or partly
+    valid. Preserve confirmed-valid content byte-identically; discard
+    obsolete content; interview for any remaining gaps as in CREATE.
+  load-references:
+    - the matching template above for the node's level
+  write-target: same as the node's level
+
+conflict-resolution:
+  process: Load -> Compare ->[conflict] AskUser -> Merge -> Persist
+  focus: |
+    Multiple discovered architecture documents disagree. Present the
+    conflict using the literal template below. Do not silently average,
+    pick one, or paraphrase the options. State and choices are
+    discrete; record the resolution in the chat output before writing
+    state.
+  literal-template: |
+    Conflict on <topic-name>:
+
+      [A] from <relative/path/to/source-A>
+          <claim from source A, ≤120 chars>
+
+      [B] from <relative/path/to/source-B>
+          <claim from source B, ≤120 chars>
+
+    Pick one:
+      1) [A] wins   — discard [B]
+      2) [B] wins   — discard [A]
+      3) Both wrong — I'll state the truth: <free text>
+      4) Cancel     — exit without changing state
+
+    Your choice:
+  rules: |
+    - Headers must appear verbatim ("Conflict on", "Pick one:",
+      "Your choice:").
+    - Source labels are exactly "[A]" and "[B]". For more than two
+      sources, generate "[A]", "[B]", "[C]", … and add one numbered
+      "[X] wins — discard others" line per extra source before the
+      "Both wrong" and "Cancel" lines.
+    - Each claim line is ≤120 characters. If the source claim is
+      longer, summarize and quote the source path so the user can
+      look up the full text.
+    - Accept user input as one of the numbered options. Anything else
+      maps to option 4 (Cancel).
+
+completion-check:
+  process: Inventory -> Evaluate -> Decide
+  focus: |
+    Determine whether every mandatory question for the active node has
+    been answered. If yes, mark the node `complete`. If not, mark `wip`
+    and list the remaining unanswered questions in the chat for the
+    user before persisting.

@@ -1,0 +1,131 @@
+# Component taxonomy for C4 level 3.
+#
+# Components live inside containers and are not independently deployable.
+# Each entry suggests responsibilities, code units, and follow-up
+# questions for components of this kind.
+#
+# Aliases are matched tolerantly. The skill always stores and writes the
+# canonical name; an alias is never persisted as a path component.
+
+components:
+  - canonical: router
+    aliases: [routes, controllers, dispatcher]
+    responsibilities:
+      - map incoming requests to handlers
+      - apply request-level middleware
+      - bind URL, queue, or command patterns to code units
+    suggested-code-units:
+      - routes
+      - handlers
+      - middleware-bindings
+    mandatory-questions:
+      - What patterns does it route (HTTP paths, queue topics, CLI commands)?
+      - Which handlers does it expose?
+      - Which middleware is bound and in what order?
+      - How are unmatched routes handled?
+      - What are its failure modes?
+      - How does it interact with auth?
+
+  - canonical: application-service
+    aliases: [use-case, orchestrator, service-layer]
+    responsibilities:
+      - encode use cases and workflows
+      - coordinate domain operations and side effects
+      - enforce transactional boundaries
+    suggested-code-units:
+      - use-cases
+      - orchestrators
+      - commands
+      - queries
+    mandatory-questions:
+      - Which use cases does it own?
+      - What are the inputs and outputs of each use case?
+      - Where are transactional boundaries drawn?
+      - Which external effects does it produce (events, integration calls)?
+      - How are failures handled and surfaced?
+
+  - canonical: domain-model
+    aliases: [domain, entities, model]
+    responsibilities:
+      - represent core business concepts
+      - enforce invariants
+      - encode business rules
+    suggested-code-units:
+      - entities
+      - value-objects
+      - policies
+      - aggregates
+    mandatory-questions:
+      - Which entities and aggregates does it own?
+      - Which invariants are enforced and where?
+      - Which value objects are defined?
+      - Which domain events are emitted?
+
+  - canonical: repository
+    aliases: [data-access, dao, persistence]
+    responsibilities:
+      - load and save aggregates or rows
+      - hide persistence technology from the rest of the container
+    suggested-code-units:
+      - interfaces
+      - adapters
+      - query-objects
+    mandatory-questions:
+      - Which aggregates or tables are managed?
+      - What are the read patterns?
+      - What are the write patterns?
+      - Is there caching, and where?
+      - What consistency guarantees does it provide?
+
+  - canonical: integration-client
+    aliases: [external-client, http-client, vendor-client]
+    responsibilities:
+      - call external systems
+      - apply retry and timeout policy
+      - translate vendor formats to domain types
+    suggested-code-units:
+      - request-builders
+      - response-mappers
+      - retry-logic
+      - error-translators
+    mandatory-questions:
+      - Which external system does it target?
+      - What auth method does it use?
+      - What are the timeout, retry, and circuit-breaker policies?
+      - Which errors are propagated vs swallowed, and why?
+
+  - canonical: job-handler
+    aliases: [worker-handler, consumer-handler]
+    responsibilities:
+      - process a single job or message
+      - guarantee idempotency
+      - emit follow-up events or writes
+    suggested-code-units:
+      - trigger
+      - execution-unit
+      - retry-policy
+      - idempotency-key
+    mandatory-questions:
+      - Which job types does it handle?
+      - How is the idempotency key derived?
+      - What is its retry behavior?
+      - Which side effects does it emit?
+      - How are failures and DLQ routing handled?
+
+  - canonical: schema
+    aliases: [db-schema, data-model]
+    responsibilities:
+      - define persistent shape of data
+      - manage migrations
+      - declare indexes and constraints
+    suggested-code-units:
+      - tables
+      - collections
+      - constraints
+      - indexes
+      - migrations
+    mandatory-questions:
+      - Which tables or collections does it own?
+      - Which constraints and indexes are defined?
+      - What is the migration policy and tooling?
+      - What backwards-compatibility expectations apply?
