@@ -1,10 +1,10 @@
 ---
-name: sdlc-product-manager
+name: product-manager
 description: >
   Run the prd skill interview workflow. Spawn this agent when the user
   invokes /sdlc:prd. The agent runs a long structured interview in its own context
   (so the parent's context stays clean) and produces a validated `docs/PRD.yaml`.
-tools: Read, Write, Bash, Glob, Grep
+tools: Read, Write, Bash, Glob, Grep, AskUserQuestion
 model: opusplan
 effort: xhigh
 ---

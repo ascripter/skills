@@ -9,7 +9,7 @@ description: >
   open questions remain or the user types EXIT.
 disable-model-invocation: true
 context: fork
-agent: sdlc-product-manager
+agent: sdlc:product-manager
 ---
 
 > **Invocation note**: this skill is normally fronted by the
