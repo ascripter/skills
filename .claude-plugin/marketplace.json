@@ -11,7 +11,7 @@
       "name": "sdlc",
       "description": "SDLC pipeline: prd → arch → ux → data → arch <container> → work → deploy",
       "source": "./sdlc",
-      "version": "0.1.0"
+      "version": "0.1.2"
     }
   ]
 }
