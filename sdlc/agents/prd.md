@@ -1,5 +1,5 @@
 ---
-name: prd
+name: project-manager-prd
 description: >
   Run the prd skill interview workflow. Spawn this agent when the user
   invokes /sdlc:prd. The agent runs a long structured interview in its own context
