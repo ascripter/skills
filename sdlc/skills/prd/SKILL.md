@@ -1,19 +1,19 @@
 ---
 name: prd
 description: >
+  INTERNAL — only loaded by sdlc:prd agent. Never invoke this skill implicitly.
   Create or update PRD.yaml for a software product. Scans project files,
   captures the user's idea in free text, asks the structural monorepo
   question, interviews the user in thematic batches with multiple-choice
-  answers, persists session state for resumability, then writes and
-  validates PRD.yaml for downstream agent consumption. ONLY stop when no
-  open questions remain or the user types EXIT.
-disable-model-invocation: true
-context: fork
-agent: sdlc:product-manager
+  answers (via AskUserQuestion), persists session state for resumability,
+  then writes and validates PRD.yaml for downstream agent consumption.
+  ONLY stop when no open questions remain or the user types EXIT.
+user-invocable: false
+allowed-tools: Read Write(CLAUDE.md) Write(docs/PRD.yaml) Write(.claude/skills-state/sdlc-prd.state.yaml) Bash Glob Grep AskUserQuestion
 ---
 
 > **Invocation note**: this skill is normally fronted by the
-> `sdlc/agents/prd.md` subagent so the long interview runs in
+> `sdlc/agents/prd.md` agent so the long interview runs in
 > its own context. The skill body below is the single source of truth for
 > the workflow regardless of which path invokes it (agent or inline).
 
@@ -39,10 +39,8 @@ unambiguous source of product truth.
                   confirm pre-fills (theme by theme)
                                         |
                                         v
-                  required-theme interview (product_identity LAST)
-                                        |
-                                        v
-                  optional themes (one-by-one: now/skip/todo)
+                  theme interview (required: run batches;
+                  optional: now/skip/todo gate then batches)
                                         |
                                         v
                           write/merge PRD.yaml
@@ -68,8 +66,8 @@ at any time without losing progress.
 | `product-questions.yaml` | The full question inventory, grouped by theme. |
 | `PRD.schema.yaml` | Human-readable canonical schema for `docs/PRD.yaml`. |
 | `validate_prd.py` | Pydantic v2 validator, called after every write. |
-| `references/interview-mechanics.md` | Batch format, parsing, type discipline, synthesis batch, conditional promotions. Read on entering Phase 6 or Phase 7. |
-| `references/merge-validate.md` | Merge logic for existing PRD.yaml, validator exit-code recovery, CLAUDE.md pointer rules. Read on entering Phase 8. |
+| `references/interview-mechanics.md` | AskUserQuestion batch format, inferred-option pattern, synthesis batch, conditional promotions. Read on entering Phase 6. |
+| `references/merge-validate.md` | Merge logic for existing PRD.yaml, validator exit-code recovery, CLAUDE.md pointer rules. Read on entering Phase 7. |
 | `references/edge-cases.md` | Unusual situations and their handling. Read whenever the happy path doesn't fit. |
 
 Runtime files (NOT inside this skill directory):
@@ -82,14 +80,14 @@ Runtime files (NOT inside this skill directory):
 
 ## Reserved EXIT command
 
-At any prompt, the user can type `EXIT` (case-insensitive) to abort the
-interview. State is *always* saved automatically after each confirmed batch,
-so progress is never lost — `EXIT` simply marks the session
-`status: aborted` and stops.
+At any prompt, the user can type `EXIT` (case-insensitive) into the free-text
+field of any `AskUserQuestion` call to abort the interview. State is *always*
+saved automatically after each confirmed batch, so progress is never lost —
+`EXIT` simply marks the session `status: aborted` and stops.
 
 There is no `SAVE` command — saving is implicit.
 
-## The 9-phase flow
+## The 8-phase flow
 
 ### Phase 1 — Resume check
 
@@ -100,7 +98,7 @@ Before doing anything else, check for `.claude/skills-state/sdlc-prd.state.yaml`
   > **resume**, **restart** (discard previous answers), or **discard** (delete
   > state and exit)?"
 - If `status: complete` or `status: aborted` and `docs/PRD.yaml` exists, treat
-  this as an update flow — see Phase 8's *merge* behavior.
+  this as an update flow — see Phase 7's *merge* behavior.
 - If no state file, continue to Phase 2.
 
 ### Phase 2 — Scan
@@ -232,59 +230,44 @@ Write the confirmed values into the state file. Set
 `<field>_confidence: confirmed` for explicitly confirmed items,
 `<field>_confidence: inferred` for accepted-as-is inferences.
 
-### Phase 6 — Required-themes interview
+### Phase 6 — Theme interview
 
-Required themes are asked in this order:
+Walk the themes in the order defined by `product-questions.yaml`. Use
+`AskUserQuestion` as the canonical asking channel (2–4 questions per call).
+For each theme:
 
-1. `problem_opportunity`
-2. `users_personas`
-3. `use_cases`
-4. `functional_requirements`
-5. `technical_constraints`
-6. `product_identity` ← intentionally **last**
+- **Required themes** (`required: true` in the YAML): run question batches
+  until every required question in the theme is answered. Write state after
+  every confirmed batch.
+- **Optional themes** (`required: false`): before asking any questions, offer
+  a gate via `AskUserQuestion`:
 
-**Why product_identity is last**: name, slug, one-liner, tagline, and vision
-are *synthesis outputs*. They read better when authored after the agent has
-heard the problem, the users, the workflows, the features, and the tech
-choices. Asking name first ("what's it called?") before the user has thought
-about anything is a degraded experience.
+  > "Theme: **\<name\>** — N questions. \<one-line description\>.
+  > Address now, skip, or mark as todo?"
 
-Run the interview as **batches of 3–5 questions per theme**. After every
-batch, write state immediately — that's what makes `EXIT` safe.
+  - **now** → run batches as above.
+  - **skip** → record under `skipped_themes` in state, move on.
+  - **todo** → append `"TODO: address theme <name>"` to
+    `open_questions.undecided_decisions`, move on.
 
-For batch format, parsing rules, type discipline, the product_identity
-synthesis batch, capture_rationale follow-ups, and the `required_if`
-conditional-promotion table → see `references/interview-mechanics.md`.
+Required questions can never be `todo`'d. They must be answered, set to
+`null` (writing a note to `prd_warnings`), or the user must `EXIT`.
+
+After all themes are addressed (answered/skipped/todo'd), set
+`suggestion_phase_done: true` in state.
+
+For AskUserQuestion call format, the `⚠ inferred` position-1 option pattern,
+`capture_rationale` follow-ups, and `required_if` conditional-promotion
+table → see `references/interview-mechanics.md`.
 
 The two non-negotiable rules in this phase:
 
-1. `⚠ inferred` candidates (used heavily in the product_identity synthesis
-   batch) cannot be batch-accepted via shortcuts. Each one needs explicit
-   pick-or-correct.
+1. `⚠ inferred` candidates surface as the **position-1 recommended option**
+   in their `AskUserQuestion` call. They cannot be silently accepted — the
+   user must explicitly pick or correct. This is the hallucination guard.
 2. State is written after **every confirmed batch**, not at theme boundaries.
 
-### Phase 7 — Optional-themes step-through
-
-Walk through optional themes in order, one at a time. For each theme, ask:
-
-> "Theme: **Non-Functional Requirements** — 5 questions, ~2 min.
-> These shape architecture choices (scalability, reliability, accessibility).
->
-> Address now / **skip** / mark as `todo` (capture as open question)?"
-
-- **now** → run a Phase 6-style batch.
-- **skip** → mark theme as `skipped_themes`, move on.
-- **todo** → append a string to `open_questions.undecided_decisions` like
-  `"TODO: address theme non_functional_requirements"`. Move on.
-
-`todo` is **only** offered for optional themes/questions. Required questions
-have no `todo` escape — they must be answered, skipped (writing `null` +
-warning), or the user must `EXIT` to come back later.
-
-After all optional themes are addressed (now/skipped/todo'd), set
-`suggestion_phase_done: true` in state.
-
-### Phase 8 — Write & validate
+### Phase 7 — Write & validate
 
 Write or merge `docs/PRD.yaml` at the project root, then run:
 
@@ -297,14 +280,22 @@ confirmation), type discipline when writing list-typed fields, and the
 exit-code recovery flow → see `references/merge-validate.md`.
 
 When writing the file: inline YAML comments on top-level keys, updated
-`metadata.last_updated` and `metadata.session_id`, and a populated
-`prd_warnings` list for any required field left null.
+`metadata.last_updated` and `metadata.session_id`.
 
-### Phase 9 — CLAUDE.md pointer & complete
+Set `metadata.status`:
+- `"complete"` — only when all required fields are filled and the validator
+  passes with `[OK]`.
+- `"draft"` — on early EXIT or when any required field is still null.
 
-On successful validation, inject (or update) the `## Product Requirements`
-pointer block in the project root `CLAUDE.md`. Create the file with the
-block alone if missing.
+If the validator returns `[FAIL]` because required fields are missing despite
+`status: complete`, ask the user via `AskUserQuestion` to either fill them
+in now or accept `status: draft`.
+
+### Phase 8 — CLAUDE.md pointer & complete
+
+On successful validation (`[OK]` or `[DRAFT]`), inject (or update) the
+`## Product Requirements` pointer block in the project root `CLAUDE.md`.
+Create the file with the block alone if missing.
 
 For block content, detection rule, and append behavior → see
 `references/merge-validate.md`.
@@ -332,7 +323,7 @@ pre_fill_confirmed: false
 suggestion_phase_done: false
 completed_themes: []
 skipped_themes: []
-todo_themes: []      # themes the user marked `todo` in Phase 7
+todo_themes: []      # themes the user marked `todo` in Phase 6
 pending_themes: []
 current_theme: null
 partial_answers: {}  # mirrors PRD.yaml structure incrementally
@@ -346,7 +337,7 @@ Rules:
   confirmations and the Phase 3 idea-text capture.
 - On user `EXIT`: set `status: aborted`, write current `partial_answers`,
   confirm to user that state was saved, then stop.
-- On Phase 9 completion: set `status: complete` but keep the file.
+- On Phase 8 completion: set `status: complete` but keep the file.
 - The validator ignores this file — it validates only `docs/PRD.yaml`.
 
 **Source of truth on resume:**
@@ -356,7 +347,7 @@ Rules:
 - On resume: load `docs/PRD.yaml` first as the baseline, then layer the state's
   `partial_answers` on top.
 - If they conflict on the same key, ask the user which to keep — never
-  silently overwrite. (See Phase 8.)
+  silently overwrite. (See Phase 7.)
 
 ## Edge cases
 
@@ -371,27 +362,23 @@ attempts) → see `references/edge-cases.md`.
 The interview is potentially long. Keep it humane:
 
 - Use the user's terminology as soon as they introduce it.
-- Keep batches to 3–5 questions; never fewer than 3 (waste) or more than 5
-  (overwhelm).
+- Keep AskUserQuestion batches to 2–4 questions; never more than 4.
 - Acknowledge progress at each theme boundary ("That's problem & opportunity
   done — next: users & personas, 5 questions.").
-- Always make multiple-choice the path of least resistance. Free text is the
-  fallback, not the default.
+- Always make multiple-choice the path of least resistance.
 - For the product_identity batch (Phase 6 finale), explicitly call out that
   candidates were synthesized from prior answers — don't pretend they came
   from nowhere.
-- After Phase 7, congratulate the user briefly and move on to write/validate.
+- After all themes are done, congratulate the user briefly and move to write/validate.
   Do not repeat the entire summary back at them.
 
 ## Quick reference: commands the user can type
 
 | User input | Effect |
 |---|---|
-| `EXIT` | Abort, save state with `status: aborted`. |
-| `1a, 2b, 3c` | Pick options a/b/c for questions 1/2/3. |
-| `1: free text, 2b, 3 skip` | Mix free text and options; skip a question. |
-| `confirm` | Accept a single inferred pre-fill. |
+| `EXIT` | Abort: type into the free-text field of any AskUserQuestion call. |
+| `confirm` | Accept a single inferred pre-fill (Phase 5). |
 | `ok` | Batch-accept all `✓ found` pre-fills in the current theme, OR accept the Phase 3 summary as-is. |
-| `now` | (Phase 7) Run the proposed optional theme. |
-| `skip` | (Phase 7) Skip the proposed optional theme. |
-| `todo` | (Phase 7) Defer the proposed optional theme; logs it to `open_questions.undecided_decisions`. |
+| `now` | Run the proposed optional theme (gate question). |
+| `skip` | Skip the proposed optional theme (gate question). |
+| `todo` | Defer the proposed optional theme; logs it to `open_questions.undecided_decisions`. |

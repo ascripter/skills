@@ -1,0 +1,30 @@
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-05T18:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "44444444-4444-4444-4444-444444444444"
+  monorepo: false
+  status: "draft"   # ← draft with missing required field → exit 0 (DRAFT)
+
+prd_warnings:
+  - "product_identity.name not yet filled in"   # informational note, not an ack flag
+
+product_identity:
+  name: null
+  one_liner: "Track team work without the noise."
+
+problem_opportunity:
+  problem_statement: "Existing trackers are too heavyweight for small teams."
+
+users_personas:
+  primary_users: ["Engineering team leads"]
+
+use_cases:
+  core_workflows: ["Add a task quickly"]
+
+functional_requirements:
+  must_have_features: ["Quick add"]
+
+technical_constraints:
+  primary_language: python
+  runtime_platform: cli

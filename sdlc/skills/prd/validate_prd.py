@@ -6,9 +6,10 @@ Run from the project root:
     python .claude/skills/sdlc-prd/validate_prd.py --path some/other/PRD.yaml
 
 Exit codes:
-    0 — schema valid (warnings allowed for required-but-null fields that are
-        already acknowledged in `prd_warnings`)
-    1 — schema invalid
+    0 — schema valid; either status='complete' with all required fields filled,
+        or status='draft' (with or without missing required fields).
+    1 — schema invalid (pydantic error), OR status='complete' but required
+        fields are missing.
     2 — could not read or parse the file (missing, bad YAML, etc.)
     3 — required dependency missing (pydantic v2 or pyyaml)
 """
@@ -19,7 +20,7 @@ import argparse
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 try:
     import yaml
@@ -179,7 +180,9 @@ class LicenseType(str, Enum):
 
 
 # =============================================================================
-# Theme models
+# Theme models — declared in the canonical interview order from
+# product-questions.yaml (required themes first, product_identity last among
+# required, optional themes follow).
 # =============================================================================
 
 # Allow extra keys we haven't modeled yet (forward-compat for new question
@@ -189,19 +192,6 @@ _BASE_CONFIG = ConfigDict(extra="allow", str_strip_whitespace=True)
 
 class _ThemeBase(BaseModel):
     model_config = _BASE_CONFIG
-
-
-class ProductIdentity(_ThemeBase):
-    idea_text: Optional[str] = None
-    name: Optional[str] = None
-    name_confidence: Optional[Confidence] = None
-    slug: Optional[str] = None
-    slug_confidence: Optional[Confidence] = None
-    one_liner: Optional[str] = None
-    one_liner_confidence: Optional[Confidence] = None
-    tagline: Optional[str] = None
-    vision: Optional[str] = None
-    mission: Optional[str] = None
 
 
 class ProblemOpportunity(_ThemeBase):
@@ -241,16 +231,6 @@ class FunctionalRequirements(_ThemeBase):
     ai_features_confidence: Optional[Confidence] = None
 
 
-class NonFunctionalRequirements(_ThemeBase):
-    performance_targets: Optional[List[str]] = None
-    scalability: Optional[Scalability] = None
-    scalability_confidence: Optional[Confidence] = None
-    reliability: Optional[Reliability] = None
-    reliability_confidence: Optional[Confidence] = None
-    availability_sla: Optional[str] = None
-    accessibility: Optional[Accessibility] = None
-
-
 class TechnicalConstraints(_ThemeBase):
     primary_language: Optional[PrimaryLanguage] = None
     primary_language_rationale: Optional[str] = None
@@ -266,6 +246,29 @@ class TechnicalConstraints(_ThemeBase):
     existing_systems: Optional[List[str]] = None
     existing_systems_confidence: Optional[Confidence] = None
     browser_support: Optional[List[str]] = None
+
+
+class ProductIdentity(_ThemeBase):
+    idea_text: Optional[str] = None
+    name: Optional[str] = None
+    name_confidence: Optional[Confidence] = None
+    slug: Optional[str] = None
+    slug_confidence: Optional[Confidence] = None
+    one_liner: Optional[str] = None
+    one_liner_confidence: Optional[Confidence] = None
+    tagline: Optional[str] = None
+    vision: Optional[str] = None
+    mission: Optional[str] = None
+
+
+class NonFunctionalRequirements(_ThemeBase):
+    performance_targets: Optional[List[str]] = None
+    scalability: Optional[Scalability] = None
+    scalability_confidence: Optional[Confidence] = None
+    reliability: Optional[Reliability] = None
+    reliability_confidence: Optional[Confidence] = None
+    availability_sla: Optional[str] = None
+    accessibility: Optional[Accessibility] = None
 
 
 class DataModel(_ThemeBase):
@@ -309,11 +312,9 @@ class Stakeholders(_ThemeBase):
     external_dependencies: Optional[List[str]] = None
 
 
-class TimelineMilestones(_ThemeBase):
+class Milestones(_ThemeBase):
     mvp_scope: Optional[str] = None
-    target_mvp_date: Optional[str] = None
-    planned_phases: Optional[List[str]] = None
-    hard_deadlines: Optional[List[str]] = None
+    phases: Optional[List[str]] = None
 
 
 class SuccessMetrics(_ThemeBase):
@@ -348,23 +349,24 @@ class Metadata(BaseModel):
     generated_by: str = "sdlc-prd"
     session_id: str
     monorepo: bool = False
+    status: Literal["draft", "complete"] = "draft"
 
 
 class Product(_ThemeBase):
-    """One product's themes, used inside `products: <slug>: ...`."""
+    """One product's themes in interview order, used inside `products: <slug>: ...`."""
 
-    product_identity: Optional[ProductIdentity] = None
     problem_opportunity: Optional[ProblemOpportunity] = None
     users_personas: Optional[UsersPersonas] = None
     use_cases: Optional[UseCases] = None
     functional_requirements: Optional[FunctionalRequirements] = None
-    non_functional_requirements: Optional[NonFunctionalRequirements] = None
     technical_constraints: Optional[TechnicalConstraints] = None
+    product_identity: Optional[ProductIdentity] = None
+    non_functional_requirements: Optional[NonFunctionalRequirements] = None
     data_model: Optional[DataModel] = None
     security_compliance: Optional[SecurityCompliance] = None
     business_model: Optional[BusinessModel] = None
     stakeholders: Optional[Stakeholders] = None
-    timeline_milestones: Optional[TimelineMilestones] = None
+    milestones: Optional[Milestones] = None
     success_metrics: Optional[SuccessMetrics] = None
     risks_assumptions: Optional[RisksAssumptions] = None
     open_questions: Optional[OpenQuestions] = None
@@ -382,19 +384,19 @@ class PRD(BaseModel):
     metadata: Metadata
     prd_warnings: List[str] = Field(default_factory=list)
 
-    # Single-product theme blocks (mirror Product)
-    product_identity: Optional[ProductIdentity] = None
+    # Single-product theme blocks in interview order (mirror Product)
     problem_opportunity: Optional[ProblemOpportunity] = None
     users_personas: Optional[UsersPersonas] = None
     use_cases: Optional[UseCases] = None
     functional_requirements: Optional[FunctionalRequirements] = None
-    non_functional_requirements: Optional[NonFunctionalRequirements] = None
     technical_constraints: Optional[TechnicalConstraints] = None
+    product_identity: Optional[ProductIdentity] = None
+    non_functional_requirements: Optional[NonFunctionalRequirements] = None
     data_model: Optional[DataModel] = None
     security_compliance: Optional[SecurityCompliance] = None
     business_model: Optional[BusinessModel] = None
     stakeholders: Optional[Stakeholders] = None
-    timeline_milestones: Optional[TimelineMilestones] = None
+    milestones: Optional[Milestones] = None
     success_metrics: Optional[SuccessMetrics] = None
     risks_assumptions: Optional[RisksAssumptions] = None
     open_questions: Optional[OpenQuestions] = None
@@ -405,18 +407,18 @@ class PRD(BaseModel):
     @model_validator(mode="after")
     def _check_mode(self) -> "PRD":
         single_themes = [
-            self.product_identity,
             self.problem_opportunity,
             self.users_personas,
             self.use_cases,
             self.functional_requirements,
-            self.non_functional_requirements,
             self.technical_constraints,
+            self.product_identity,
+            self.non_functional_requirements,
             self.data_model,
             self.security_compliance,
             self.business_model,
             self.stakeholders,
-            self.timeline_milestones,
+            self.milestones,
             self.success_metrics,
             self.risks_assumptions,
             self.open_questions,
@@ -441,20 +443,20 @@ class PRD(BaseModel):
 
 
 # =============================================================================
-# Required-field check (separate from schema validation so we can warn-not-fail
-# when prd_warnings already acknowledges the gap)
+# Required-field check — separate from schema validation so drafts can be
+# saved without failing. Validation behavior depends on metadata.status.
 # =============================================================================
 
 # Path is dotted relative to a Product (or top level in single-product mode).
 REQUIRED_PATHS: List[str] = [
-    "product_identity.name",
-    "product_identity.one_liner",
     "problem_opportunity.problem_statement",
     "users_personas.primary_users",
     "use_cases.core_workflows",
     "functional_requirements.must_have_features",
     "technical_constraints.primary_language",
     "technical_constraints.runtime_platform",
+    "product_identity.name",
+    "product_identity.one_liner",
 ]
 
 
@@ -475,25 +477,17 @@ def _is_empty(value: object) -> bool:
     return False
 
 
-def check_required(prd: PRD) -> tuple[List[str], List[str]]:
-    """Return (errors, warnings).
+def check_required(prd: PRD) -> List[str]:
+    """Return list of missing required field paths.
 
-    A required field that is empty *and not* acknowledged in prd_warnings is
-    an error. A required field that is empty but acknowledged is a warning.
+    In monorepo mode, paths are prefixed with `products.<slug>.`.
     """
-    errors: List[str] = []
-    warnings: List[str] = []
+    missing: List[str] = []
 
     def _check(scope_label: str, root: object) -> None:
         for path in REQUIRED_PATHS:
             if _is_empty(_get_dotted(root, path)):
-                qualified = f"{scope_label}{path}"
-                acknowledged = any(qualified in w or path in w for w in prd.prd_warnings)
-                msg = f"required field missing or empty: {qualified}"
-                if acknowledged:
-                    warnings.append(msg + " (acknowledged in prd_warnings)")
-                else:
-                    errors.append(msg + " (add to prd_warnings or fill it in)")
+                missing.append(f"{scope_label}{path}")
 
     if prd.metadata.monorepo and prd.products:
         for slug, product in prd.products.items():
@@ -501,7 +495,7 @@ def check_required(prd: PRD) -> tuple[List[str], List[str]]:
     else:
         _check("", prd)
 
-    return errors, warnings
+    return missing
 
 
 # =============================================================================
@@ -549,24 +543,36 @@ def validate_file(path: Path) -> int:
             print(f"  - {line}")
         return 1
 
-    errors, warnings = check_required(prd)
+    missing = check_required(prd)
+    status = prd.metadata.status
 
-    if errors:
-        print(f"[FAIL] PRD.yaml FAILED required-field check ({path})\n")
-        print("Errors:")
-        for e in errors:
-            print(f"  - {e}")
-        if warnings:
-            print("\nWarnings:")
-            for w in warnings:
-                print(f"  - {w}")
-        return 1
+    if status == "complete":
+        if missing:
+            print(
+                f"[FAIL] PRD.yaml claims status 'complete' but {len(missing)} "
+                f"required field(s) are missing ({path})\n"
+            )
+            print("Missing required fields:")
+            for m in missing:
+                print(f"  - {m}")
+            return 1
+        print(f"[OK] PRD.yaml is valid and complete ({path})")
+        return 0
 
-    print(f"[OK] PRD.yaml is valid ({path})")
-    if warnings:
-        print(f"\nWarnings ({len(warnings)}):")
-        for w in warnings:
-            print(f"  - {w}")
+    # status == "draft"
+    if missing:
+        print(
+            f"[DRAFT] PRD.yaml is a draft — {len(missing)} required field(s) "
+            f"missing ({path})"
+        )
+        print("Missing required fields (fill in and set metadata.status: complete when done):")
+        for m in missing:
+            print(f"  - {m}")
+    else:
+        print(
+            f"[DRAFT] PRD.yaml is a draft — all required fields filled. "
+            f"Set metadata.status: complete when done ({path})"
+        )
     return 0
 
 

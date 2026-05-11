@@ -1,7 +1,7 @@
 # Merging, validating, and the CLAUDE.md pointer
 
-Detailed rules for Phase 8 (write & validate) and Phase 9 (CLAUDE.md
-pointer). Read this when entering Phase 8.
+Detailed rules for Phase 7 (write & validate) and Phase 8 (CLAUDE.md
+pointer). Read this when entering Phase 7.
 
 ## Merging into an existing PRD.yaml
 
@@ -35,7 +35,12 @@ Write `docs/PRD.yaml` with:
 - Inline YAML comments on each top-level key (use `PRD.schema.yaml` as a
   template).
 - Updated `metadata.last_updated` (ISO-8601 UTC) and `metadata.session_id`.
-- A populated `prd_warnings` list for any required field left null.
+- `metadata.status`:
+  - Set to `"complete"` only when **all required fields are filled** and
+    the validator passes with `[OK]`.
+  - Set to `"draft"` on early EXIT or when any required field is still null.
+- `prd_warnings`: informational notes (low-confidence answers, merge
+  conflicts, etc.) — not used for required-field acknowledgement.
 
 ## Running the validator
 
@@ -47,16 +52,21 @@ Exit codes:
 
 | Code | Meaning | What the agent does |
 |---|---|---|
-| 0 | Valid | ✓ pass; warnings (if any) are informational. Proceed to Phase 9. |
-| 1 | Schema invalid | Show field-level errors verbatim. Ask: "Want to re-enter just those fields, or finish with errors?" Re-run validation after re-entry. |
+| 0 (`[OK]`) | Complete and valid | ✓ Proceed to Phase 8. |
+| 0 (`[DRAFT]`) | Draft — structurally valid, possibly missing required fields | Inform user and proceed to Phase 8 (pointer still injected). |
+| 1 (`[FAIL]`) | Schema invalid, OR `status: complete` but required fields missing | Show field-level errors verbatim. If required fields are missing, offer via `AskUserQuestion`: fill them in now, or accept `status: draft`. Re-run validation after re-entry. |
 | 2 | Cannot read/parse the file | Surface to user (missing file, bad YAML, permission error). Do not retry silently. |
-| 3 | Missing dependency | For `pydantic>=2` or `pyyaml`, validator prints `pip install` instructions AND alternatively `pyproject.toml` edit instructions, then calling `uv sync`. Do **not** auto-install — ask the user to install and re-run. |
+| 3 | Missing dependency | Validator prints `pip install` instructions. Do **not** auto-install — ask the user to install and re-run. |
 
-## CLAUDE.md pointer (Phase 9)
+**Downstream-agent contract**: downstream agents MUST reject the PRD if
+`metadata.status != "complete"` OR if `validate_prd.py` exits non-zero.
+Document this in CLAUDE.md if the user asks.
 
-On successful validation, inject (or update) this block in the project
-root `CLAUDE.md`. If `CLAUDE.md` does not exist, create it with this block
-as the sole content:
+## CLAUDE.md pointer (Phase 8)
+
+On validation exit code 0 (either `[OK]` or `[DRAFT]`), inject (or update)
+this block in the project root `CLAUDE.md`. If `CLAUDE.md` does not exist,
+create it with this block as the sole content:
 
 ```markdown
 ## Product Requirements
@@ -74,7 +84,7 @@ content.
 
 ## Closing the session
 
-After Phase 9's CLAUDE.md write succeeds:
+After Phase 8's CLAUDE.md write succeeds:
 
 - Set `status: complete` in the state file.
 - Keep the state file as an audit trail — do **not** delete it.

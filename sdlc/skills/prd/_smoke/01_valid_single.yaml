@@ -4,6 +4,7 @@ metadata:
   generated_by: sdlc-prd
   session_id: "11111111-1111-1111-1111-111111111111"
   monorepo: false
+  status: "complete"
 
 prd_warnings: []
 

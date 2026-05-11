@@ -22,6 +22,7 @@
 #       * assumption — user picked a placeholder, expect to revisit
 #   - Enum values are lowercase snake_case strings. See `validate_prd.py`
 #     for the authoritative enum definitions.
+#   - Theme order matches the interview order in `product-questions.yaml`.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -30,34 +31,25 @@
 metadata:
   prd_version: "1.0"                       # schema version this file conforms to
   last_updated: "2026-05-05T12:00:00Z"     # ISO-8601 UTC timestamp of last write
-  generated_by: sdlc-prd                # always literal string "sdlc-prd"
+  generated_by: sdlc-prd                   # always literal string "sdlc-prd"
   session_id: "00000000-0000-0000-0000-000000000000"  # UUID of the interview session
-  monorepo: false                          # true => use the `products:` shape below
+  monorepo: false                           # true => use the `products:` shape below
+  status: "draft"                           # "draft" | "complete"
+                                            # writer sets to "complete" only when all
+                                            # required fields are filled and the
+                                            # validator passes. Downstream agents
+                                            # MUST reject the PRD if status != "complete".
 
-# prd_warnings — populated by the writer, not the user.
-# Each entry references a required field that was left null, so downstream
-# agents can decide whether to proceed, prompt, or stop.
-prd_warnings:
-  - "product_identity.name is null (required)"
+# prd_warnings — informational notes populated by the writer.
+# Use for low-confidence answers, merge conflicts, or other notable context.
+# NOT used for required-field acknowledgement — see metadata.status for
+# completeness signalling.
+prd_warnings: []
 
 # =============================================================================
-# SINGLE-PRODUCT MODE — themes at top level
+# SINGLE-PRODUCT MODE — themes at top level, in interview order
 # (omit the entire `products:` key in this mode)
 # =============================================================================
-
-# -----------------------------------------------------------------------------
-# product_identity — what is this product, in one breath?
-# (Asked LAST among required themes so the agent can synthesize candidates
-# from everything answered in earlier themes.)
-# -----------------------------------------------------------------------------
-product_identity:
-  idea_text: null             # original free-text idea description from Phase 3 (string|null, multi-line)
-  name: null                  # Product name as it appears to users (string)
-  slug: null                  # url-safe identifier, kebab-case (string)
-  one_liner: null             # ≤ 140 chars, plain language, no jargon (string)
-  tagline: null               # marketing tagline, optional (string|null)
-  vision: null                # 1–3 sentences: where this product is going (string|null)
-  mission: null               # 1–3 sentences: what it does for users today (string|null)
 
 # -----------------------------------------------------------------------------
 # problem_opportunity — what hurts and why this is the moment to fix it
@@ -98,16 +90,6 @@ functional_requirements:
   ai_features: null           # AI-driven capabilities, if any (list[string])
 
 # -----------------------------------------------------------------------------
-# non_functional_requirements — qualities, not features
-# -----------------------------------------------------------------------------
-non_functional_requirements:
-  performance_targets: null   # e.g. "p95 < 200ms", "10k rps" (list[string])
-  scalability: null           # one of: small | medium | large | hyperscale (enum)
-  reliability: null           # one of: best_effort | high | mission_critical (enum)
-  availability_sla: null      # e.g. "99.9%", "business hours" (string|null)
-  accessibility: null         # one of: none_yet | wcag_aa | wcag_aaa (enum)
-
-# -----------------------------------------------------------------------------
 # technical_constraints — the tech we are committed to (or not)
 # Note: several fields here capture rationale because trade-offs matter.
 # -----------------------------------------------------------------------------
@@ -127,6 +109,30 @@ technical_constraints:
   deployment_target_rationale: null  # (string|null)
   existing_systems: null      # systems we must integrate with (list[string])
   browser_support: null       # e.g. ["chrome>=120", "firefox>=115"] (list[string]|null)
+
+# -----------------------------------------------------------------------------
+# product_identity — what is this product, in one breath?
+# (Asked LAST among required themes so the agent can synthesize candidates
+# from everything answered in earlier themes.)
+# -----------------------------------------------------------------------------
+product_identity:
+  idea_text: null             # original free-text idea description from Phase 3 (string|null, multi-line)
+  name: null                  # Product name as it appears to users (string)
+  slug: null                  # url-safe identifier, kebab-case (string)
+  one_liner: null             # ≤ 140 chars, plain language, no jargon (string)
+  tagline: null               # marketing tagline, optional (string|null)
+  vision: null                # 1–3 sentences: where this product is going (string|null)
+  mission: null               # 1–3 sentences: what it does for users today (string|null)
+
+# -----------------------------------------------------------------------------
+# non_functional_requirements — qualities, not features
+# -----------------------------------------------------------------------------
+non_functional_requirements:
+  performance_targets: null   # e.g. "p95 < 200ms", "10k rps" (list[string])
+  scalability: null           # one of: small | medium | large | hyperscale (enum)
+  reliability: null           # one of: best_effort | high | mission_critical (enum)
+  availability_sla: null      # e.g. "99.9%", "business hours" (string|null)
+  accessibility: null         # one of: none_yet | wcag_aa | wcag_aaa (enum)
 
 # -----------------------------------------------------------------------------
 # data_model — what data lives here, who owns it, how much
@@ -174,17 +180,15 @@ business_model:
 stakeholders:
   product_owner: null         # name or role (string|null)
   primary_contributors: null  # list of names/roles (list[string])
-  decision_maker: null        # who has final say on scope/timeline (string|null)
+  decision_maker: null        # who has final say on scope (string|null)
   external_dependencies: null # external teams/vendors we depend on (list[string])
 
 # -----------------------------------------------------------------------------
-# timeline_milestones — when must this be real
+# milestones — what we're building toward, and in what phases
 # -----------------------------------------------------------------------------
-timeline_milestones:
+milestones:
   mvp_scope: null             # 1–3 sentence MVP description (string|null)
-  target_mvp_date: null       # ISO-8601 date or descriptive text (string|null)
-  planned_phases: null        # ordered list of phases (list[string])
-  hard_deadlines: null        # immovable dates and what they block (list[string])
+  phases: null                # ordered list of phases beyond MVP (list[string])
 
 # -----------------------------------------------------------------------------
 # success_metrics — how we will know it worked
@@ -214,19 +218,32 @@ open_questions:
 # =============================================================================
 # MULTI-PRODUCT MODE (monorepo) — uncomment and use *instead of* the top-level
 # theme blocks above. Each entry under `products:` mirrors the single-product
-# shape (every theme above can appear under `products.<slug>.<theme>`).
+# shape (every theme above, in the same interview order).
 # =============================================================================
 #
 # products:
 #   auth:
+#     problem_opportunity: { ... }
+#     users_personas: { ... }
+#     use_cases: { ... }
+#     functional_requirements: { ... }
+#     technical_constraints: { ... }
 #     product_identity:
 #       name: "Auth Service"
 #       slug: "auth"
 #       one_liner: "..."
 #       ...
-#     problem_opportunity: { ... }
-#     # ...all other themes...
+#     non_functional_requirements: { ... }
+#     data_model: { ... }
+#     security_compliance: { ... }
+#     business_model: { ... }
+#     stakeholders: { ... }
+#     milestones: { ... }
+#     success_metrics: { ... }
+#     risks_assumptions: { ... }
+#     open_questions: { ... }
 #   billing:
+#     problem_opportunity: { ... }
 #     product_identity:
 #       name: "Billing"
 #       slug: "billing"

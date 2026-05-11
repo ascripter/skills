@@ -26,11 +26,11 @@
 #   confidence_field   — if true, a sibling <prd_path>_confidence is written
 #                        (most fields use this; set false to opt out)
 #
-# Theme order below is the canonical interview order. Required themes come
-# first; product_identity is intentionally LAST among the required themes so
-# that the agent can synthesize name/slug/one_liner candidates from earlier
-# answers (problem, users, features, tech) instead of asking cold. Optional
-# themes follow, surfaced one-by-one in the optional-themes step-through.
+# Theme order below is the canonical interview order. Required themes are
+# asked in batches via AskUserQuestion (2–4 questions per call); product_identity
+# is intentionally LAST among required themes so the agent can synthesize
+# name/slug/one_liner candidates from earlier answers instead of asking cold.
+# For optional themes the agent offers a now/skip/todo gate before each batch.
 # =============================================================================
 
 themes:
@@ -93,10 +93,10 @@ themes:
     required: false
     description: "Who decides, who builds, who blocks?"
 
-  - id: timeline_milestones
-    title: "Timeline & Milestones"
+  - id: milestones
+    title: "Milestones"
     required: false
-    description: "When must this be real?"
+    description: "What we're building toward and in what phases."
 
   - id: success_metrics
     title: "Success Metrics"
@@ -496,9 +496,21 @@ questions:
 
   # ---------------------------------------------------------------------------
   # Product Identity (asked LAST among required themes — synthesized from
-  # everything answered above; the agent should propose name/slug/one_liner
-  # candidates as ⚠ inferred pre-fills, not ask cold)
+  # everything answered above; the agent should propose all candidates as
+  # ⚠ inferred position-1 options in AskUserQuestion, not ask cold)
   # ---------------------------------------------------------------------------
+  - theme: product_identity
+    id: idea_text
+    prd_path: product_identity.idea_text
+    question: "Original product brief — the free-text description you shared at the start."
+    hint: "Preserved verbatim so downstream agents can refer to the founding idea without re-reading the interview transcript."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+    synthesis: true
+
   - theme: product_identity
     id: name
     prd_path: product_identity.name
@@ -552,6 +564,18 @@ questions:
     prd_path: product_identity.vision
     question: "Where is this product going in 1–3 years? (1–3 sentences)"
     hint: "Vision shapes architectural choices that have long horizons."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+    synthesis: true
+
+  - theme: product_identity
+    id: mission
+    prd_path: product_identity.mission
+    question: "What does this product do for users today? (1–3 sentences)"
+    hint: "Mission is what the product IS now; vision is where it's going. Used by agents for onboarding copy and feature rationale."
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -614,6 +638,7 @@ questions:
     question: "Availability target? (Optional.)"
     hint: "An explicit SLA shapes infra spend and oncall rotations."
     suggested_answers:
+      - "99% (≈3.65 days/year downtime)"
       - "99.9% (≈9h/year downtime)"
       - "99.95%"
       - "99.99% (≈53min/year downtime)"
@@ -913,11 +938,11 @@ questions:
     confidence_field: false
 
   # ---------------------------------------------------------------------------
-  # Timeline & Milestones
+  # Milestones
   # ---------------------------------------------------------------------------
-  - theme: timeline_milestones
+  - theme: milestones
     id: mvp_scope
-    prd_path: timeline_milestones.mvp_scope
+    prd_path: milestones.mvp_scope
     question: "What is the MVP, in 1–3 sentences?"
     hint: "Tightest possible scope an agent should default to building first."
     suggested_answers: []
@@ -926,38 +951,11 @@ questions:
     capture_rationale: false
     confidence_field: false
 
-  - theme: timeline_milestones
-    id: target_mvp_date
-    prd_path: timeline_milestones.target_mvp_date
-    question: "Target MVP date? (Specific date, quarter, or 'no fixed date'.)"
-    hint: "Calibrates how aggressive scope cuts should be."
-    suggested_answers:
-      - "Within 2 weeks"
-      - "Within 1 month"
-      - "Within 1 quarter"
-      - "Within 6 months"
-      - "No fixed date"
-    free_text_allowed: true
-    required: false
-    capture_rationale: false
-    confidence_field: false
-
-  - theme: timeline_milestones
-    id: planned_phases
-    prd_path: timeline_milestones.planned_phases
+  - theme: milestones
+    id: phases
+    prd_path: milestones.phases
     question: "Planned post-MVP phases, if any? (Ordered list.)"
     hint: "Lets agents plan extension points without front-loading complexity."
-    suggested_answers: []
-    free_text_allowed: true
-    required: false
-    capture_rationale: false
-    confidence_field: false
-
-  - theme: timeline_milestones
-    id: hard_deadlines
-    prd_path: timeline_milestones.hard_deadlines
-    question: "Any *immovable* deadlines, and what they block? (List or 'none'.)"
-    hint: "Hard deadlines justify trade-offs that would otherwise be wrong."
     suggested_answers: []
     free_text_allowed: true
     required: false

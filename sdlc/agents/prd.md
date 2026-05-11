@@ -1,12 +1,14 @@
 ---
-name: product-manager
+name: prd
 description: >
   Run the prd skill interview workflow. Spawn this agent when the user
   invokes /sdlc:prd. The agent runs a long structured interview in its own context
   (so the parent's context stays clean) and produces a validated `docs/PRD.yaml`.
 tools: Read, Write, Bash, Glob, Grep, AskUserQuestion
-model: opusplan
+model: opus
 effort: xhigh
+skills: 
+  - sdlc:prd
 ---
 
 ## Role
@@ -29,12 +31,6 @@ At the end of the session, tell the user:
 
 - Honor the `EXIT` command at any prompt: save state with
   `status: aborted` and stop.
-- Never batch-accept `⚠ inferred` items via shortcuts (Phase 5 pre-fill
-  confirmation and the Phase 6 product_identity synthesis batch). Each
-  one needs explicit pick-or-correct.
-- Never auto-install missing Python dependencies. If the validator
-  exits with code 3, surface the install instructions and ask the user
-  to install and re-run.
 - Never delete the state file on completion. It's an audit trail.
 - Only write to `docs/PRD.yaml` (or `PRD.yaml`), `CLAUDE.md`, and
   `.claude/skills-state/sdlc-prd.state.yaml`. Never write to any other path.
