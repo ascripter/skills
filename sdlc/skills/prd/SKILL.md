@@ -25,35 +25,13 @@ unambiguous source of product truth.
 
 ## What this skill does (at a glance)
 
-```
-                  +----- existing state? -----+
-   /sdlc:prd --|                            |
-                  +----- no state ------+      |
-                                        v      v
-         scan project --> capture idea (free text + summary)
-                                        |
-                                        v
-                  ask structural Qs (monorepo? products?)
-                                        |
-                                        v
-                  confirm pre-fills (theme by theme)
-                                        |
-                                        v
-                  theme interview (required: run batches;
-                  optional: now/skip/todo gate then batches)
-                                        |
-                                        v
-                          write/merge PRD.yaml
-                                        |
-                                        v
-                          run validate_prd.py
-                                        |
-                                        v
-                          inject CLAUDE.md pointer
-                                        |
-                                        v
-                          mark session complete
-```
+1. **Resume check** → load existing state if any (otherwise scan from scratch).
+2. **Scan + idea capture** → build pre-fill map and a free-text idea summary.
+3. **Structural questions** → monorepo? products? (sets PRD shape.)
+4. **Pre-fill confirmation** → theme by theme, each `⚠ inferred` confirmed individually.
+5. **Theme interview** → required themes always run; optional themes are gated now/skip/todo. Per-question flow varies by `importance` tier (see `references/importance-flows.md`).
+6. **Write + validate** → merge into `docs/PRD.yaml`, run `validate_prd.py`.
+7. **CLAUDE.md pointer + close** → inject the pointer block, mark state `complete`.
 
 State is persisted **after every confirmed batch**, so the user can `EXIT`
 at any time without losing progress.
@@ -66,7 +44,8 @@ at any time without losing progress.
 | `product-questions.yaml` | The full question inventory, grouped by theme. |
 | `PRD.schema.yaml` | Human-readable canonical schema for `docs/PRD.yaml`. |
 | `validate_prd.py` | Pydantic v2 validator, called after every write. |
-| `references/interview-mechanics.md` | AskUserQuestion batch format, inferred-option pattern, synthesis batch, conditional promotions. Read on entering Phase 6. |
+| `references/interview-mechanics.md` | AskUserQuestion batch format, inferred-option pattern, conditional promotions. Read on entering Phase 6. |
+| `references/importance-flows.md` | The `med` / `high` / `critical` interview flows, including the per-item state machine for critical lists and the `product_identity` synthesis batch. Read alongside `interview-mechanics.md` on entering Phase 6 — required whenever a question with `importance: high` or `critical` is up next. |
 | `references/merge-validate.md` | Merge logic for existing PRD.yaml, validator exit-code recovery, CLAUDE.md pointer rules. Read on entering Phase 7. |
 | `references/edge-cases.md` | Unusual situations and their handling. Read whenever the happy path doesn't fit. |
 
@@ -233,19 +212,18 @@ Write the confirmed values into the state file. Set
 ### Phase 6 — Theme interview
 
 Walk the themes in the order defined by `product-questions.yaml`. Use
-`AskUserQuestion` as the canonical asking channel (2–4 questions per call).
-For each theme:
+`AskUserQuestion` as the canonical asking channel. For each theme:
 
-- **Required themes** (`required: true` in the YAML): run question batches
-  until every required question in the theme is answered. Write state after
-  every confirmed batch.
+- **Required themes** (`required: true` in the YAML): run the theme's
+  questions until every required question is answered. Write state after
+  every confirmed batch or mini-section.
 - **Optional themes** (`required: false`): before asking any questions, offer
   a gate via `AskUserQuestion`:
 
   > "Theme: **\<name\>** — N questions. \<one-line description\>.
   > Address now, skip, or mark as todo?"
 
-  - **now** → run batches as above.
+  - **now** → run the theme's questions as above.
   - **skip** → record under `skipped_themes` in state, move on.
   - **todo** → append `"TODO: address theme <name>"` to
     `open_questions.undecided_decisions`, move on.
@@ -256,16 +234,44 @@ Required questions can never be `todo`'d. They must be answered, set to
 After all themes are addressed (answered/skipped/todo'd), set
 `suggestion_phase_done: true` in state.
 
-For AskUserQuestion call format, the `⚠ inferred` position-1 option pattern,
-`capture_rationale` follow-ups, and `required_if` conditional-promotion
-table → see `references/interview-mechanics.md`.
+#### Within a theme: tiered question flow
+
+Each question in `product-questions.yaml` carries an `importance` field
+(`med | high | critical`) that controls how the agent runs it:
+
+- **`med`** (the default — most questions): batch with up to 3 sibling
+  `med` questions from the same theme into one `AskUserQuestion` call.
+  `⚠ inferred` candidate at position 1. Current behavior.
+- **`high`** (~12 questions, mostly required list[string] fields and
+  foundational narratives): runs as its **own mini-section** — never
+  batched with other questions. For scalars: agent drafts a full answer,
+  shows it, user approves or iterates (max 3 rounds). For list[string]:
+  per-item with one clarifying challenge round each.
+- **`critical`** (currently only `must_have_features` and
+  `nice_to_have_features`): full per-item state machine — propose →
+  optionally challenge → detail → optionally clarify → final approval →
+  next item. Every item is examined before being added.
+
+Order within a theme: run all `med` questions first (in 2–4-question
+batches), then each `high`/`critical` question as its own mini-section
+in the order they appear in `product-questions.yaml`.
+
+**Read `references/importance-flows.md` before running any
+`high`/`critical` question.** It contains the exact `AskUserQuestion`
+prompts, iteration caps, EXIT-mid-flow rules, and the
+`product_identity` synthesis batch example.
+
+For batch format details (option layout, free-text-only questions,
+`capture_rationale` follow-ups, `required_if` conditional-promotion
+table) → see `references/interview-mechanics.md`.
 
 The two non-negotiable rules in this phase:
 
 1. `⚠ inferred` candidates surface as the **position-1 recommended option**
    in their `AskUserQuestion` call. They cannot be silently accepted — the
    user must explicitly pick or correct. This is the hallucination guard.
-2. State is written after **every confirmed batch**, not at theme boundaries.
+2. State is written after **every confirmed batch or mini-section**, not
+   at theme boundaries.
 
 ### Phase 7 — Write & validate
 

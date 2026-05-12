@@ -138,51 +138,14 @@ not the string `"none"`.
 
 ## product_identity — the synthesis batch
 
-Because `product_identity` comes **last** among required themes, the agent
-has rich context by the time it asks. Synthesize candidates from all prior
-answers. Every synthesized value surfaces as the **position-1 recommended
-option** in its question — not as a separate pre-fill step.
+`product_identity` is asked LAST among required themes, so by the time
+the agent gets there it has rich context to synthesize name, slug, and
+one-liner candidates instead of asking cold. Every synthesized value
+surfaces as the **position-1 `⚠ inferred` option** in its question.
 
-Example:
-
-```
-AskUserQuestion(questions=[
-  {
-    header: "Identity",
-    question: "What is the product's name?",
-    options: [
-      { label: "⚠ flowcraft", description: "⚠ Inferred from your assembly metaphor. Pick to confirm or use text field to correct." },
-      { label: "⚠ mosaic",    description: "⚠ Pieces composing into a whole." },
-      { label: "⚠ loom",      description: "⚠ Weaving workflows together." },
-      { label: "Custom name", description: "Type your preferred name in the text field." }
-    ]
-  },
-  {
-    header: "Identity",
-    question: "Preferred URL/package slug? (kebab-case)",
-    options: [
-      { label: "⚠ flowcraft", description: "⚠ Auto-derived from inferred name. Confirm or correct." },
-      { label: "Custom slug", description: "Type a kebab-case slug in the text field." }
-    ]
-  },
-  {
-    header: "Identity",
-    question: "Describe the product in one sentence (≤ 140 chars).",
-    options: [
-      { label: "⚠ Inferred one-liner", description: "⚠ \"Compose AI workflows visually, run them anywhere — even offline.\" Confirm or correct." },
-      { label: "Custom one-liner", description: "Type your own in the text field." }
-    ]
-  }
-])
-```
-
-**Hallucination guard**: all `⚠`-marked options require explicit pick-or-correct
-from the user. Accepting one of them counts as confirmation; the user can also
-use the "Other" field to provide a correction. Never treat a non-answer (no
-selection) as implicit acceptance of a `⚠` candidate.
-
-Explicitly call out in the batch header or question text that candidates were
-synthesized from prior answers — don't present them as facts.
+The full call structure and hallucination-guard rules live in
+`references/importance-flows.md` under "product_identity — the synthesis
+batch" alongside the rest of the tier-flow guidance.
 
 ## Conditional promotions (`required_if`)
 

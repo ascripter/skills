@@ -25,12 +25,32 @@
 #                        "In one sentence — why?". Stored at <prd_path>_rationale.
 #   confidence_field   — if true, a sibling <prd_path>_confidence is written
 #                        (most fields use this; set false to opt out)
+#   importance         — one of `med | high | critical`. Controls how the agent
+#                        runs the interview for this question. Defaults to `med`
+#                        if omitted. See `references/importance-flows.md`:
+#                          * med      — single AskUserQuestion batch entry,
+#                                       inferred suggestion at position 1.
+#                          * high     — own mini-section: agent drafts a full
+#                                       answer, shows it, user approves or
+#                                       iterates (max 3 rounds). For list[string]
+#                                       fields the loop runs once per item with
+#                                       a single clarifying challenge round.
+#                          * critical — same as high but the agent challenges
+#                                       every list item against risks/gaps it
+#                                       sees, with the full a→a-2→b→b-2→c→d
+#                                       per-item state machine.
+#                        Most fields stay `med`. Required list[string] fields
+#                        and a few foundational narrative fields are `high`.
+#                        Only `must_have_features` and `nice_to_have_features`
+#                        are `critical` — they define MVP scope.
 #
 # Theme order below is the canonical interview order. Required themes are
 # asked in batches via AskUserQuestion (2–4 questions per call); product_identity
 # is intentionally LAST among required themes so the agent can synthesize
 # name/slug/one_liner candidates from earlier answers instead of asking cold.
 # For optional themes the agent offers a now/skip/todo gate before each batch.
+# Within a theme, `high`/`critical` questions are *not* batched with others —
+# they run as their own mini-section because their answer flow is multi-turn.
 # =============================================================================
 
 themes:
@@ -128,6 +148,7 @@ questions:
     required: true
     capture_rationale: false
     confidence_field: true
+    importance: high
 
   - theme: problem_opportunity
     id: who_has_pain
@@ -144,6 +165,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: problem_opportunity
     id: current_workarounds
@@ -160,6 +182,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: problem_opportunity
     id: why_now
@@ -176,6 +199,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Users & Personas
@@ -195,6 +219,7 @@ questions:
     required: true
     capture_rationale: false
     confidence_field: true
+    importance: high
 
   - theme: users_personas
     id: secondary_users
@@ -211,6 +236,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: users_personas
     id: user_goals
@@ -227,6 +253,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: users_personas
     id: user_frustrations
@@ -243,6 +270,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: users_personas
     id: expertise_level
@@ -258,6 +286,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Use Cases & Jobs to Be Done
@@ -272,6 +301,7 @@ questions:
     required: true
     capture_rationale: false
     confidence_field: false
+    importance: high
 
   - theme: use_cases
     id: primary_jobs_to_be_done
@@ -283,6 +313,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: high
 
   - theme: use_cases
     id: secondary_jobs
@@ -294,6 +325,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: use_cases
     id: edge_cases
@@ -310,6 +342,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Functional Requirements
@@ -317,13 +350,14 @@ questions:
   - theme: functional_requirements
     id: must_have_features
     prd_path: functional_requirements.must_have_features
-    question: "What features are *must-have* for the first usable release? (List 3–10.)"
+    question: "What features are *must-have* for the first usable release? List 3–10. Be verbose."
     hint: "Defines the MVP. Anything not on this list is deferrable."
     suggested_answers: []
     free_text_allowed: true
     required: true
     capture_rationale: false
     confidence_field: false
+    importance: critical
 
   - theme: functional_requirements
     id: nice_to_have_features
@@ -335,6 +369,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: critical
 
   - theme: functional_requirements
     id: out_of_scope
@@ -346,6 +381,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: high
 
   - theme: functional_requirements
     id: integrations_required
@@ -362,6 +398,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: high
 
   - theme: functional_requirements
     id: ai_features
@@ -378,6 +415,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: high
 
   # ---------------------------------------------------------------------------
   # Technical Constraints (rationale captured on stack-shaping fields)
@@ -402,6 +440,7 @@ questions:
     required: true
     capture_rationale: true
     confidence_field: true
+    importance: med
 
   - theme: technical_constraints
     id: framework
@@ -419,6 +458,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: technical_constraints
     id: runtime_platform
@@ -440,6 +480,7 @@ questions:
     required: true
     capture_rationale: true
     confidence_field: true
+    importance: med
 
   - theme: technical_constraints
     id: deployment_target
@@ -460,6 +501,7 @@ questions:
     required: false
     capture_rationale: true
     confidence_field: true
+    importance: med
 
   - theme: technical_constraints
     id: existing_systems
@@ -476,6 +518,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: technical_constraints
     id: browser_support
@@ -493,6 +536,7 @@ questions:
     required_if: "runtime_platform == 'web'"
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Product Identity (asked LAST among required themes — synthesized from
@@ -510,6 +554,7 @@ questions:
     capture_rationale: false
     confidence_field: false
     synthesis: true
+    importance: med  # captured verbatim in Phase 3, no new input here
 
   - theme: product_identity
     id: name
@@ -522,6 +567,7 @@ questions:
     capture_rationale: false
     confidence_field: true
     synthesis: true
+    importance: med
 
   - theme: product_identity
     id: slug
@@ -534,6 +580,7 @@ questions:
     capture_rationale: false
     confidence_field: true
     synthesis: true
+    importance: med
 
   - theme: product_identity
     id: one_liner
@@ -546,6 +593,7 @@ questions:
     capture_rationale: false
     confidence_field: true
     synthesis: true
+    importance: med
 
   - theme: product_identity
     id: tagline
@@ -558,6 +606,7 @@ questions:
     capture_rationale: false
     confidence_field: false
     synthesis: true
+    importance: med
 
   - theme: product_identity
     id: vision
@@ -570,6 +619,7 @@ questions:
     capture_rationale: false
     confidence_field: false
     synthesis: true
+    importance: med
 
   - theme: product_identity
     id: mission
@@ -582,6 +632,7 @@ questions:
     capture_rationale: false
     confidence_field: false
     synthesis: true
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Non-Functional Requirements
@@ -602,6 +653,7 @@ questions:
     required_if: "scalability in ['large', 'hyperscale']"
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: non_functional_requirements
     id: scalability
@@ -617,6 +669,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: non_functional_requirements
     id: reliability
@@ -631,6 +684,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: non_functional_requirements
     id: availability_sla
@@ -648,6 +702,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: non_functional_requirements
     id: accessibility
@@ -662,6 +717,19 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
+
+  - theme: non_functional_requirements
+    id: other
+    prd_path: non_functional_requirements.other
+    question: "What else are important non-functional requirements?"
+    hint: "Anything else impacting the project and not yet mentioned."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+    importance: high
 
   # ---------------------------------------------------------------------------
   # Data Model
@@ -676,6 +744,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: high
 
   - theme: data_model
     id: data_ownership
@@ -692,6 +761,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: data_model
     id: data_volume_estimate
@@ -709,6 +779,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: data_model
     id: storage_preferences
@@ -726,6 +797,7 @@ questions:
     required: false
     capture_rationale: true
     confidence_field: true
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Security & Compliance
@@ -750,6 +822,7 @@ questions:
     required_if: "data_sensitivity in ['restricted', 'regulated']"
     capture_rationale: true
     confidence_field: true
+    importance: med
 
   - theme: security_compliance
     id: data_sensitivity
@@ -766,6 +839,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: security_compliance
     id: regulatory_requirements
@@ -785,6 +859,7 @@ questions:
     required_if: "data_sensitivity in ['restricted', 'regulated']"
     capture_rationale: false
     confidence_field: true
+    importance: med
 
   - theme: security_compliance
     id: encryption_at_rest
@@ -798,6 +873,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: security_compliance
     id: audit_logging
@@ -811,6 +887,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Business Model
@@ -834,6 +911,7 @@ questions:
     required: false
     capture_rationale: true
     confidence_field: true
+    importance: med
 
   - theme: business_model
     id: pricing_model
@@ -846,6 +924,7 @@ questions:
     required_if: "monetization not in ['internal_tool', 'open_source', 'free']"
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: business_model
     id: license_type
@@ -868,6 +947,7 @@ questions:
     required: false
     capture_rationale: true
     confidence_field: true
+    importance: med
 
   - theme: business_model
     id: target_market
@@ -884,6 +964,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Stakeholders
@@ -898,6 +979,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: stakeholders
     id: primary_contributors
@@ -909,6 +991,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: stakeholders
     id: decision_maker
@@ -920,6 +1003,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: stakeholders
     id: external_dependencies
@@ -936,6 +1020,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Milestones
@@ -950,6 +1035,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: high
 
   - theme: milestones
     id: phases
@@ -961,6 +1047,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: high
 
   # ---------------------------------------------------------------------------
   # Success Metrics
@@ -980,6 +1067,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: success_metrics
     id: acceptance_criteria
@@ -996,6 +1084,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: success_metrics
     id: definition_of_done
@@ -1012,6 +1101,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: success_metrics
     id: user_satisfaction_target
@@ -1023,6 +1113,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Risks & Assumptions
@@ -1042,6 +1133,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: high
 
   - theme: risks_assumptions
     id: key_assumptions
@@ -1058,6 +1150,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: risks_assumptions
     id: blockers
@@ -1069,6 +1162,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: risks_assumptions
     id: dependencies
@@ -1085,6 +1179,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   # ---------------------------------------------------------------------------
   # Open Questions
@@ -1099,6 +1194,7 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med
 
   - theme: open_questions
     id: parking_lot
@@ -1110,3 +1206,4 @@ questions:
     required: false
     capture_rationale: false
     confidence_field: false
+    importance: med

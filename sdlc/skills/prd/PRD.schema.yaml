@@ -133,6 +133,7 @@ non_functional_requirements:
   reliability: null           # one of: best_effort | high | mission_critical (enum)
   availability_sla: null      # e.g. "99.9%", "business hours" (string|null)
   accessibility: null         # one of: none_yet | wcag_aa | wcag_aaa (enum)
+  other: null                 # any other NFRs worth calling out (list[string])
 
 # -----------------------------------------------------------------------------
 # data_model — what data lives here, who owns it, how much

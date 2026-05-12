@@ -269,6 +269,7 @@ class NonFunctionalRequirements(_ThemeBase):
     reliability_confidence: Optional[Confidence] = None
     availability_sla: Optional[str] = None
     accessibility: Optional[Accessibility] = None
+    other: Optional[List[str]] = None  # catch-all for any NFRs not captured above
 
 
 class DataModel(_ThemeBase):
@@ -562,8 +563,7 @@ def validate_file(path: Path) -> int:
     # status == "draft"
     if missing:
         print(
-            f"[DRAFT] PRD.yaml is a draft — {len(missing)} required field(s) "
-            f"missing ({path})"
+            f"[DRAFT] PRD.yaml is a draft — {len(missing)} required field(s) " f"missing ({path})"
         )
         print("Missing required fields (fill in and set metadata.status: complete when done):")
         for m in missing:
