@@ -9,7 +9,7 @@ description: >
   then writes and validates PRD.yaml for downstream agent consumption.
   ONLY stop when no open questions remain or the user types EXIT.
 user-invocable: false
-allowed-tools: Read Write(CLAUDE.md) Write(docs/PRD.yaml) Write(.claude/skills-state/sdlc-prd.state.yaml) Bash Glob Grep AskUserQuestion
+allowed-tools: Read Write(CLAUDE.md) Write(docs/PRD.yaml) Write(.claude/skills-state/sdlc-prd.state.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion
 ---
 
 > **Invocation note**: this skill is normally fronted by the
