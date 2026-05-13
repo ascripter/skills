@@ -1,5 +1,5 @@
 ---
-name: sdlc-arch
+name: arch
 description: >
   Manual architecture-authoring skill for C4-style spec-driven
   development, downstream of sdlc-prd. Use /sdlc:arch [container]
@@ -9,6 +9,7 @@ description: >
   edges from existing artifacts. Reads docs/PRD.yaml and (for sub-node
   invocations) docs/ARCH.yaml, docs/UX.yaml, docs/DATA.yaml as
   preconditions.
+user-invocable: true
 disable-model-invocation: true
 model: opusplan
 effort: xhigh

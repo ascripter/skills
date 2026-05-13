@@ -8,14 +8,12 @@ description: >
   answers (via AskUserQuestion), persists session state for resumability,
   then writes and validates PRD.yaml for downstream agent consumption.
   ONLY stop when no open questions remain or the user types EXIT.
-user-invocable: false
+user-invocable: true
+disable-model-invocation: true
+model: opusplan
+effort: xhigh
 allowed-tools: Read Write(CLAUDE.md) Write(docs/PRD.yaml) Write(.claude/skills-state/sdlc-prd.state.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion
 ---
-
-> **Invocation note**: this skill is normally fronted by the
-> `sdlc/agents/prd.md` agent so the long interview runs in
-> its own context. The skill body below is the single source of truth for
-> the workflow regardless of which path invokes it (agent or inline).
 
 # sdlc-prd
 
