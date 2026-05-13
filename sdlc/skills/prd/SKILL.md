@@ -1,7 +1,6 @@
 ---
 name: prd
 description: >
-  INTERNAL — only loaded by sdlc:prd agent. Never invoke this skill implicitly.
   Create or update PRD.yaml for a software product. Scans project files,
   captures the user's idea in free text, asks the structural monorepo
   question, interviews the user in thematic batches with multiple-choice
