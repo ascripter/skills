@@ -1,0 +1,50 @@
+# Smoke fixture: api_kind: rest, status: complete, with a DATA-MODEL.yaml
+# in the same dir that defines entities { User, Order }. The API.yaml's
+# resource references primary_entity: Widget — which doesn't exist.
+# Expected validator behaviour: exit 1, "[FAIL]" with entity-link
+# failure naming Widget.
+
+metadata:
+  api_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "77777777-7777-7777-7777-777777777777"
+  monorepo: false
+  status: "complete"
+
+api_warnings: []
+
+api_kind: rest
+api_kind_confidence: confirmed
+
+transport_styles: [rest]
+transport_styles_confidence: confirmed
+
+versioning:
+  strategy: path
+  current_version: "v1"
+
+auth:
+  schemes: [bearer_jwt]
+  default_visibility: authenticated
+
+errors:
+  envelope: rfc7807
+
+pagination:
+  strategy: none
+
+idempotency:
+  idempotent_methods: [GET]
+
+rate_limiting:
+  scopes: [per_user]
+
+resource_inventory:
+  - resource_id: widgets
+    base_path: /v1/widgets
+    status: confirmed
+    file_path: docs/API__widgets.yaml
+    primary_entity: Widget        # not in DATA-MODEL.yaml.entities
+    traces_prd_features: []
+    traces_ux_surfaces: []

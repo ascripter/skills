@@ -1,0 +1,12 @@
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-10T08:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "00000000-0000-0000-0000-000000000000"
+  monorepo: false
+  status: "complete"
+
+functional_requirements:
+  must_have_features:
+    - "F-001: Create user accounts via email + password."
+    - "F-002: Export user audit log as CSV."

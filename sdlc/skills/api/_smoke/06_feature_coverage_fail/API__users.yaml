@@ -1,0 +1,21 @@
+metadata:
+  api_resource_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "66666666-6666-6666-6666-666666666666"
+  status: "complete"
+
+resource_id: users
+base_path: /v1/users
+primary_entity: User
+traces_prd_features: ["F-001"]
+traces_ux_surfaces: []
+
+endpoints:
+  - operation_id: create-user
+    method: POST
+    path: /v1/users
+    summary: "Create a user account"
+    responses:
+      "201":
+        description: created

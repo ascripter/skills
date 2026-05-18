@@ -1,0 +1,20 @@
+# Smoke fixture: api_kind: none, status: complete.
+# Expected validator behaviour: exit 0, "[OK]" message, coverage skipped.
+# Demonstrates the pure-CLI / library / desktop-app skip path.
+
+metadata:
+  api_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "22222222-2222-2222-2222-222222222222"
+  monorepo: false
+  status: "complete"
+
+api_warnings: []
+
+api_kind: none
+api_kind_confidence: confirmed
+rationale: "Pure CLI tool — local execution only, no network surface."
+
+# Every other field stays null — coverage + entity-link checks are
+# skipped when api_kind == none.

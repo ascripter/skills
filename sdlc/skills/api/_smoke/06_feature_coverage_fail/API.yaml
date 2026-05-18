@@ -1,0 +1,52 @@
+# Smoke fixture: api_kind: rest, status: complete, with a PRD in the
+# same dir that lists F-001 and F-002. The API.yaml only traces F-001
+# (F-002 has no resource trace and is not in non_api_features).
+# Expected validator behaviour: exit 1, "[FAIL]" with feature-coverage
+# failure naming F-002.
+
+metadata:
+  api_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "66666666-6666-6666-6666-666666666666"
+  monorepo: false
+  status: "complete"
+
+api_warnings: []
+
+api_kind: rest
+api_kind_confidence: confirmed
+
+transport_styles: [rest]
+transport_styles_confidence: confirmed
+
+versioning:
+  strategy: path
+  current_version: "v1"
+
+auth:
+  schemes: [bearer_jwt]
+  default_visibility: authenticated
+
+errors:
+  envelope: rfc7807
+
+pagination:
+  strategy: offset
+  default_page_size: 25
+  max_page_size: 100
+
+idempotency:
+  idempotent_methods: [GET, PUT, DELETE]
+
+rate_limiting:
+  scopes: [per_user]
+
+resource_inventory:
+  - resource_id: users
+    base_path: /v1/users
+    status: confirmed
+    file_path: docs/API__users.yaml
+    primary_entity: User
+    traces_prd_features: ["F-001"]   # F-002 deliberately omitted
+    traces_ux_surfaces: []

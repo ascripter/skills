@@ -1,0 +1,24 @@
+# Smoke fixture: api_kind: rest, status: complete, but several
+# required fields are null.
+# Expected validator behaviour: exit 1, "[FAIL]" with field-level
+# errors listing missing required paths.
+
+metadata:
+  api_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "33333333-3333-3333-3333-333333333333"
+  monorepo: false
+  status: "complete"
+
+api_warnings: []
+
+api_kind: rest
+# transport_styles deliberately null — required when api_kind != none
+# versioning.strategy deliberately null
+# auth.schemes deliberately null
+# errors.envelope deliberately null
+# pagination.strategy deliberately null
+# idempotency.idempotent_methods deliberately null
+# rate_limiting.scopes deliberately null
+# resource_inventory deliberately null

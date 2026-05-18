@@ -1,0 +1,61 @@
+# Smoke fixture: api_kind: rest, status: draft.
+# Expected validator behaviour: exit 0, "[DRAFT]" message.
+# Most required fields filled but stays as draft to demonstrate the
+# draft-state path. Coverage checks are skipped (no upstream files in
+# the same dir).
+
+metadata:
+  api_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "11111111-1111-1111-1111-111111111111"
+  monorepo: false
+  status: "draft"
+
+api_warnings: []
+
+api_kind: rest
+api_kind_confidence: confirmed
+
+transport_styles:
+  - rest
+transport_styles_confidence: confirmed
+
+versioning:
+  strategy: path
+  current_version: "v1"
+
+auth:
+  schemes:
+    - bearer_jwt
+  default_visibility: authenticated
+
+errors:
+  envelope: rfc7807
+
+pagination:
+  strategy: cursor
+  default_page_size: 25
+  max_page_size: 100
+  stable_sort_field: "created_at, id"
+
+idempotency:
+  idempotent_methods:
+    - GET
+    - PUT
+    - DELETE
+  header: "Idempotency-Key"
+  cache_window: "24h"
+
+rate_limiting:
+  scopes:
+    - per_user
+
+resource_inventory:
+  - resource_id: users
+    base_path: /v1/users
+    status: defined
+    file_path: docs/API__users.yaml
+    primary_entity: User
+    traces_prd_features: ["F-001"]
+    traces_ux_surfaces: ["user-list"]

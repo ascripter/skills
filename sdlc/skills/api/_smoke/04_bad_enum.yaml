@@ -1,0 +1,15 @@
+# Smoke fixture: invalid enum value ("rocket" is not a valid api_kind).
+# Expected validator behaviour: exit 1, "[FAIL]" with Pydantic
+# ValidationError naming `api_kind`.
+
+metadata:
+  api_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "44444444-4444-4444-4444-444444444444"
+  monorepo: false
+  status: "draft"
+
+api_warnings: []
+
+api_kind: rocket   # not a valid enum value

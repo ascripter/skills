@@ -14,8 +14,8 @@ project from a structured chain of artifacts. Skills are invoked as
 |--------------|---------------------|----------------------------------------------------------------------------------------------|------------------------------------------------------|
 | `prd`        | `sdlc/skills/prd`   | repo scan + ideation + interview                                                             | `docs/PRD.yaml`                                      |
 | `ux`         | `sdlc/skills/ux`    | `docs/PRD.yaml` + interview                                                                  | `docs/UX.yaml`, `docs/UX__<surface>.yaml`            |
-| `api`        | `sdlc/skills/api`   | `docs/PRD.yaml` + `docs/UX.yaml` + interview                                                 | `docs/API.yaml`                                      |
-| `data`       | `sdlc/skills/data`  | `docs/PRD.yaml` + `docs/UX.yaml` + `docs/API.yaml` + interview                               | `docs/DATA-MODEL.yaml`                               |
+| `data`       | `sdlc/skills/data`  | `docs/PRD.yaml` + `docs/UX.yaml` + interview                                                 | `docs/DATA-MODEL.yaml`                               |
+| `api`        | `sdlc/skills/api`   | `docs/PRD.yaml` + `docs/UX.yaml` + `docs/DATA-MODEL.yaml` + interview                        | `docs/API.yaml`, `docs/API__<resource>.yaml`         |
 | `arch`       | `sdlc/skills/arch`  | `docs/PRD.yaml` + `docs/UX.yaml` + `docs/API.yaml` + `docs/DATA-MODEL.yaml` + interview                                                      | `docs/ARCH.yaml`, `docs/ARCH__<component>.yaml`      |
 | `test`       | `sdlc/skills/test`  | `docs/PRD.yaml` + `docs/API.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH__<component>.yaml` + interview                                       | `docs/TEST-STRATEGY__<component>.yaml`               |
 | `task`       | `sdlc/skills/task`  | `docs/API.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH__<component>.yaml` + `docs/TEST-STRATEGY__<component>.yaml`                                          | `docs/TASKS__<component>.json`                       |

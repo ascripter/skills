@@ -1,0 +1,267 @@
+# =============================================================================
+# API.yaml — Canonical Schema Reference (global API contract)
+# =============================================================================
+# Documents the full structure of docs/API.yaml. NOT a runtime config — it is
+# the human-readable source of truth that `validate_schema.py` enforces.
+#
+# Two top-level shapes are supported, mirroring PRD.yaml / UX.yaml:
+#   1. SINGLE-PRODUCT (default): theme blocks live at the top level.
+#   2. MULTI-PRODUCT (monorepo): themes live under `products.<slug>.<theme>`.
+#      Triggered when the upstream PRD has `metadata.monorepo: true`.
+#
+# Conventions:
+#   - `null` (not omission) means "explicitly unanswered".
+#   - For trade-off fields, a sibling `<field>_rationale` (string) captures
+#     the *why*.
+#   - For pre-filled answers, a sibling `<field>_confidence` captures
+#     certainty: confirmed | inferred | assumption.
+#   - Enum values are lowercase snake_case strings.
+#   - Per-resource contents live in sibling files
+#     `docs/API__<resource>.yaml` (see API__RESOURCE.schema.yaml). API.yaml
+#     lists them in `resource_inventory:` and never duplicates their
+#     endpoints or schemas.
+#   - DTO-vs-entity discipline: schemas defined here (and in per-resource
+#     files) are wire DTOs. Persistent entity shapes live in
+#     `docs/DATA-MODEL.yaml`. DTOs may `$ref` DATA entities; see
+#     `references/openapi-embedding.md`.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# metadata — always at top level, present in both single- and multi-product mode
+# -----------------------------------------------------------------------------
+metadata:
+  api_version: "1.0"                       # schema version this file conforms to
+  last_updated: "2026-05-18T12:00:00Z"     # ISO-8601 UTC timestamp of last write
+  generated_by: sdlc-api                   # always literal string "sdlc-api"
+  session_id: "00000000-0000-0000-0000-000000000000"  # UUID of the interview session
+  monorepo: false                          # mirrors PRD.metadata.monorepo
+  status: "draft"                          # "draft" | "complete"
+                                           # writer sets to "complete" only when:
+                                           #   1) all required fields are filled,
+                                           #   2) the validator passes,
+                                           #   3) feature coverage passes
+                                           #      (every PRD F-NNN is either
+                                           #      traced or in non_api_features),
+                                           #   4) surface coverage passes
+                                           #      (every UX surface with data
+                                           #      I/O is traced by ≥1 endpoint),
+                                           #   5) entity-link check passes
+                                           #      (every primary_entity exists
+                                           #      in DATA-MODEL).
+                                           # Coverage + entity-link checks are
+                                           # skipped when api_kind: none.
+
+# api_warnings — informational notes. Used for:
+#   * uncovered PRD F-NNN features ("feature F-007 has no resource trace")
+#   * uncovered UX surfaces with data I/O ("surface 'foo' has no endpoint")
+#   * unresolved DATA entity refs ("primary_entity 'Bar' not in DATA-MODEL")
+#   * low-confidence answers
+#   * merge conflicts
+#   * deferred optional themes (now/skip/todo) recorded for downstream visibility
+api_warnings: []
+
+# =============================================================================
+# SINGLE-PRODUCT MODE — themes at top level, in interview order
+# (omit the entire `products:` key in this mode)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# api_kind_and_styles — the structural axis. If api_kind == "none", every
+# block below stays null and downstream coverage checks are skipped.
+# -----------------------------------------------------------------------------
+api_kind: null                  # REQUIRED — one of:
+                                #   rest | graphql | grpc | mixed | none (enum)
+api_kind_confidence: null       # confirmed | inferred | assumption (enum)
+rationale: null                 # REQUIRED when api_kind == "none" (string)
+                                # e.g. "Pure CLI tool; no network surface."
+
+transport_styles: null          # list[string] — picked from:
+                                #   rest | graphql | grpc | websocket |
+                                #   server_sent_events | webhooks_out
+                                # MUST be a non-empty list unless api_kind == "none".
+transport_styles_confidence: null
+
+# -----------------------------------------------------------------------------
+# versioning
+# -----------------------------------------------------------------------------
+versioning:
+  strategy: null                # one of: path | header | content_type | none (enum)
+  strategy_confidence: null
+  current_version: null         # string, e.g. "1.0" or "v1"
+  deprecation_policy: null      # string — how long old versions stay live, etc.
+
+# -----------------------------------------------------------------------------
+# auth — high-level auth contract. Per-endpoint overrides live in the
+# per-resource yaml under endpoints[].auth_override.
+# -----------------------------------------------------------------------------
+auth:
+  schemes: null                 # REQUIRED — list of:
+                                #   api_key | bearer_jwt | oauth2 |
+                                #   session_cookie | mtls | none (enum members)
+  schemes_confidence: null
+  roles: null                   # list[string], e.g. ["admin","editor","viewer"]
+  scopes: null                  # list[string], OAuth-style scopes if applicable
+  default_visibility: null      # one of: public | authenticated | mixed (enum)
+  default_visibility_confidence: null
+
+# -----------------------------------------------------------------------------
+# errors — error envelope + retry semantics
+# -----------------------------------------------------------------------------
+errors:
+  envelope: null                # REQUIRED — one of: rfc7807 | custom (enum)
+  envelope_confidence: null
+  localisation: null            # boolean — are error messages localised?
+  retry_semantics: null         # string — when may a client safely retry?
+  error_codes: null             # list[ErrorCode]; each:
+                                #   - code: string (e.g. "USER_NOT_FOUND")
+                                #     http_status: int
+                                #     description: string
+
+# -----------------------------------------------------------------------------
+# pagination — global default; per-endpoint overrides allowed
+# -----------------------------------------------------------------------------
+pagination:
+  strategy: null                # REQUIRED — one of: offset | cursor | none (enum)
+  strategy_confidence: null
+  default_page_size: null       # int
+  max_page_size: null           # int
+  stable_sort_field: null       # string — e.g. "created_at" (required if cursor)
+
+# -----------------------------------------------------------------------------
+# idempotency — which methods are idempotent + how clients signal idempotency
+# -----------------------------------------------------------------------------
+idempotency:
+  idempotent_methods: null      # list[string] subset of HTTP method names,
+                                # e.g. ["GET","PUT","DELETE","POST"]
+                                # (POST appears here only when paired with
+                                # an idempotency-key header.)
+  header: null                  # string — e.g. "Idempotency-Key" or null if
+                                # idempotency is method-level only.
+  cache_window: null            # string — e.g. "24h" or ISO-8601 duration
+
+# -----------------------------------------------------------------------------
+# rate_limiting
+# -----------------------------------------------------------------------------
+rate_limiting:
+  scopes: null                  # REQUIRED — list of:
+                                #   per_ip | per_user | per_key | global (enum)
+  burst: null                   # string — e.g. "10 req/sec"
+  sustained: null               # string — e.g. "1000 req/min"
+  response: null                # string — e.g. "429 + Retry-After header"
+
+# -----------------------------------------------------------------------------
+# events — async/event contract.
+# Present only when transport_styles contains websocket, server_sent_events,
+# or webhooks_out. Set to null otherwise.
+# -----------------------------------------------------------------------------
+events:
+  channels: null                # list[EventChannel]; each:
+                                #   - channel_id: kebab-case
+                                #     transport: websocket | sse | webhook | queue
+                                #     direction: server_to_client | client_to_server |
+                                #                outbound_webhook | both
+                                #     payload_schema_ref: $ref into shared_schemas
+                                #                          or a per-resource schema
+                                #     auth_ref: which auth scheme applies
+  payload_conventions: null     # string — e.g. "JSON envelope with type + data"
+  delivery_guarantees: null     # one of: at_most_once | at_least_once |
+                                #          exactly_once (enum)
+  consumer_auth: null           # string — how consumers authenticate
+
+# -----------------------------------------------------------------------------
+# external_dependencies — outbound third-party APIs this product calls.
+# Pre-filled from PRD.functional_requirements.integrations_required.
+# -----------------------------------------------------------------------------
+external_dependencies:          # list[ExternalDependency]; each:
+                                #   - name: string (e.g. "Stripe")
+                                #     auth: string (e.g. "API key in Authorization")
+                                #     rate_limit: string | null
+                                #     retry_policy: string | null
+                                #     docs_url: string | null
+  null
+
+# -----------------------------------------------------------------------------
+# shared_schemas — OpenAPI 3.1 component schemas referenced by ≥2 resources.
+# Resource-local schemas live in the per-resource file's `schemas` block.
+# May `$ref` DATA entities (see references/openapi-embedding.md for syntax).
+# -----------------------------------------------------------------------------
+shared_schemas:                 # object — OpenAPI 3.1 schemas, keyed by name
+                                # e.g.
+                                #   Money:
+                                #     type: object
+                                #     properties:
+                                #       amount: { type: integer }
+                                #       currency: { type: string }
+                                #   Problem:    # RFC 7807
+                                #     type: object
+                                #     properties:
+                                #       type:    { type: string, format: uri }
+                                #       title:   { type: string }
+                                #       status:  { type: integer }
+                                #       detail:  { type: string }
+                                #       instance:{ type: string }
+  null
+
+# -----------------------------------------------------------------------------
+# resource_inventory — the registry of API resources.
+# Each entry POINTS to a docs/API__<resource_id>.yaml file. The full
+# endpoint + schema spec lives there (see API__RESOURCE.schema.yaml).
+# -----------------------------------------------------------------------------
+resource_inventory:             # list[ResourceInventoryItem]
+  - resource_id: null           # kebab-case unique id (string)
+    base_path: null             # e.g. "/v1/users" (string)
+    status: defined             # one of: defined | draft | confirmed (enum)
+                                #   defined  = id + base_path known, no endpoints yet
+                                #   draft    = deep-dive started, not approved
+                                #   confirmed= deep-dive complete + user-approved
+    file_path: null             # always docs/API__<resource_id>.yaml (string)
+    primary_entity: null        # DATA-MODEL entity name this resource fronts
+                                # (string|null). Null only for resources that
+                                # span entities (e.g. /search).
+    traces_prd_features: null   # list[string] — PRD F-NNN feature IDs this
+                                # resource implements
+    traces_ux_surfaces: null    # list[string] — UX surface_ids this resource
+                                # serves (used by the surface-coverage check)
+
+# -----------------------------------------------------------------------------
+# non_api_features — PRD F-NNN feature IDs explicitly NOT exposed via API.
+# Examples: pure-UI features (theming), backend batch jobs, internal-only
+# utilities. Required so the feature-coverage check can pass.
+# -----------------------------------------------------------------------------
+non_api_features: null          # list[string] of F-NNN IDs, e.g.
+                                #   - F-007  # theme switcher — UI only
+                                #   - F-012  # nightly cleanup job
+
+# =============================================================================
+# MULTI-PRODUCT MODE (monorepo) — uncomment and use *instead of* the top-level
+# blocks above. Each entry under `products:` mirrors the single-product shape.
+# Per-resource files are named docs/API__<product-slug>__<resource-slug>.yaml
+# to avoid collisions across products.
+# =============================================================================
+#
+# products:
+#   billing:
+#     api_kind: rest
+#     transport_styles: [rest, webhooks_out]
+#     versioning:
+#       strategy: path
+#       current_version: "v1"
+#     auth:
+#       schemes: [bearer_jwt]
+#       default_visibility: authenticated
+#     errors:
+#       envelope: rfc7807
+#     pagination:
+#       strategy: cursor
+#     rate_limiting:
+#       scopes: [per_user]
+#     resource_inventory:
+#       - resource_id: invoices
+#         base_path: /v1/invoices
+#         status: confirmed
+#         file_path: docs/API__billing__invoices.yaml
+#         primary_entity: Invoice
+#         traces_prd_features: [F-001, F-002]
+#         traces_ux_surfaces: [invoice-list, invoice-detail]
+#   notifications:
+#     # ...

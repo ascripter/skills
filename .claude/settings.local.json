@@ -10,7 +10,11 @@
       "Bash(grep -v \"\\\\.pyc$\")",
       "Bash(git mv *)",
       "WebFetch(domain:docs.claude.com)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "WebSearch",
+      "WebFetch(domain:www.asyncapi.com)",
+      "WebFetch(domain:learn.openapis.org)",
+      "Bash(ls *)"
     ]
   },
   "enableAllProjectMcpServers": true,

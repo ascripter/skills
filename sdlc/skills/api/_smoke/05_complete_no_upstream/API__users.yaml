@@ -1,0 +1,81 @@
+metadata:
+  api_resource_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "55555555-5555-5555-5555-555555555555"
+  status: "complete"
+
+resource_id: users
+base_path: /v1/users
+primary_entity: User
+traces_prd_features:
+  - "F-001"
+  - "F-002"
+traces_ux_surfaces:
+  - "user-list"
+  - "user-detail"
+
+endpoints:
+  - operation_id: list-users
+    method: GET
+    path: /v1/users
+    summary: "List users (paginated)"
+    parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema: { type: string }
+    responses:
+      "200":
+        description: ok
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/UserList" }
+    security:
+      - bearer_jwt: ["read:users"]
+    idempotent: true
+
+  - operation_id: get-user
+    method: GET
+    path: /v1/users/{id}
+    summary: "Get a user by id"
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: ok
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/User" }
+      "404":
+        description: not found
+        content:
+          application/problem+json:
+            schema: { $ref: "../API.yaml#/shared_schemas/Problem" }
+    security:
+      - bearer_jwt: ["read:users"]
+    idempotent: true
+
+schemas:
+  User:
+    projects_from: User
+    type: object
+    required: [id, email]
+    properties:
+      id: { type: string, format: uuid }
+      email: { type: string, format: email }
+      name: { type: string }
+  UserList:
+    projects_from: null
+    type: object
+    required: [items]
+    properties:
+      items:
+        type: array
+        items: { $ref: "#/schemas/User" }
+      next_cursor:
+        type: string
+        nullable: true

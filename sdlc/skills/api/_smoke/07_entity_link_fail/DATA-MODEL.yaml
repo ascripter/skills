@@ -1,0 +1,11 @@
+# Minimal DATA-MODEL fixture. Only the top-level `entities:` block is
+# read by the api skill's entity-link check.
+entities:
+  User:
+    fields:
+      id: { type: uuid, primary_key: true }
+      email: { type: string, unique: true }
+  Order:
+    fields:
+      id: { type: uuid, primary_key: true }
+      user_id: { type: uuid, references: User.id }

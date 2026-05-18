@@ -1,0 +1,73 @@
+# Smoke fixture: api_kind: rest, status: complete, with one resource
+# file. No upstream PRD / UX / DATA-MODEL files in the same dir, so all
+# three coverage / entity-link checks soft-skip.
+# Expected validator behaviour: exit 0, "[OK]" message.
+
+metadata:
+  api_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "55555555-5555-5555-5555-555555555555"
+  monorepo: false
+  status: "complete"
+
+api_warnings: []
+
+api_kind: rest
+api_kind_confidence: confirmed
+
+transport_styles:
+  - rest
+transport_styles_confidence: confirmed
+
+versioning:
+  strategy: path
+  current_version: "v1"
+  deprecation_policy: "12 months notice + Deprecation/Sunset headers"
+
+auth:
+  schemes:
+    - bearer_jwt
+  schemes_confidence: confirmed
+  roles:
+    - admin
+    - user
+  default_visibility: authenticated
+  default_visibility_confidence: confirmed
+
+errors:
+  envelope: rfc7807
+  envelope_confidence: confirmed
+  localisation: false
+  retry_semantics: "5xx + 429 only; respect Retry-After; cap 5 attempts"
+
+pagination:
+  strategy: cursor
+  strategy_confidence: confirmed
+  default_page_size: 25
+  max_page_size: 100
+  stable_sort_field: "created_at, id"
+
+idempotency:
+  idempotent_methods:
+    - GET
+    - PUT
+    - DELETE
+  header: "Idempotency-Key"
+  cache_window: "24h"
+
+rate_limiting:
+  scopes:
+    - per_user
+  burst: "10 req/sec"
+  sustained: "1000 req/min"
+  response: "429 + Retry-After header"
+
+resource_inventory:
+  - resource_id: users
+    base_path: /v1/users
+    status: confirmed
+    file_path: docs/API__users.yaml
+    primary_entity: User
+    traces_prd_features: ["F-001", "F-002"]
+    traces_ux_surfaces: ["user-list", "user-detail"]
