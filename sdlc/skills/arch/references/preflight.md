@@ -21,7 +21,7 @@ All dependency-family invocations are sub-node: `-d` without a prior
 
 ## Always-required: docs/PRD.yaml checks
 
-### sdlc-prd validate_prd.py exit codes
+### sdlc-prd validate_schema.py exit codes
 
 | Exit | Meaning |
 |---|---|
@@ -42,7 +42,7 @@ requirements.
 ```
 docs/PRD.yaml doesn't validate the schema. Run /sdlc-prd to fix.
 (validator output below)
-<stderr from validate_prd.py>
+<stderr from validate_schema.py>
 ```
 
 **PRD unreadable / parse error (exit 2):**
@@ -50,7 +50,7 @@ docs/PRD.yaml doesn't validate the schema. Run /sdlc-prd to fix.
 docs/PRD.yaml exists but could not be read or parsed.
 Run /sdlc-prd to recreate it.
 (validator output below)
-<stderr from validate_prd.py>
+<stderr from validate_schema.py>
 ```
 
 **PRD validation dependencies missing (exit 3):**

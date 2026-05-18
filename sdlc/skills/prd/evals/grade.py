@@ -25,7 +25,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = REPO_ROOT / "sdlc-prd-workspace"
-VALIDATOR = SKILL_ROOT / "validate_prd.py"
+VALIDATOR = SKILL_ROOT / "validate_schema.py"
 
 
 # -----------------------------------------------------------------------------

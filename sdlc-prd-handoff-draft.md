@@ -14,7 +14,7 @@ When explicitly invoked, the skill:
 5. Persists state after every confirmed batch.
 6. After required themes, proactively suggests additional items.
 7. Writes (or merges into) `PRD.yaml` at the project root.
-8. Validates output via a bundled Pydantic v2 script (`validate_prd.py`).
+8. Validates output via a bundled Pydantic v2 script (`validate_schema.py`).
 9. Injects or updates a pointer block in `CLAUDE.md`.
 10. Marks session state as `complete`.
 
@@ -29,7 +29,7 @@ When explicitly invoked, the skill:
 - Allow the user to answer an entire batch in one reply (e.g. "1a, 2b, 3 SaaS").
 - After required themes, suggest lower-priority or inferred items the user may not have considered, and ask if they want to address them.
 - Write or merge `PRD.yaml` at the project root.
-- Run `validate_prd.py` and surface any errors before declaring completion.
+- Run `validate_schema.py` and surface any errors before declaring completion.
 - Inject a pointer block into `CLAUDE.md` (create the file if absent).
 
 ---
@@ -100,7 +100,7 @@ Behavior:
 - **During interview**: write state after every confirmed batch — not just at end.
 - **On completion**: set `status: complete`, keep file as audit trail (do not delete).
 - **On user abort**: set `status: aborted`, write current `partial_answers` so nothing is lost.
-- `validate_prd.py` must ignore the state file — it validates only `PRD.yaml`.
+- `validate_schema.py` must ignore the state file — it validates only `PRD.yaml`.
 
 ---
 
@@ -159,7 +159,7 @@ On re-run: **merge** — update changed keys, add new keys, never silently delet
 
 ---
 
-## Pydantic Validation: `validate_prd.py`
+## Pydantic Validation: `validate_schema.py`
 
 A bundled Python script the skill calls after writing `PRD.yaml`.
 
@@ -195,7 +195,7 @@ If the block already exists, update the timestamp. Do not duplicate the block.
 3. **Confirmation phase**: Show pre-filled values grouped by theme. One block per theme. User confirms, edits, or skips. Write state after each confirmed theme.
 4. **Interview phase**: For unanswered required and high-value optional questions, proceed theme by theme. 3–5 questions per batch with multiple-choice options. User can answer a full batch in one reply. Write state after each batch.
 5. **Suggestion phase**: Offer lower-priority or inferred items. Ask if the user wants to address them. Mark `suggestion_phase_done: true` in state.
-6. **Write & validate phase**: Generate or merge `PRD.yaml`. Run `validate_prd.py`. Report result. If errors, offer interactive correction.
+6. **Write & validate phase**: Generate or merge `PRD.yaml`. Run `validate_schema.py`. Report result. If errors, offer interactive correction.
 7. **Completion**: Inject CLAUDE.md pointer. Set state `status: complete`.
 
 ---
@@ -243,7 +243,7 @@ Test cases are strongly recommended (deterministic output, fixed schema):
 All under `.claude/skills/sdlc-prd/`:
 - `SKILL.md` — main skill instructions and full interview flow
 - `product-questions.yaml` — bundled question inventory (skill-creator researches and populates with genuine depth)
-- `validate_prd.py` — Pydantic v2 validation script for `PRD.yaml`
+- `validate_schema.py` — Pydantic v2 validation script for `PRD.yaml`
 - `PRD.schema.yaml` — canonical schema reference (recommended)
 
 Runtime files (not inside the skill directory):

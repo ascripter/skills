@@ -1,6 +1,6 @@
 # Importance flows — running the interview by tier
 
-Every question in `product-questions.yaml` carries an `importance` field:
+Every question in `prd-questions.yaml` carries an `importance` field:
 `med | high | critical`. The tier dictates how the agent runs the
 question — single batch entry, dedicated draft-approval loop, or full
 per-item drill-down. Read this file when entering Phase 6 alongside
@@ -35,7 +35,7 @@ is multi-turn and cannot share a call with sibling questions.
 
 Inside a theme, run all `med` questions first (in 2–4-question batches),
 then run each `high`/`critical` question as its own mini-section in
-the order they appear in `product-questions.yaml`. Write state after
+the order they appear in `prd-questions.yaml`. Write state after
 each mini-section completes, exactly like after a normal batch.
 
 ## The `med` flow (default)
@@ -139,6 +139,31 @@ Currently applies to `functional_requirements.must_have_features` and
 `functional_requirements.nice_to_have_features`. This is the full
 per-item state machine. Every item is challenged before it's accepted.
 
+### Feature IDs — F-NNN convention
+
+Every collected feature — must-have and nice-to-have alike — is stored
+with a stable `F-NNN` identifier:
+
+```
+"F-001: <title and full detail description>"
+"F-002: ..."
+```
+
+Rules:
+- IDs are three-digit zero-padded integers (`F-001`, `F-002`, …,
+  `F-010`, `F-011`, …).
+- Assigned at **step c approval** (not before — the draft shown earlier
+  in the flow doesn't carry an ID yet).
+- The counter is a single unified sequence across both lists. Must-haves
+  run first, so they take the low numbers; nice-to-haves continue from
+  where must-haves left off.
+- The running counter lives in `state.last_feature_id` (integer,
+  initialized to 0). Increment it and persist it after each approved item.
+- If the user EXITs mid-flow, the counter retains its current value in
+  state so numbering stays gapless on resume.
+- IDs never change once assigned — promoting a nice-to-have to a
+  must-have later means moving the string, not renumbering it.
+
 ### Per-item state machine
 
 For each item in the list:
@@ -212,21 +237,35 @@ proceed to step c. Do not loop here — at most one b-2 round.
 
 #### Step c — finalize
 
-Print the drafted feature entry to the chat as a YAML snippet — title +
-detail, exactly as it would appear in `must_have_features`. Then ask:
+Print the drafted feature entry to the chat as a YAML snippet showing
+exactly how it will be stored. **Assign the next F-NNN ID now** (increment
+`state.last_feature_id`, format as `F-{:03d}`). The stored format merges
+title and detail into one string:
+
+```yaml
+# Feature about to be added (F-NNN assigned on approval):
+- "F-003: OAuth2 login — users authenticate via Google or GitHub; the app
+   stores a short-lived access token with refresh-token rotation; done when
+   a new user can complete sign-up without setting a password."
+```
+
+Then ask:
 
 ```
-header: "Approve?"
-question: "Add this feature to must_have_features?"
+header: "Approve F-NNN?"
+question: "Add F-NNN to <must_have/nice_to_have>_features?"
 options:
-  - { label: "Approve — add it",         description: "Append the drafted entry to the list and move on." }
+  - { label: "Approve — add it",         description: "Append F-NNN to the list and move on." }
   - { label: "Iterate — type changes",   description: "Use the text field to describe what to change. The agent will re-draft." }
 ```
 
-On iterate: re-enter step b with the user's revision as new context.
-**Iteration cap**: after 3 c-iterations on a single item, append the
-current draft, add a `prd_warnings` entry naming the feature, and
-proceed to step d.
+On approve: write `"F-NNN: <merged title + detail>"` to the list and
+persist `state.last_feature_id`.
+On iterate: re-enter step b with the user's revision as new context; the
+ID is tentatively held but not written until the next approval.
+**Iteration cap**: after 3 c-iterations on a single item, write the
+current draft with the assigned ID, add a `prd_warnings` entry naming
+the feature, and proceed to step d.
 
 #### Step d — next item or end
 
@@ -243,7 +282,7 @@ Once an item is approved (or capped):
   options:
     - { label: "Add another (I'll suggest)", description: "I'll propose a candidate next." }
     - { label: "Add my own",                  description: "Type the title; we'll work through it from step a-2." }
-    - { label: "Done — wrap up the list",     description: "Move on to nice_to_have_features." }
+    - { label: "Done — wrap up the list",     description: "Move on to nice_to_have_features (IDs will continue from F-NNN)." }
   ```
 
 ### Caps

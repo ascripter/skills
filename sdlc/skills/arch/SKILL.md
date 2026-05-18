@@ -121,7 +121,7 @@ Validation rules:
    No docs/PRD.yaml found. Call /sdlc:prd first to define product
    requirements.
    ```
-2. Run `python "${CLAUDE_SKILL_DIR}/../prd/validate_prd.py" --path docs/PRD.yaml`:
+2. Run `python "${CLAUDE_SKILL_DIR}/../prd/validate_schema.py" --path docs/PRD.yaml`:
    - exit 0 → proceed.
    - exit 1 → abort: `docs/PRD.yaml doesn't validate the schema. Run /sdlc:prd to fix.` (include validator stderr).
    - exit 2 → abort: `docs/PRD.yaml exists but could not be read or parsed. Run /sdlc:prd to recreate it.`

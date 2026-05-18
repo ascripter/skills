@@ -1,15 +1,15 @@
 ---
 name: prd
 description: >
-  Create or update PRD.yaml for a software product. Scans project files,
-  captures the user's idea in free text, asks the structural monorepo
-  question, interviews the user in thematic batches with multiple-choice
+  Launch in empty context. Create or update PRD.yaml for software product.
+  Scans project files, captures user's idea in free text, asks structural
+  monorepo question, interviews the user in thematic batches with multiple-choice
   answers (via AskUserQuestion), persists session state for resumability,
   then writes and validates PRD.yaml for downstream agent consumption.
   ONLY stop when no open questions remain or the user types EXIT.
 user-invocable: true
 disable-model-invocation: true
-model: opusplan
+model: opus
 effort: xhigh
 allowed-tools: Read Write(CLAUDE.md) Write(docs/PRD.yaml) Write(.claude/skills-state/sdlc-prd.state.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion
 ---
@@ -27,7 +27,7 @@ unambiguous source of product truth.
 3. **Structural questions** → monorepo? products? (sets PRD shape.)
 4. **Pre-fill confirmation** → theme by theme, each `⚠ inferred` confirmed individually.
 5. **Theme interview** → required themes always run; optional themes are gated now/skip/todo. Per-question flow varies by `importance` tier (see `references/importance-flows.md`).
-6. **Write + validate** → merge into `docs/PRD.yaml`, run `validate_prd.py`.
+6. **Write + validate** → merge into `docs/PRD.yaml`, run `validate_schema.py`.
 7. **CLAUDE.md pointer + close** → inject the pointer block, mark state `complete`.
 
 State is persisted **after every confirmed batch**, so the user can `EXIT`
@@ -38,9 +38,10 @@ at any time without losing progress.
 | File | Purpose |
 |---|---|
 | `SKILL.md` | This file — the workflow itself. |
-| `product-questions.yaml` | The full question inventory, grouped by theme. |
+| `prd-questions.yaml` | The full question inventory, grouped by theme. |
 | `PRD.schema.yaml` | Human-readable canonical schema for `docs/PRD.yaml`. |
-| `validate_prd.py` | Pydantic v2 validator, called after every write. |
+| `validate_schema.py` | Pydantic v2 validator, called after every write. |
+| `set_claude_md_pointer.py` | Deterministic CLAUDE.md pointer injector, called in Phase 8. |
 | `references/interview-mechanics.md` | AskUserQuestion batch format, inferred-option pattern, conditional promotions. Read on entering Phase 6. |
 | `references/importance-flows.md` | The `med` / `high` / `critical` interview flows, including the per-item state machine for critical lists and the `product_identity` synthesis batch. Read alongside `interview-mechanics.md` on entering Phase 6 — required whenever a question with `importance: high` or `critical` is up next. |
 | `references/merge-validate.md` | Merge logic for existing PRD.yaml, validator exit-code recovery, CLAUDE.md pointer rules. Read on entering Phase 7. |
@@ -208,7 +209,7 @@ Write the confirmed values into the state file. Set
 
 ### Phase 6 — Theme interview
 
-Walk the themes in the order defined by `product-questions.yaml`. Use
+Walk the themes in the order defined by `prd-questions.yaml`. Use
 `AskUserQuestion` as the canonical asking channel. For each theme:
 
 - **Required themes** (`required: true` in the YAML): run the theme's
@@ -233,7 +234,7 @@ After all themes are addressed (answered/skipped/todo'd), set
 
 #### Within a theme: tiered question flow
 
-Each question in `product-questions.yaml` carries an `importance` field
+Each question in `prd-questions.yaml` carries an `importance` field
 (`med | high | critical`) that controls how the agent runs it:
 
 - **`med`** (the default — most questions): batch with up to 3 sibling
@@ -251,7 +252,7 @@ Each question in `product-questions.yaml` carries an `importance` field
 
 Order within a theme: run all `med` questions first (in 2–4-question
 batches), then each `high`/`critical` question as its own mini-section
-in the order they appear in `product-questions.yaml`.
+in the order they appear in `prd-questions.yaml`.
 
 **Read `references/importance-flows.md` before running any
 `high`/`critical` question.** It contains the exact `AskUserQuestion`
@@ -275,7 +276,7 @@ The two non-negotiable rules in this phase:
 Write or merge `docs/PRD.yaml` at the project root, then run:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/validate_prd.py" --path PRD.yaml
+python "${CLAUDE_SKILL_DIR}/validate_schema.py" --path PRD.yaml
 ```
 
 For full merge logic (conflict handling, key preservation, deletion
@@ -296,11 +297,12 @@ in now or accept `status: draft`.
 
 ### Phase 8 — CLAUDE.md pointer & complete
 
-On successful validation (`[OK]` or `[DRAFT]`), inject (or update) the
-`## Product Requirements` pointer block in the project root `CLAUDE.md`.
-Create the file with the block alone if missing.
+On successful validation (`[OK]` or `[DRAFT]`), call
+`set_claude_md_pointer.py` to inject or update this skill's bullet
+inside the shared `## SDLC Documents` section of the project root
+`CLAUDE.md`. Create `CLAUDE.md` with the section if missing.
 
-For block content, detection rule, and append behavior → see
+For the bullet format, detection rule, and append behavior → see
 `references/merge-validate.md`.
 
 After the CLAUDE.md write succeeds: set `status: complete` in the state
@@ -329,6 +331,7 @@ skipped_themes: []
 todo_themes: []      # themes the user marked `todo` in Phase 6
 pending_themes: []
 current_theme: null
+last_feature_id: 0   # counter for F-NNN IDs; incremented at each critical-item approval in Phase 6
 partial_answers: {}  # mirrors PRD.yaml structure incrementally
 ```
 

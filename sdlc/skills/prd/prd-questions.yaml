@@ -1,5 +1,5 @@
 # =============================================================================
-# product-questions.yaml — Question inventory for the sdlc-prd skill
+# prd-questions.yaml — Question inventory for the sdlc-prd skill
 # =============================================================================
 # This file is a *guide*, not a rigid script. The skill batches questions by
 # theme (3–5 per batch), skips questions already answered by the project scan,
@@ -8,7 +8,7 @@
 # Field reference for each entry:
 #   theme              — grouping label; matches a top-level key in PRD.yaml
 #   id                 — unique slug, kebab-case
-#   prd_path           — dotted path where the answer is written in PRD.yaml
+#   schema_path        — dotted path where the answer is written in PRD.yaml
 #                        (e.g. "product_identity.name")
 #   question           — the prompt shown to the user
 #   hint               — why this matters for downstream agents (kept short)
@@ -22,8 +22,8 @@
 #                        re-evaluate this at the start of each new theme batch.
 #                        Examples below.
 #   capture_rationale  — if true, after the choice, ask one follow-up:
-#                        "In one sentence — why?". Stored at <prd_path>_rationale.
-#   confidence_field   — if true, a sibling <prd_path>_confidence is written
+#                        "In one sentence — why?". Stored at <schema_path>_rationale.
+#   confidence_field   — if true, a sibling <schema_path>_confidence is written
 #                        (most fields use this; set false to opt out)
 #   importance         — one of `med | high | critical`. Controls how the agent
 #                        runs the interview for this question. Defaults to `med`
@@ -140,7 +140,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: problem_opportunity
     id: problem_statement
-    prd_path: problem_opportunity.problem_statement
+    schema_path: problem_opportunity.problem_statement
     question: "What user pain or unmet need does this product address? (1–3 sentences)"
     hint: "The grounding fact for every feature decision downstream."
     suggested_answers: []
@@ -152,7 +152,7 @@ questions:
 
   - theme: problem_opportunity
     id: who_has_pain
-    prd_path: problem_opportunity.who_has_pain
+    schema_path: problem_opportunity.who_has_pain
     question: "Who specifically feels this pain? (Pick one or more, or describe.)"
     hint: "Helps agents make persona-specific UX trade-offs."
     suggested_answers:
@@ -169,7 +169,7 @@ questions:
 
   - theme: problem_opportunity
     id: current_workarounds
-    prd_path: problem_opportunity.current_workarounds
+    schema_path: problem_opportunity.current_workarounds
     question: "How do affected people cope today? (Pick all that apply.)"
     hint: "Anchors the 'why-better-than-status-quo' argument."
     suggested_answers:
@@ -186,7 +186,7 @@ questions:
 
   - theme: problem_opportunity
     id: why_now
-    prd_path: problem_opportunity.why_now
+    schema_path: problem_opportunity.why_now
     question: "Why is this the right moment to build this? (Optional — market shift, new tech, regulation, etc.)"
     hint: "Helps agents reason about urgency and competitive pressure."
     suggested_answers:
@@ -206,7 +206,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: users_personas
     id: primary_users
-    prd_path: users_personas.primary_users
+    schema_path: users_personas.primary_users
     question: "Who are the primary users? (Pick all that apply, or describe.)"
     hint: "Primary users define the default UX bias."
     suggested_answers:
@@ -223,7 +223,7 @@ questions:
 
   - theme: users_personas
     id: secondary_users
-    prd_path: users_personas.secondary_users
+    schema_path: users_personas.secondary_users
     question: "Any secondary users we should keep in mind? (Optional — pick or describe.)"
     hint: "Secondary users get acknowledged but not optimized for in v1."
     suggested_answers:
@@ -240,7 +240,7 @@ questions:
 
   - theme: users_personas
     id: user_goals
-    prd_path: users_personas.user_goals
+    schema_path: users_personas.user_goals
     question: "What does success look like for a user after using this? (Pick all that apply.)"
     hint: "Drives the framing of error states, success states, and CTAs."
     suggested_answers:
@@ -257,7 +257,7 @@ questions:
 
   - theme: users_personas
     id: user_frustrations
-    prd_path: users_personas.user_frustrations
+    schema_path: users_personas.user_frustrations
     question: "What frustrates these users about today's options? (Pick all that apply.)"
     hint: "Pain points are sharp signals for what to over-invest in."
     suggested_answers:
@@ -274,7 +274,7 @@ questions:
 
   - theme: users_personas
     id: expertise_level
-    prd_path: users_personas.expertise_level
+    schema_path: users_personas.expertise_level
     question: "Typical user expertise level in this domain?"
     hint: "Drives how much hand-holding the UX needs."
     suggested_answers:
@@ -293,7 +293,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: use_cases
     id: core_workflows
-    prd_path: use_cases.core_workflows
+    schema_path: use_cases.core_workflows
     question: "What are the 3–7 happy-path workflows? (List them as short verb phrases.)"
     hint: "Each becomes a candidate feature surface and a test scenario."
     suggested_answers: []
@@ -305,7 +305,7 @@ questions:
 
   - theme: use_cases
     id: primary_jobs_to_be_done
-    prd_path: use_cases.primary_jobs_to_be_done
+    schema_path: use_cases.primary_jobs_to_be_done
     question: "What are the primary 'jobs' the product is hired to do? (JTBD format: 'When ___, I want to ___, so I can ___'.)"
     hint: "JTBD framing keeps agents from designing features in isolation from intent."
     suggested_answers: []
@@ -317,7 +317,7 @@ questions:
 
   - theme: use_cases
     id: secondary_jobs
-    prd_path: use_cases.secondary_jobs
+    schema_path: use_cases.secondary_jobs
     question: "Any secondary jobs worth supporting? (Optional.)"
     hint: "Helps agents avoid accidentally blocking adjacent use cases."
     suggested_answers: []
@@ -329,7 +329,7 @@ questions:
 
   - theme: use_cases
     id: edge_cases
-    prd_path: use_cases.edge_cases
+    schema_path: use_cases.edge_cases
     question: "Any edge cases that must be handled gracefully from day one? (Pick or describe.)"
     hint: "Calling these out early prevents agents from treating them as afterthoughts."
     suggested_answers:
@@ -349,9 +349,9 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: functional_requirements
     id: must_have_features
-    prd_path: functional_requirements.must_have_features
+    schema_path: functional_requirements.must_have_features
     question: "What features are *must-have* for the first usable release? List 3–10. Be verbose."
-    hint: "Defines the MVP. Anything not on this list is deferrable."
+    hint: "Defines the MVP. Each item is stored as 'F-NNN: <description>' (e.g. 'F-001: …') — the ID is assigned automatically at approval and used for cross-stage traceability. Anything not on this list is deferrable."
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -361,9 +361,9 @@ questions:
 
   - theme: functional_requirements
     id: nice_to_have_features
-    prd_path: functional_requirements.nice_to_have_features
+    schema_path: functional_requirements.nice_to_have_features
     question: "Nice-to-have features for a later release? (Optional.)"
-    hint: "Lets agents propose extension points without scope creep."
+    hint: "Post-MVP backlog. IDs continue the F-NNN sequence from must_have_features — if must-haves ended at F-005, nice-to-haves start at F-006. Same 'F-NNN: <description>' format. Lets agents propose extension points without scope creep."
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -373,7 +373,7 @@ questions:
 
   - theme: functional_requirements
     id: out_of_scope
-    prd_path: functional_requirements.out_of_scope
+    schema_path: functional_requirements.out_of_scope
     question: "What is *explicitly out of scope*? (List, or skip.)"
     hint: "Crucial. Agents over-build when scope boundaries are vague."
     suggested_answers: []
@@ -385,7 +385,7 @@ questions:
 
   - theme: functional_requirements
     id: integrations_required
-    prd_path: functional_requirements.integrations_required
+    schema_path: functional_requirements.integrations_required
     question: "Which external systems must this integrate with? (Pick or describe.)"
     hint: "Integrations drive auth, schema, and reliability requirements."
     suggested_answers:
@@ -402,7 +402,7 @@ questions:
 
   - theme: functional_requirements
     id: ai_features
-    prd_path: functional_requirements.ai_features
+    schema_path: functional_requirements.ai_features
     question: "Any AI-powered capabilities planned? (Pick or describe.)"
     hint: "AI features have outsized cost, latency, and eval implications."
     suggested_answers:
@@ -422,7 +422,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: technical_constraints
     id: primary_language
-    prd_path: technical_constraints.primary_language
+    schema_path: technical_constraints.primary_language
     question: "Primary programming language?"
     hint: "Determines available libraries, hiring pool, runtime characteristics."
     suggested_answers:
@@ -444,7 +444,7 @@ questions:
 
   - theme: technical_constraints
     id: framework
-    prd_path: technical_constraints.framework
+    schema_path: technical_constraints.framework
     question: "Primary framework(s), if any? (Pick or describe.)"
     hint: "Frameworks lock in many downstream decisions; worth surfacing early."
     suggested_answers:
@@ -462,7 +462,7 @@ questions:
 
   - theme: technical_constraints
     id: runtime_platform
-    prd_path: technical_constraints.runtime_platform
+    schema_path: technical_constraints.runtime_platform
     question: "Where does the product run?"
     hint: "Drives UI assumptions, packaging, distribution model."
     suggested_answers:
@@ -484,7 +484,7 @@ questions:
 
   - theme: technical_constraints
     id: deployment_target
-    prd_path: technical_constraints.deployment_target
+    schema_path: technical_constraints.deployment_target
     question: "Deployment target?"
     hint: "Affects every infra and ops decision downstream."
     suggested_answers:
@@ -505,7 +505,7 @@ questions:
 
   - theme: technical_constraints
     id: existing_systems
-    prd_path: technical_constraints.existing_systems
+    schema_path: technical_constraints.existing_systems
     question: "Any existing systems we must coexist with or migrate from? (Pick or describe.)"
     hint: "Coexistence constraints often dwarf greenfield design considerations."
     suggested_answers:
@@ -522,7 +522,7 @@ questions:
 
   - theme: technical_constraints
     id: browser_support
-    prd_path: technical_constraints.browser_support
+    schema_path: technical_constraints.browser_support
     question: "Browser support requirements? (Web only — skip if not web.)"
     hint: "Directly informs polyfills, CSS, and bundler config."
     suggested_answers:
@@ -545,7 +545,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: product_identity
     id: idea_text
-    prd_path: product_identity.idea_text
+    schema_path: product_identity.idea_text
     question: "Original product brief — the free-text description you shared at the start."
     hint: "Preserved verbatim so downstream agents can refer to the founding idea without re-reading the interview transcript."
     suggested_answers: []
@@ -558,7 +558,7 @@ questions:
 
   - theme: product_identity
     id: name
-    prd_path: product_identity.name
+    schema_path: product_identity.name
     question: "What is the product's name?"
     hint: "Used by downstream agents in copy, branding, and code identifiers."
     suggested_answers: []
@@ -571,7 +571,7 @@ questions:
 
   - theme: product_identity
     id: slug
-    prd_path: product_identity.slug
+    schema_path: product_identity.slug
     question: "Preferred URL/package slug? (kebab-case)"
     hint: "Used for repo names, package names, URL paths."
     suggested_answers: []
@@ -584,7 +584,7 @@ questions:
 
   - theme: product_identity
     id: one_liner
-    prd_path: product_identity.one_liner
+    schema_path: product_identity.one_liner
     question: "Describe the product in one sentence (≤ 140 chars), as if to a smart friend who doesn't work in your industry."
     hint: "Used everywhere: docs intros, README headers, agent context."
     suggested_answers: []
@@ -597,7 +597,7 @@ questions:
 
   - theme: product_identity
     id: tagline
-    prd_path: product_identity.tagline
+    schema_path: product_identity.tagline
     question: "Marketing tagline (optional). Punchy, ≤ 8 words."
     hint: "Optional. Skip if you don't have one yet."
     suggested_answers: []
@@ -610,7 +610,7 @@ questions:
 
   - theme: product_identity
     id: vision
-    prd_path: product_identity.vision
+    schema_path: product_identity.vision
     question: "Where is this product going in 1–3 years? (1–3 sentences)"
     hint: "Vision shapes architectural choices that have long horizons."
     suggested_answers: []
@@ -623,7 +623,7 @@ questions:
 
   - theme: product_identity
     id: mission
-    prd_path: product_identity.mission
+    schema_path: product_identity.mission
     question: "What does this product do for users today? (1–3 sentences)"
     hint: "Mission is what the product IS now; vision is where it's going. Used by agents for onboarding copy and feature rationale."
     suggested_answers: []
@@ -639,7 +639,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: non_functional_requirements
     id: performance_targets
-    prd_path: non_functional_requirements.performance_targets
+    schema_path: non_functional_requirements.performance_targets
     question: "Any specific performance targets? (Pick or describe.)"
     hint: "Concrete targets prevent over- or under-engineering."
     suggested_answers:
@@ -657,7 +657,7 @@ questions:
 
   - theme: non_functional_requirements
     id: scalability
-    prd_path: non_functional_requirements.scalability
+    schema_path: non_functional_requirements.scalability
     question: "Expected scale?"
     hint: "Frames architecture decisions: monolith vs. distributed."
     suggested_answers:
@@ -673,7 +673,7 @@ questions:
 
   - theme: non_functional_requirements
     id: reliability
-    prd_path: non_functional_requirements.reliability
+    schema_path: non_functional_requirements.reliability
     question: "Reliability tier?"
     hint: "Mission-critical implies redundancy, formal SLOs, oncall."
     suggested_answers:
@@ -688,7 +688,7 @@ questions:
 
   - theme: non_functional_requirements
     id: availability_sla
-    prd_path: non_functional_requirements.availability_sla
+    schema_path: non_functional_requirements.availability_sla
     question: "Availability target? (Optional.)"
     hint: "An explicit SLA shapes infra spend and oncall rotations."
     suggested_answers:
@@ -706,7 +706,7 @@ questions:
 
   - theme: non_functional_requirements
     id: accessibility
-    prd_path: non_functional_requirements.accessibility
+    schema_path: non_functional_requirements.accessibility
     question: "Accessibility commitment?"
     hint: "WCAG levels affect component choices, colors, keyboard handling."
     suggested_answers:
@@ -721,7 +721,7 @@ questions:
 
   - theme: non_functional_requirements
     id: other
-    prd_path: non_functional_requirements.other
+    schema_path: non_functional_requirements.other
     question: "What else are important non-functional requirements?"
     hint: "Anything else impacting the project and not yet mentioned."
     suggested_answers: []
@@ -736,7 +736,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: data_model
     id: key_entities
-    prd_path: data_model.key_entities
+    schema_path: data_model.key_entities
     question: "What are the primary domain entities? (e.g. User, Project, Invoice)"
     hint: "Seeds the schema, API resources, and authorization boundaries."
     suggested_answers: []
@@ -748,7 +748,7 @@ questions:
 
   - theme: data_model
     id: data_ownership
-    prd_path: data_model.data_ownership
+    schema_path: data_model.data_ownership
     question: "Who owns the data?"
     hint: "Drives auth model, deletion semantics, export obligations."
     suggested_answers:
@@ -765,7 +765,7 @@ questions:
 
   - theme: data_model
     id: data_volume_estimate
-    prd_path: data_model.data_volume_estimate
+    schema_path: data_model.data_volume_estimate
     question: "Rough total data volume at maturity?"
     hint: "MB vs. TB changes everything about storage and indexing strategy."
     suggested_answers:
@@ -783,7 +783,7 @@ questions:
 
   - theme: data_model
     id: storage_preferences
-    prd_path: data_model.storage_preferences
+    schema_path: data_model.storage_preferences
     question: "Preferred storage technologies? (Pick or describe.)"
     hint: "Even soft preferences here save downstream agents from re-litigating."
     suggested_answers:
@@ -804,7 +804,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: security_compliance
     id: auth_model
-    prd_path: security_compliance.auth_model
+    schema_path: security_compliance.auth_model
     question: "Authentication model?"
     hint: "Auth choice cascades into session handling, mobile flows, integrations."
     suggested_answers:
@@ -826,7 +826,7 @@ questions:
 
   - theme: security_compliance
     id: data_sensitivity
-    prd_path: security_compliance.data_sensitivity
+    schema_path: security_compliance.data_sensitivity
     question: "Highest data sensitivity tier handled?"
     hint: "Restricted/regulated data implies encryption, audit, segregation."
     suggested_answers:
@@ -843,7 +843,7 @@ questions:
 
   - theme: security_compliance
     id: regulatory_requirements
-    prd_path: security_compliance.regulatory_requirements
+    schema_path: security_compliance.regulatory_requirements
     question: "Any regulatory regimes that apply? (Pick all that apply.)"
     hint: "GDPR/HIPAA/PCI/SOC2 each impose specific concrete obligations."
     suggested_answers:
@@ -863,7 +863,7 @@ questions:
 
   - theme: security_compliance
     id: encryption_at_rest
-    prd_path: security_compliance.encryption_at_rest
+    schema_path: security_compliance.encryption_at_rest
     question: "Is encryption at rest required?"
     hint: "Boolean — drives storage backend selection and key management."
     suggested_answers:
@@ -877,7 +877,7 @@ questions:
 
   - theme: security_compliance
     id: audit_logging
-    prd_path: security_compliance.audit_logging
+    schema_path: security_compliance.audit_logging
     question: "Is audit logging required for sensitive actions?"
     hint: "Boolean — affects every mutating endpoint."
     suggested_answers:
@@ -894,7 +894,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: business_model
     id: monetization
-    prd_path: business_model.monetization
+    schema_path: business_model.monetization
     question: "How does this product make (or save) money?"
     hint: "Drives auth tiers, billing surface, feature flagging needs."
     suggested_answers:
@@ -915,7 +915,7 @@ questions:
 
   - theme: business_model
     id: pricing_model
-    prd_path: business_model.pricing_model
+    schema_path: business_model.pricing_model
     question: "Pricing model summary, if known? (One sentence.)"
     hint: "Per-seat vs per-usage vs flat radically changes UX surfaces."
     suggested_answers: []
@@ -928,7 +928,7 @@ questions:
 
   - theme: business_model
     id: license_type
-    prd_path: business_model.license_type
+    schema_path: business_model.license_type
     question: "License type?"
     hint: "License affects what dependencies can be used and how code can ship."
     suggested_answers:
@@ -951,7 +951,7 @@ questions:
 
   - theme: business_model
     id: target_market
-    prd_path: business_model.target_market
+    schema_path: business_model.target_market
     question: "Target market in one sentence? (Optional.)"
     hint: "B2B vs B2C vs internal radically changes UX assumptions."
     suggested_answers:
@@ -971,7 +971,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: stakeholders
     id: product_owner
-    prd_path: stakeholders.product_owner
+    schema_path: stakeholders.product_owner
     question: "Who owns this product? (Name, role, or 'me'.)"
     hint: "Used by agents when summarizing and when conflicts arise."
     suggested_answers: []
@@ -983,7 +983,7 @@ questions:
 
   - theme: stakeholders
     id: primary_contributors
-    prd_path: stakeholders.primary_contributors
+    schema_path: stakeholders.primary_contributors
     question: "Who are the primary contributors? (List names or roles.)"
     hint: "Helps agents tailor reviews and PR descriptions."
     suggested_answers: []
@@ -995,7 +995,7 @@ questions:
 
   - theme: stakeholders
     id: decision_maker
-    prd_path: stakeholders.decision_maker
+    schema_path: stakeholders.decision_maker
     question: "Who has final say on scope and timeline?"
     hint: "Useful for agents when escalating trade-offs."
     suggested_answers: []
@@ -1007,7 +1007,7 @@ questions:
 
   - theme: stakeholders
     id: external_dependencies
-    prd_path: stakeholders.external_dependencies
+    schema_path: stakeholders.external_dependencies
     question: "Any external teams or vendors we depend on? (Pick or describe.)"
     hint: "External dependencies are common silent blockers."
     suggested_answers:
@@ -1027,7 +1027,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: milestones
     id: mvp_scope
-    prd_path: milestones.mvp_scope
+    schema_path: milestones.mvp_scope
     question: "What is the MVP, in 1–3 sentences?"
     hint: "Tightest possible scope an agent should default to building first."
     suggested_answers: []
@@ -1039,7 +1039,7 @@ questions:
 
   - theme: milestones
     id: phases
-    prd_path: milestones.phases
+    schema_path: milestones.phases
     question: "Planned post-MVP phases, if any? (Ordered list.)"
     hint: "Lets agents plan extension points without front-loading complexity."
     suggested_answers: []
@@ -1054,7 +1054,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: success_metrics
     id: primary_kpis
-    prd_path: success_metrics.primary_kpis
+    schema_path: success_metrics.primary_kpis
     question: "Top 2–5 KPIs that matter? (Pick or describe.)"
     hint: "Anchors what agents should optimize for when trading off."
     suggested_answers:
@@ -1071,7 +1071,7 @@ questions:
 
   - theme: success_metrics
     id: acceptance_criteria
-    prd_path: success_metrics.acceptance_criteria
+    schema_path: success_metrics.acceptance_criteria
     question: "What makes a feature 'done' for this product? (Pick all that apply.)"
     hint: "Becomes the implicit checklist for every PR an agent opens."
     suggested_answers:
@@ -1088,7 +1088,7 @@ questions:
 
   - theme: success_metrics
     id: definition_of_done
-    prd_path: success_metrics.definition_of_done
+    schema_path: success_metrics.definition_of_done
     question: "Team-level Definition of Done items? (Pick or describe.)"
     hint: "Distinguishes 'feature works' from 'release-ready'."
     suggested_answers:
@@ -1105,7 +1105,7 @@ questions:
 
   - theme: success_metrics
     id: user_satisfaction_target
-    prd_path: success_metrics.user_satisfaction_target
+    schema_path: success_metrics.user_satisfaction_target
     question: "User satisfaction target, if any? (NPS, CSAT, etc. — Optional.)"
     hint: "If you have one, agents should weight UX work accordingly."
     suggested_answers: []
@@ -1120,7 +1120,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: risks_assumptions
     id: top_risks
-    prd_path: risks_assumptions.top_risks
+    schema_path: risks_assumptions.top_risks
     question: "Top risks that could derail this? (Pick all that apply, or describe.)"
     hint: "Risks the team has named are risks the team can manage."
     suggested_answers:
@@ -1137,7 +1137,7 @@ questions:
 
   - theme: risks_assumptions
     id: key_assumptions
-    prd_path: risks_assumptions.key_assumptions
+    schema_path: risks_assumptions.key_assumptions
     question: "What are we taking on faith? (Pick or describe.)"
     hint: "Naming assumptions lets agents flag when reality contradicts them."
     suggested_answers:
@@ -1154,7 +1154,7 @@ questions:
 
   - theme: risks_assumptions
     id: blockers
-    prd_path: risks_assumptions.blockers
+    schema_path: risks_assumptions.blockers
     question: "Active blockers right now? (List or 'none'.)"
     hint: "Lets agents avoid doing work that depends on a blocked path."
     suggested_answers: []
@@ -1166,7 +1166,7 @@ questions:
 
   - theme: risks_assumptions
     id: dependencies
-    prd_path: risks_assumptions.dependencies
+    schema_path: risks_assumptions.dependencies
     question: "Critical external dependencies? (Pick or describe.)"
     hint: "Agents should weight critical-path work above dependency-light work."
     suggested_answers:
@@ -1186,7 +1186,7 @@ questions:
   # ---------------------------------------------------------------------------
   - theme: open_questions
     id: undecided_decisions
-    prd_path: open_questions.undecided_decisions
+    schema_path: open_questions.undecided_decisions
     question: "Any decisions you are explicitly punting for now? (List, or 'none'.)"
     hint: "Agents should treat these as decisions-still-to-make, not silence."
     suggested_answers: []
@@ -1198,7 +1198,7 @@ questions:
 
   - theme: open_questions
     id: parking_lot
-    prd_path: open_questions.parking_lot
+    schema_path: open_questions.parking_lot
     question: "Anything in the parking lot to revisit later? (Ideas, half-baked thoughts, optional.)"
     hint: "A safe place to capture ideas without committing to them."
     suggested_answers: []

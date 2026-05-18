@@ -106,7 +106,7 @@ fields), ask a single targeted clarifying `AskUserQuestion` before writing.
 
 ## Capturing rationale
 
-For questions marked `capture_rationale: true` in `product-questions.yaml`,
+For questions marked `capture_rationale: true` in `prd-questions.yaml`,
 immediately follow with a single-question `AskUserQuestion`:
 
 ```
@@ -118,7 +118,7 @@ options: [
 ]
 ```
 
-Skippable. Stored at `<prd_path>_rationale`.
+Skippable. Stored at `<schema_path>_rationale`.
 
 ## Type discipline when writing answers
 
@@ -149,7 +149,7 @@ batch" alongside the rest of the tier-flow guidance.
 
 ## Conditional promotions (`required_if`)
 
-Some questions in `product-questions.yaml` carry a `required_if:` rule
+Some questions in `prd-questions.yaml` carry a `required_if:` rule
 (an expression evaluated against already-answered fields). Re-evaluate
 these at the start of each new theme batch and promote them to required
 if the condition holds. Current rules:

@@ -1,9 +1,9 @@
-"""Validate PRD.yaml against the canonical sdlc-prd schema.
+"""Validate PRD.yaml against the canonical sdlc:prd schema.
 
 Run from the project root:
 
-    python .claude/skills/sdlc-prd/validate_prd.py
-    python .claude/skills/sdlc-prd/validate_prd.py --path some/other/PRD.yaml
+    python sdlc/skills/prd/validate_schema.py
+    python sdlc/skills/prd/validate_schema.py --path some/other/PRD.yaml
 
 Exit codes:
     0 — schema valid; either status='complete' with all required fields filled,
@@ -17,6 +17,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from enum import Enum
 from pathlib import Path
@@ -181,7 +182,7 @@ class LicenseType(str, Enum):
 
 # =============================================================================
 # Theme models — declared in the canonical interview order from
-# product-questions.yaml (required themes first, product_identity last among
+# prd-questions.yaml (required themes first, product_identity last among
 # required, optional themes follow).
 # =============================================================================
 
@@ -444,6 +445,45 @@ class PRD(BaseModel):
 
 
 # =============================================================================
+# Feature ID check — every item in must_have_features / nice_to_have_features
+# must start with "F-NNN: " (3+ zero-padded digits, colon, space).
+# Violations are warnings for drafts; errors for status=complete.
+# =============================================================================
+
+_FEATURE_ID_RE = re.compile(r"^F-\d{3,}: .+")
+
+
+def check_feature_ids(prd: "PRD") -> List[str]:
+    """Return violation messages for feature items missing the F-NNN prefix."""
+    violations: List[str] = []
+
+    def _check(items: Optional[List[str]], path: str) -> None:
+        for i, item in enumerate(items or []):
+            if not _FEATURE_ID_RE.match(item):
+                violations.append(f"{path}[{i}]: expected 'F-NNN: …' prefix, got {item!r}")
+
+    if prd.metadata.monorepo and prd.products:
+        for slug, product in prd.products.items():
+            if product.functional_requirements:
+                fr = product.functional_requirements
+                _check(
+                    fr.must_have_features,
+                    f"products.{slug}.functional_requirements.must_have_features",
+                )
+                _check(
+                    fr.nice_to_have_features,
+                    f"products.{slug}.functional_requirements.nice_to_have_features",
+                )
+    else:
+        if prd.functional_requirements:
+            fr = prd.functional_requirements
+            _check(fr.must_have_features, "functional_requirements.must_have_features")
+            _check(fr.nice_to_have_features, "functional_requirements.nice_to_have_features")
+
+    return violations
+
+
+# =============================================================================
 # Required-field check — separate from schema validation so drafts can be
 # saved without failing. Validation behavior depends on metadata.status.
 # =============================================================================
@@ -545,17 +585,20 @@ def validate_file(path: Path) -> int:
         return 1
 
     missing = check_required(prd)
+    id_violations = check_feature_ids(prd)
     status = prd.metadata.status
 
     if status == "complete":
-        if missing:
-            print(
-                f"[FAIL] PRD.yaml claims status 'complete' but {len(missing)} "
-                f"required field(s) are missing ({path})\n"
-            )
-            print("Missing required fields:")
-            for m in missing:
-                print(f"  - {m}")
+        if missing or id_violations:
+            print(f"[FAIL] PRD.yaml claims status 'complete' but has errors ({path})\n")
+            if missing:
+                print(f"{len(missing)} required field(s) missing:")
+                for m in missing:
+                    print(f"  - {m}")
+            if id_violations:
+                print(f"\n{len(id_violations)} feature item(s) missing F-NNN prefix:")
+                for v in id_violations:
+                    print(f"  - {v}")
             return 1
         print(f"[OK] PRD.yaml is valid and complete ({path})")
         return 0
@@ -573,6 +616,12 @@ def validate_file(path: Path) -> int:
             f"[DRAFT] PRD.yaml is a draft — all required fields filled. "
             f"Set metadata.status: complete when done ({path})"
         )
+    if id_violations:
+        print(
+            f"\nWarning: {len(id_violations)} feature item(s) missing F-NNN prefix (required before setting status: complete):"
+        )
+        for v in id_violations:
+            print(f"  - {v}")
     return 0
 
 

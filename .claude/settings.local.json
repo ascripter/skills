@@ -8,7 +8,9 @@
       "Bash(echo \"Exit: $?\")",
       "Bash(xargs sed -i 's/product-req/sdlc-prd/g')",
       "Bash(grep -v \"\\\\.pyc$\")",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "WebFetch(domain:docs.claude.com)",
+      "Bash(git *)"
     ]
   },
   "enableAllProjectMcpServers": true,

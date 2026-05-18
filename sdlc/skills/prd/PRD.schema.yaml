@@ -3,7 +3,7 @@
 # =============================================================================
 # This file documents the full structure of PRD.yaml. It is *not* a runtime
 # config — it is the human-readable source of truth for the schema that
-# `validate_prd.py` enforces.
+# `validate_schema.py` enforces.
 #
 # Two top-level shapes are supported:
 #   1. SINGLE-PRODUCT (the default): theme blocks live at the top level.
@@ -20,9 +20,9 @@
 #       * confirmed  — user explicitly stated
 #       * inferred   — derived from a project file scan, accepted by user
 #       * assumption — user picked a placeholder, expect to revisit
-#   - Enum values are lowercase snake_case strings. See `validate_prd.py`
+#   - Enum values are lowercase snake_case strings. See `validate_schema.py`
 #     for the authoritative enum definitions.
-#   - Theme order matches the interview order in `product-questions.yaml`.
+#   - Theme order matches the interview order in `prd-questions.yaml`.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -83,8 +83,12 @@ use_cases:
 # functional_requirements — what the product must, should, won't do
 # -----------------------------------------------------------------------------
 functional_requirements:
-  must_have_features: null    # MVP features (list[string])
-  nice_to_have_features: null # post-MVP backlog (list[string])
+  must_have_features: null    # MVP features (list[string]); each item starts with a stable ID:
+                              #   "F-001: <title and detail description>"
+                              # IDs are assigned in collection order (F-001, F-002, …).
+  nice_to_have_features: null # post-MVP backlog (list[string]); IDs continue the F-NNN
+                              # sequence from must_have_features — e.g. if must-haves end
+                              # at F-005, nice-to-haves start at F-006. Same format.
   out_of_scope: null          # explicit non-goals (list[string])
   integrations_required: null # external systems we must talk to (list[string])
   ai_features: null           # AI-driven capabilities, if any (list[string])

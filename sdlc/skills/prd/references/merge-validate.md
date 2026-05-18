@@ -45,7 +45,7 @@ Write `docs/PRD.yaml` with:
 ## Running the validator
 
 ```bash
-python .claude/skills/sdlc-prd/validate_prd.py --path docs/PRD.yaml
+python .claude/skills/sdlc-prd/validate_schema.py --path docs/PRD.yaml
 ```
 
 Exit codes:
@@ -59,28 +59,42 @@ Exit codes:
 | 3 | Missing dependency | Validator prints `pip install` instructions. Do **not** auto-install — ask the user to install and re-run. |
 
 **Downstream-agent contract**: downstream agents MUST reject the PRD if
-`metadata.status != "complete"` OR if `validate_prd.py` exits non-zero.
+`metadata.status != "complete"` OR if `validate_schema.py` exits non-zero.
 Document this in CLAUDE.md if the user asks.
 
 ## CLAUDE.md pointer (Phase 8)
 
-On validation exit code 0 (either `[OK]` or `[DRAFT]`), inject (or update)
-this block in the project root `CLAUDE.md`. If `CLAUDE.md` does not exist,
-create it with this block as the sole content:
+On validation exit code 0 (either `[OK]` or `[DRAFT]`), call
+`set_claude_md_pointer.py` (bundled with this skill) to inject or update
+the skill's bullet inside the shared `## SDLC Documents` section of the
+project root `CLAUDE.md`. The script implements the rules below
+deterministically — do not write to `CLAUDE.md` by hand.
 
-```markdown
-## Product Requirements
-`PRD.yaml` in `docs/` contains the full structured product requirements. Load when working on features, architecture, API design, or user-facing decisions. Last updated by `sdlc-prd` skill on <ISO-8601 timestamp>.
+**Bullet format**:
+
+```
+- `docs/PRD.yaml`: structured product requirements. Load when working on features, architecture, API design, or user-facing decisions. Last updated by `sdlc-prd` on <ISO-8601 timestamp>.
 ```
 
-**Detection rule**: the block is identified by the heading
-`## Product Requirements` followed by a paragraph containing the literal
-string `` `PRD.yaml` `` and `sdlc-prd`. If a matching block exists,
-**update the timestamp only** and do not duplicate.
+**Rules** (mirrored from `CLAUDE.md` project conventions):
 
-If `CLAUDE.md` exists with unrelated content, append the block at the end
-with a blank line before it. Never reorder or modify the user's existing
-content.
+- If `CLAUDE.md` does not exist → create it containing only the
+  `## SDLC Documents` heading and this bullet.
+- If `CLAUDE.md` exists but the `## SDLC Documents` section does not →
+  append a blank line, the heading, and this bullet at the end.
+- If the section exists and a bullet whose substring contains both
+  `` `docs/PRD.yaml` `` and `` `sdlc-prd` `` is present → update the
+  timestamp only; do not duplicate.
+- If the section exists but no matching bullet → append the bullet as
+  the last line of the section.
+- Never reorder or modify the user's existing CLAUDE.md content.
+
+Invoke as:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/set_claude_md_pointer.py"
+# add --dry-run to preview the diff without writing
+```
 
 ## Closing the session
 
