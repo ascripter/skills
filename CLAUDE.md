@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 ## Project Overview
 
 A repo containing a collection of skills bundled as a Claude Code plugin (`sdlc`).
@@ -12,9 +16,9 @@ project from a structured chain of artifacts. Skills are invoked as
 | `ux`         | `sdlc/skills/ux`    | `docs/PRD.yaml` + interview                                                                  | `docs/UX.yaml`, `docs/UX__<surface>.yaml`            |
 | `api`        | `sdlc/skills/api`   | `docs/PRD.yaml` + `docs/UX.yaml` + interview                                                 | `docs/API.yaml`                                      |
 | `data`       | `sdlc/skills/data`  | `docs/PRD.yaml` + `docs/UX.yaml` + `docs/API.yaml` + interview                               | `docs/DATA-MODEL.yaml`                               |
-| `arch`       | `sdlc/skills/arch`  | PRD + UX + API + DATA-MODEL + interview                                                      | `docs/ARCH.yaml`, `docs/ARCH__<component>.yaml`      |
-| `test`       | `sdlc/skills/test`  | PRD + API + DATA-MODEL + ARCH__<component> + interview                                       | `docs/TEST-STRATEGY__<component>.yaml`               |
-| `task`       | `sdlc/skills/task`  | API + DATA-MODEL + ARCH__<component> + TEST-STRATEGY                                         | `docs/TASKS__<component>.json`                       |
+| `arch`       | `sdlc/skills/arch`  | `docs/PRD.yaml` + `docs/UX.yaml` + `docs/API.yaml` + `docs/DATA-MODEL.yaml` + interview                                                      | `docs/ARCH.yaml`, `docs/ARCH__<component>.yaml`      |
+| `test`       | `sdlc/skills/test`  | `docs/PRD.yaml` + `docs/API.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH__<component>.yaml` + interview                                       | `docs/TEST-STRATEGY__<component>.yaml`               |
+| `task`       | `sdlc/skills/task`  | `docs/API.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH__<component>.yaml` + `docs/TEST-STRATEGY__<component>.yaml`                                          | `docs/TASKS__<component>.json`                       |
 | `deploy`     | `sdlc/skills/deploy` | `docs/ARCH.yaml` + interview                                                                | `docs/DEPLOY.yaml`                                   |
 
 **Downstream consumers of every output are AI agents, not humans.** Optimize
@@ -332,11 +336,37 @@ minimum: missing/corrupted inputs, conflicting scan signals, skipped
 required fields, mid-interview abort, write-permission errors, very
 large repos.
 
-## Key files and directories
+## Commands
 
-- `CLAUDE.md` — this file (project conventions).
-- `sdlc/.claude-plugin/plugin.json` — plugin manifest (skills inventory).
-- `sdlc/skills/<skill>/` — per-skill folder.
-- `.claude/skills-state/` — per-skill session state.
-- `docs/` — generated SDLC artifacts (project root).
-- `pyproject.toml` — Python dependencies (`pip install -e .`).
+Install Python deps (the skills' validators depend on `pydantic>=2` and `pyyaml`):
+
+    pip install -e .          # or: uv sync
+
+Run a skill's schema validator (from project root):
+
+    python sdlc/skills/<skill>/validate_schema.py
+    python sdlc/skills/<skill>/validate_schema.py --path docs/PRD.yaml
+
+Smoke-test a validator against fixture YAMLs:
+
+    python sdlc/skills/prd/validate_schema.py --path sdlc/skills/prd/_smoke/01_valid_single.yaml
+
+Test a CLAUDE.md pointer injector without writing:
+
+    python sdlc/skills/<skill>/set_claude_md_pointer.py --dry-run
+
+## Repository layout
+
+This repo is itself a Claude Code marketplace containing one plugin (`sdlc`).
+Output artifacts (`docs/`, `.claude/skills-state/`) are produced **at the
+consumer project's root** when the skills run — they are not present in this
+repo by default.
+
+- `.claude-plugin/marketplace.json` — top-level marketplace manifest.
+- `sdlc/.claude-plugin/plugin.json` — the `sdlc` plugin manifest (skills inventory).
+- `sdlc/skills/<skill>/` — per-skill folder (see "Skill directory layout" above).
+- `sdlc/skills/<skill>/_smoke/` — YAML fixtures for the validator (one valid + several intentionally-broken).
+- `sdlc/skills/<skill>/evals/` — eval prompts (`evals.json`), fixtures, and grader scripts.
+- `.claude/settings.json` — project Claude Code settings (permissions, MCP servers).
+- `pyproject.toml` / `uv.lock` — Python toolchain.
+- `sdlc-*-handoff-draft.md` (root) — scratch handoff drafts; not skill assets.
