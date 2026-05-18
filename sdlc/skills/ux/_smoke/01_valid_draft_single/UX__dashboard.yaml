@@ -1,0 +1,58 @@
+metadata:
+  ux_surface_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "22222222-2222-2222-2222-222222222222"
+  status: "complete"
+
+surface_id: dashboard
+surface_type: screen
+route: "/dashboard"
+
+entry_conditions:
+  - "User authenticated and lands on /dashboard"
+exit_conditions:
+  - "Click on a task -> /tasks/<id>"
+  - "Esc -> previous surface"
+
+layout:
+  region_tree:
+    - id: header
+      role: header
+    - id: content
+      role: content
+      children:
+        - id: task-list
+          role: feed
+    - id: footer
+      role: footer
+
+states:
+  default:
+    description: "Renders the task list immediately if cached"
+  loading:
+    description: "Skeleton placeholders"
+  empty:
+    description: "Illustration + 'Add your first task' CTA"
+  error:
+    description: "inherit"
+  success:
+    description: "Toast: 'Task added'"
+
+interactions:
+  - id: add-task
+    actor: user
+    trigger: keypress
+    trigger_target: surface
+    preconditions: ["focus on dashboard"]
+    effects: ["opens quick-add modal"]
+    target_surface: quick-add
+
+components:
+  - id: add-button
+    type: button
+    variants: ["primary"]
+
+traces_prd_flows:
+  - "Add a task in under 3 seconds"
+  - "Mark tasks done from the keyboard"

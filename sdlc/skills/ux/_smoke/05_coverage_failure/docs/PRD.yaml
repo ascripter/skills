@@ -1,0 +1,13 @@
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-10T08:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "00000000-0000-0000-0000-000000000000"
+  monorepo: false
+  status: "complete"
+
+use_cases:
+  core_workflows:
+    - "Add a task in under 3 seconds"
+    - "Mark tasks done from the keyboard"
+    - "Export to CSV"

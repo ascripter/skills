@@ -1,0 +1,19 @@
+metadata:
+  ux_surface_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "66666666-6666-6666-6666-666666666666"
+  status: "complete"
+
+surface_id: dashboard
+surface_type: screen
+route: "/dashboard"
+
+layout:
+  region_tree:
+    - id: content
+      role: content
+
+traces_prd_flows:
+  - "Add a task in under 3 seconds"
+  - "Mark tasks done from the keyboard"

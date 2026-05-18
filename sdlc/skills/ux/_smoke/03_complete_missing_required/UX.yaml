@@ -1,0 +1,37 @@
+metadata:
+  ux_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "44444444-4444-4444-4444-444444444444"
+  monorepo: false
+  status: "complete"      # claims complete but required fields are missing below
+
+ux_warnings: []
+
+surface_family: web
+
+# design_principles.tenets missing -> required-field failure when status=complete
+design_principles: {}
+
+navigation_model:
+  type: sitemap
+  top_level_nodes: ["/dashboard"]
+
+surface_inventory:
+  - surface_id: dashboard
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__dashboard.yaml
+    traces_prd_flows: ["Add a task in under 3 seconds"]
+
+component_library:
+  name: "shadcn/ui"
+
+state_patterns:
+  error: "Inline error"
+
+content_rules:
+  tone: "Professional + concise"
+
+accessibility:
+  wcag_target: wcag_aa

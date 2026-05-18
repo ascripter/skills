@@ -1,0 +1,67 @@
+metadata:
+  ux_surface_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "55555555-5555-5555-5555-555555555555"
+  status: "complete"
+
+surface_id: task-add
+surface_type: cli_command
+cli_invocation: "acme task add <title> [--priority=<level>]"
+
+entry_conditions:
+  - "User runs `acme task add` from a terminal"
+exit_conditions:
+  - "Process exits 0 on success"
+  - "Process exits 1 on error"
+  - "Process exits 2 on misuse (missing title)"
+
+layout:
+  cli_args:
+    - name: title
+      kind: positional
+      type: string
+      required: true
+      description: "Short task title."
+    - name: priority
+      kind: option
+      short: "-p"
+      long: "--priority"
+      type: choice
+      choices: ["low", "normal", "high"]
+      default: "normal"
+      required: false
+      description: "Priority bucket."
+
+states:
+  default:
+    description: "Print confirmation 'Added task <id>' to stderr; emit task json to stdout."
+  loading:
+    description: "Spinner to stderr if save takes >200ms"
+  empty:
+    description: "n/a"
+  error:
+    description: "Error to stderr; non-zero exit"
+  success:
+    description: "inherit"
+
+interactions:
+  - id: invoke
+    actor: user
+    trigger: cli_invoke
+    trigger_target: surface
+    preconditions: ["title provided"]
+    effects: ["create task in store", "print confirmation"]
+    target_surface: null
+
+components: []
+
+validation_rules:
+  - field: title
+    rules: ["required", "max_length=140"]
+    error_message: "title is required and must be ≤140 chars"
+
+accessibility_notes: "inherit"
+
+traces_prd_flows:
+  - "Add a task in under 3 seconds"

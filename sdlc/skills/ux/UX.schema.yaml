@@ -1,0 +1,221 @@
+# =============================================================================
+# UX.yaml — Canonical Schema Reference (global UX contract)
+# =============================================================================
+# This file documents the full structure of UX.yaml. It is *not* a runtime
+# config — it is the human-readable source of truth for the schema that
+# `validate_schema.py` enforces.
+#
+# Two top-level shapes are supported, mirroring PRD.yaml:
+#   1. SINGLE-PRODUCT (default): theme blocks live at the top level.
+#   2. MULTI-PRODUCT (monorepo): themes live under `products.<slug>.<theme>`.
+#      Triggered when the upstream PRD has `metadata.monorepo: true`.
+#
+# Conventions:
+#   - `null` (not omission) means "explicitly unanswered".
+#   - For trade-off fields, a sibling `<field>_rationale` (string) captures
+#     the *why*.
+#   - For pre-filled answers, a sibling `<field>_confidence` captures
+#     certainty: confirmed | inferred | assumption.
+#   - Enum values are lowercase snake_case strings.
+#   - Per-surface contents live in sibling files `docs/UX__<surface>.yaml`
+#     (see UX__SURFACE.schema.yaml). UX.yaml lists them in
+#     `surface_inventory:` and never duplicates their content.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# metadata — always at top level, present in both single- and multi-product mode
+# -----------------------------------------------------------------------------
+metadata:
+  ux_version: "1.0"                       # schema version this file conforms to
+  last_updated: "2026-05-05T12:00:00Z"     # ISO-8601 UTC timestamp of last write
+  generated_by: sdlc-ux                    # always literal string "sdlc-ux"
+  session_id: "00000000-0000-0000-0000-000000000000"  # UUID of the interview session
+  monorepo: false                          # mirrors PRD.metadata.monorepo
+  status: "draft"                          # "draft" | "complete"
+                                           # writer sets to "complete" only when:
+                                           #   1) all required fields are filled,
+                                           #   2) the validator passes,
+                                           #   3) every PRD core_workflow is traced
+                                           #      by at least one surface.
+
+# ux_warnings — informational notes. Used for:
+#   * uncovered PRD workflows ("flow X has no surface trace")
+#   * low-confidence answers
+#   * merge conflicts
+#   * deferred optional themes (now/skip/todo) recorded for downstream visibility
+ux_warnings: []
+
+# =============================================================================
+# SINGLE-PRODUCT MODE — themes at top level, in interview order
+# (omit the entire `products:` key in this mode)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# platform_and_shell — surface family, device targets, viewport breakpoints
+# -----------------------------------------------------------------------------
+surface_family: null            # one of: cli | web | mobile | desktop | mixed (enum)
+surface_family_confidence: null # confirmed | inferred | assumption (enum)
+surface_family_members: null    # list[surface_family]; populated only when
+                                # surface_family == 'mixed'; e.g. ["web","cli"]
+device_targets: null            # list[string] — e.g. ["desktop","tablet","mobile"]
+device_targets_confidence: null
+viewport_breakpoints: null      # list[string] — e.g. ["sm=640","md=768","lg=1024"]
+
+# -----------------------------------------------------------------------------
+# design_principles — tenets that govern every surface
+# -----------------------------------------------------------------------------
+design_principles:
+  tenets: null                  # 3–7 short tenet phrases (list[string])
+  anti_patterns: null           # things to explicitly avoid (list[string])
+  inspiration_refs: null        # named products to echo (list[string])
+
+# -----------------------------------------------------------------------------
+# navigation_model — how surfaces relate to each other
+# -----------------------------------------------------------------------------
+navigation_model:
+  type: null                    # one of: sitemap | command_tree | state_graph | hybrid (enum)
+  type_confidence: null         # confirmed | inferred | assumption
+  top_level_nodes: null         # list of top-level routes / menu groups / command groups (list[string])
+  deep_link_strategy: null      # routing strategy summary (string|null)
+  auth_required_routes: null    # which nodes require auth (list[string])
+  # Optional structured representations (populated when the agent infers them
+  # from PRD workflows; otherwise null):
+  sitemap: null                 # nested tree, only if type == sitemap (any)
+  command_tree: null            # nested tree, only if type == command_tree (any)
+  state_graph: null             # node + edge list, only if type == state_graph (any)
+
+# -----------------------------------------------------------------------------
+# surface_inventory — the registry of UI surfaces.
+# Each entry POINTS to a docs/UX__<surface_id>.yaml file. The full surface
+# spec lives there (see UX__SURFACE.schema.yaml).
+# -----------------------------------------------------------------------------
+surface_inventory:                # list[SurfaceInventoryItem]
+  - surface_id: null              # kebab-case unique id (string)
+    surface_type: null            # one of: screen | modal | panel | drawer |
+                                  #         cli_command | flow_step |
+                                  #         empty_state | toast | overlay |
+                                  #         tab | page | dialog | other (enum)
+    status: defined               # one of: defined | draft | confirmed (enum)
+                                  #   defined  = id + type known, no deep-dive yet
+                                  #   draft    = deep-dive started, not approved
+                                  #   confirmed= deep-dive complete + user-approved
+    file_path: null               # always docs/UX__<surface_id>.yaml (string)
+    traces_prd_flows: null        # PRD use_cases.core_workflows entries this
+                                  # surface participates in (list[string])
+                                  # — used by the coverage check at validation.
+
+# -----------------------------------------------------------------------------
+# component_library — library choice + theming tokens
+# -----------------------------------------------------------------------------
+component_library:
+  name: null                    # library name (string)
+  name_rationale: null          # one-sentence justification (string|null)
+  name_confidence: null         # confirmed | inferred | assumption
+  theming_approach: null        # one of: design_tokens_dtcg | tailwind_utility |
+                                #         css_variables | library_theme |
+                                #         none | custom (enum)
+  theming_approach_confidence: null
+  theming_tokens:               # any tokens worth pinning at the global level;
+                                # may be null/{} if punted to library defaults
+    colors: null                # color tokens (any — list, map, or string)
+    typography: null            # font + scale (any)
+    spacing: null               # spacing scale (any)
+    radii: null                 # border radius scale (any)
+    shadows: null               # elevation tokens (any)
+    motion: null                # easings / durations (any)
+
+# -----------------------------------------------------------------------------
+# state_patterns — global rules for the five canonical surface states
+# Each surface inherits these unless its UX__<surface>.yaml overrides them.
+# -----------------------------------------------------------------------------
+state_patterns:
+  default: null                 # how a "normal" surface renders (string|null)
+  loading: null                 # loading pattern (string|null)
+  empty: null                   # empty pattern (string|null)
+  error: null                   # REQUIRED — error pattern (string)
+  error_confidence: null        # confirmed | inferred | assumption
+  success: null                 # success pattern (string|null)
+
+# -----------------------------------------------------------------------------
+# content_rules — voice, copy guidelines
+# -----------------------------------------------------------------------------
+content_rules:
+  tone: null                    # REQUIRED — brand voice / tone (string)
+  tone_confidence: null         # confirmed | inferred | assumption
+  error_message_style: null     # style guideline (string|null)
+  terminology: null             # list of {term, definition} pairs (list[any])
+  copy_length_limits: null      # caps in chars per copy type (any — map or string)
+
+# -----------------------------------------------------------------------------
+# accessibility — global baseline; surfaces may add notes
+# -----------------------------------------------------------------------------
+accessibility:
+  wcag_target: null             # REQUIRED — one of: wcag_a | wcag_aa | wcag_aaa |
+                                #                    none_yet | not_applicable_cli (enum)
+  wcag_target_confidence: null
+  keyboard_only: null           # boolean — every action reachable by keyboard
+  screen_reader_notes: null     # ARIA / live region notes (list[string])
+  color_contrast_minimum: null  # ratio descriptor (string|null)
+  motion_preferences: null      # boolean — honor prefers-reduced-motion
+
+# -----------------------------------------------------------------------------
+# localisation — optional theme; omitted entirely if not enabled
+# -----------------------------------------------------------------------------
+localisation:
+  enabled: null                 # boolean
+  default_locale: null          # BCP-47 tag (string|null)
+  target_locales: null          # list[string] BCP-47 tags
+  framework: null               # i18n library (string|null)
+  rtl_support: null             # boolean
+
+# -----------------------------------------------------------------------------
+# cli — CLI-specific spec; present only when surface_family in ['cli','mixed']
+# When absent, downstream agents may assume the product has no CLI surface.
+# -----------------------------------------------------------------------------
+cli:
+  root_command: null            # REQUIRED when present — top-level binary name (string)
+  root_command_confidence: null
+  command_shape: null           # one of: verb_noun | noun_verb | flat | mixed (enum)
+  arg_parsing_library: null     # REQUIRED — library name (string)
+  arg_parsing_library_rationale: null
+  arg_parsing_library_confidence: null
+  arg_conventions: null         # one of: posix | gnu | custom (enum)
+  help_text_format: null        # one of: auto_generated | authored | hybrid (enum)
+  output_formats:
+    supported: null             # REQUIRED — list[string] of supported formats
+    default: null               # REQUIRED — the default emitted format (string)
+  exit_code_convention: null    # description of exit-code scheme (string)
+  exit_codes: null              # explicit per-code semantics (any — map or list)
+                                # e.g. { "0": "success", "1": "generic error", "2": "misuse" }
+  interactive_mode: null        # description; or false/None if non-interactive (any)
+  config_file:
+    location: null              # path/pattern (string|null)
+    precedence: null            # e.g. "cli_flag > env > config_file > default" (string)
+    env_prefix: null            # e.g. "ACME_" (string|null)
+
+# =============================================================================
+# MULTI-PRODUCT MODE (monorepo) — uncomment and use *instead of* the top-level
+# blocks above. Each entry under `products:` mirrors the single-product shape.
+# Each product also has its own surface_inventory; per-surface files are
+# named docs/UX__<product-slug>__<surface-slug>.yaml so they don't collide.
+# =============================================================================
+#
+# products:
+#   auth:
+#     surface_family: web
+#     design_principles:
+#       tenets: [...]
+#     navigation_model: { ... }
+#     surface_inventory:
+#       - surface_id: login
+#         surface_type: screen
+#         status: confirmed
+#         file_path: docs/UX__auth__login.yaml
+#         traces_prd_flows: ["sign up", "sign in"]
+#     component_library: { ... }
+#     state_patterns: { ... }
+#     content_rules: { ... }
+#     accessibility: { ... }
+#     # localisation, cli — optional
+#   billing:
+#     # ...

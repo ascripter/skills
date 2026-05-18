@@ -1,0 +1,187 @@
+# =============================================================================
+# UX__<surface>.yaml — Per-surface schema reference
+# =============================================================================
+# One file per UI surface, written next to docs/UX.yaml in the consumer
+# project. <surface> is kebab-case and unique (same surface_id used in
+# UX.yaml's surface_inventory).
+#
+# Conventions:
+#   - `null` (not omission) means "explicitly unanswered".
+#   - For state defaults inherited from UX.yaml.state_patterns, the field
+#     can be set to the literal string "inherit" (or omitted) — downstream
+#     agents fall back to the global pattern.
+#   - All ids inside (component ids, interaction ids) are kebab-case.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# metadata — always at top level
+# -----------------------------------------------------------------------------
+metadata:
+  ux_surface_version: "1.0"               # schema version this file conforms to
+  last_updated: "2026-05-05T12:00:00Z"     # ISO-8601 UTC timestamp of last write
+  generated_by: sdlc-ux
+  session_id: "00000000-0000-0000-0000-000000000000"
+  status: "draft"                          # "draft" | "complete"
+                                           # writer sets to "complete" only when
+                                           # all required fields below are filled
+                                           # and the surface is user-confirmed.
+
+# -----------------------------------------------------------------------------
+# identity
+# -----------------------------------------------------------------------------
+surface_id: null                # REQUIRED — kebab-case unique id, matches the
+                                # surface_id in UX.yaml.surface_inventory (string)
+surface_type: null              # REQUIRED — one of: screen | modal | panel |
+                                #             drawer | cli_command | flow_step |
+                                #             empty_state | toast | overlay |
+                                #             tab | page | dialog | other (enum)
+parent_surface: null            # null OR another surface_id that contains this one
+                                # (e.g. a modal's parent screen) (string|null)
+
+# -----------------------------------------------------------------------------
+# routing / addressing
+# -----------------------------------------------------------------------------
+route: null                     # graphical surfaces: URL/path or screen route name
+cli_invocation: null            # CLI surfaces: full invocation pattern, e.g.
+                                #   "<root> task add <title> [--priority=<n>]"
+                                # (string|null)
+
+# -----------------------------------------------------------------------------
+# entry / exit conditions
+# -----------------------------------------------------------------------------
+entry_conditions: null          # list[string] — what triggers the user reaching
+                                # this surface. e.g.
+                                #   ["clicked 'New project' on dashboard",
+                                #    "deep-link with valid project id"]
+exit_conditions: null           # list[string] — what causes the user to leave
+                                # (and where they end up). e.g.
+                                #   ["clicked Save -> dashboard",
+                                #    "pressed Esc -> previous surface"]
+
+# -----------------------------------------------------------------------------
+# layout — region tree for graphical surfaces; arg structure for CLI.
+# Use whichever shape applies to the surface_type.
+# -----------------------------------------------------------------------------
+layout:
+  # Graphical (screen|modal|panel|drawer|page|dialog|tab|overlay):
+  region_tree: null             # nested list of regions (any). Each region:
+                                #   { id, role, children?, sizing?, sticky? }
+                                #   role examples:
+                                #     header | sidebar | content | aside |
+                                #     footer | toolbar | nav | feed | grid |
+                                #     detail_pane | hero | banner
+
+  # CLI surfaces (cli_command):
+  cli_args:                     # null OR list of CLIArg
+    # Each CLIArg:
+    #   - name: kebab-case
+    #     kind: positional | option | flag | subcommand
+    #     short: "-x" | null
+    #     long:  "--name" | null
+    #     type:  string | int | float | bool | path | choice
+    #     required: true | false
+    #     repeatable: true | false
+    #     default: <value> | null
+    #     choices: [<...>] | null
+    #     description: short help text
+    null
+
+# -----------------------------------------------------------------------------
+# states — one block per canonical state. Use "inherit" to fall back to the
+# global state_patterns block in UX.yaml.
+# -----------------------------------------------------------------------------
+states:
+  default:                      # null/"inherit" or { description, content_outline }
+    description: null
+    content_outline: null       # what's actually rendered (list[string] or string)
+  loading:
+    description: null
+    content_outline: null
+  empty:
+    description: null
+    content_outline: null
+  error:
+    description: null
+    content_outline: null
+    recovery_action: null       # the affordance offered to recover (string)
+  success:
+    description: null
+    content_outline: null
+
+# -----------------------------------------------------------------------------
+# interactions — ordered list of user actions on this surface.
+# Each interaction is one event handler downstream.
+# -----------------------------------------------------------------------------
+interactions:                   # list[Interaction]
+  # Each Interaction:
+  #   - id: kebab-case unique within this surface
+  #     actor: user | system
+  #     trigger: click | submit | keypress | hover | focus | blur |
+  #              long_press | swipe | drag | drop | timer | navigation |
+  #              cli_invoke | cli_signal
+  #     trigger_target: component_id | "surface"
+  #     preconditions: list[string]   # state requirements before this fires
+  #     effects: list[string]         # what changes in app state / UI
+  #     target_surface: surface_id|null   # destination surface, if any
+  #     error_paths: list[string]    # observable failures + their UI fallback
+  null
+
+# -----------------------------------------------------------------------------
+# components — list of components used on this surface, inline (v1).
+# Downstream agents read this list to know exactly what to instantiate.
+# If the catalog grows large, a future split into a separate
+# `docs/UX-COMPONENTS.yaml` is an easy migration path.
+# -----------------------------------------------------------------------------
+components:                     # list[Component]
+  # Each Component:
+  #   - id: kebab-case unique within this surface
+  #     type: button | input | textarea | select | checkbox | radio |
+  #           switch | slider | table | list | card | tabs | modal |
+  #           toast | alert | banner | breadcrumb | menu | tooltip |
+  #           popover | progress | spinner | avatar | badge | tag |
+  #           link | icon | divider | code_block | empty_state |
+  #           custom
+  #     library_ref: <import-path-or-package-name> | null
+  #     variants: list[string]            # e.g. ["primary","secondary","ghost"]
+  #     content_slots:                    # named slots that downstream agents
+  #       label: <copy or i18n_key>       # need to fill with copy
+  #       placeholder: <copy or i18n_key>
+  #     aria_role: <ARIA role string> | null
+  #     keyboard_shortcuts: list[string]  # e.g. ["Cmd+K","Enter"]
+  null
+
+# -----------------------------------------------------------------------------
+# validation_rules — for input fields on this surface
+# -----------------------------------------------------------------------------
+validation_rules:               # list[ValidationRule]
+  # Each ValidationRule:
+  #   - field: <component_id of the input>
+  #     rules: list[string]    # e.g. ["required","max_length=140","regex=^[A-Z]"]
+  #     error_message: <copy or i18n_key>
+  null
+
+# -----------------------------------------------------------------------------
+# accessibility_notes — surface-specific overrides on top of the global
+# accessibility section in UX.yaml. Set to "inherit" or omit if no overrides.
+# -----------------------------------------------------------------------------
+accessibility_notes:            # list[string] | "inherit" | null
+  # Examples:
+  #   - "focus moves to first input on mount"
+  #   - "Esc closes the modal and returns focus to invoking trigger"
+  #   - "live region announces row count after filter changes"
+  null
+
+# -----------------------------------------------------------------------------
+# traces_prd_flows — REQUIRED for the coverage check.
+# Every PRD core_workflow must end up referenced by at least one surface here.
+# -----------------------------------------------------------------------------
+traces_prd_flows:               # list[string] of PRD use_cases.core_workflows entries
+  # Examples (verbatim from PRD):
+  #   - "Add a task in under 3 seconds"
+  #   - "Mark tasks done from the keyboard"
+  null
+
+# -----------------------------------------------------------------------------
+# notes — free-form, optional. For caveats that don't fit elsewhere.
+# -----------------------------------------------------------------------------
+notes: null                     # string | null

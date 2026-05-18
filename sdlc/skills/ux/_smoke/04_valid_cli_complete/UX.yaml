@@ -1,0 +1,64 @@
+metadata:
+  ux_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "55555555-5555-5555-5555-555555555555"
+  monorepo: false
+  status: "complete"
+
+ux_warnings: []
+
+surface_family: cli
+surface_family_confidence: confirmed
+
+design_principles:
+  tenets:
+    - "Scriptable by default"
+    - "Helpful errors with resolution hints"
+
+navigation_model:
+  type: command_tree
+  top_level_nodes:
+    - "task"
+    - "project"
+
+surface_inventory:
+  - surface_id: task-add
+    surface_type: cli_command
+    status: confirmed
+    file_path: docs/UX__task-add.yaml
+    traces_prd_flows: ["Add a task in under 3 seconds"]
+
+component_library:
+  name: "rich (Python)"
+  name_confidence: confirmed
+
+state_patterns:
+  error: "stderr message + non-zero exit"
+  error_confidence: confirmed
+
+content_rules:
+  tone: "Technical + precise"
+  tone_confidence: confirmed
+
+accessibility:
+  wcag_target: not_applicable_cli
+  wcag_target_confidence: confirmed
+  keyboard_only: true
+
+cli:
+  root_command: "acme"
+  root_command_confidence: confirmed
+  command_shape: verb_noun
+  arg_parsing_library: "click"
+  arg_parsing_library_confidence: confirmed
+  arg_conventions: gnu
+  help_text_format: auto_generated
+  output_formats:
+    supported: ["table", "json"]
+    default: "table"
+  exit_code_convention: "POSIX (0=ok, 1=error, 2=misuse)"
+  config_file:
+    location: "$XDG_CONFIG_HOME/acme/config.yaml"
+    precedence: "cli_flag > env > config_file > default"
+    env_prefix: "ACME_"

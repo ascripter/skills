@@ -1,0 +1,215 @@
+# Edge cases — sdlc-ux
+
+Read this whenever the agent hits an unusual situation that doesn't fit
+the happy path.
+
+## Input-side edge cases (PRD-related)
+
+- **`docs/PRD.yaml` missing**: do NOT proceed. Print a clear warning:
+
+  > "Cannot start the UX interview — `docs/PRD.yaml` is missing. Run
+  > `/sdlc:prd` first."
+
+  Exit cleanly without writing anything.
+
+- **`docs/PRD.yaml` present but `metadata.status: draft`**: do NOT
+  proceed. The PRD is the source of truth for surface family, runtime
+  platform, accessibility baseline, and core workflows — a draft PRD
+  makes UX decisions speculative.
+
+  Offer two choices via `AskUserQuestion`:
+
+  - "Stop and finish the PRD first" (recommended).
+  - "Proceed anyway and record draft status in `ux_warnings`" — only
+    use this when the user explicitly accepts the risk. The UX yaml
+    will be forced to `status: draft` regardless of completeness.
+
+- **`docs/PRD.yaml` fails PRD validator (exit code 1, 2, or 3)**: do
+  NOT proceed. Print the validator's error output verbatim and ask the
+  user to fix the PRD first.
+
+- **PRD has no `use_cases.core_workflows`**: surface a `ux_warnings`
+  entry and proceed. The coverage check will pass trivially (no flows
+  to cover), but the UX skill becomes a thin shell — every surface is
+  user-defined from scratch. Recommend the user re-run `/sdlc:prd` to
+  fill in the missing flows.
+
+- **PRD says `runtime_platform: server | embedded | other`**: ask the
+  user to pick `cli | web | mobile | desktop | mixed` directly. Servers
+  often expose a CLI admin tool plus a web admin panel — `mixed` is
+  the common answer.
+
+## Surface-inventory edge cases
+
+- **Surfaceless PRD flow**: a `core_workflow` for which the agent can't
+  imagine any UI surface — e.g. "Send a weekly digest email". Behavior:
+  - The agent should propose a `flow_step` surface (`surface_type:
+    flow_step`) named after the workflow, even if it has no UI per se,
+    so the trace exists. The `layout` for these flow steps is the
+    backend trigger description (cron + payload).
+  - Alternative: keep the flow uncovered and write a `ux_warnings`
+    entry. Force `status: draft`.
+
+- **Same surface participates in many flows**: fine. List every
+  matching flow in `traces_prd_flows`. The coverage check is satisfied
+  as long as each flow appears in at least one surface's traces, but
+  one surface can carry several flows.
+
+- **Two surfaces have a circular trace dependency** (rare, e.g. a flow
+  routes through two surfaces back-and-forth): list the flow in both
+  surfaces' `traces_prd_flows`. No special handling needed.
+
+- **Surface candidate has no obvious trace** (e.g. `/about` page, error
+  surfaces): allow it. Record `traces_prd_flows: []` and add a
+  `ux_warnings` entry `"surface '<id>' has no PRD trace"`. The
+  validator does NOT require every surface to trace — it only requires
+  every PRD flow to be covered by at least one surface.
+
+## Mid-interview platform change
+
+The user said `web` in theme 1, answered themes 2–5, then says
+"actually we also need a CLI companion → make it `mixed`".
+
+Behavior:
+
+- Update `state.surface_family = mixed`, prompt for
+  `surface_family_members`.
+- Re-evaluate `required_if` rules at next theme boundary — the
+  `cli_specifics` theme is now required.
+- Existing surfaces stay; the user can add CLI surfaces during
+  theme 4 (extension of inventory). Existing per-surface yamls don't
+  need to change.
+- Do NOT silently delete the user's earlier answers — surface family
+  changes augment, not invalidate.
+
+If the user goes from `web` → `cli` (changing, not adding), warn:
+
+> "Switching surface_family from `web` to `cli` will invalidate
+> existing surface deep-dives (region trees won't apply to CLI
+> commands). Continue and re-do the surfaces, or keep both as
+> `mixed`?"
+
+## Conflicting design decisions across surfaces
+
+The user picks `state_patterns.error: "Inline error + retry"` globally
+but later, during a per-surface deep-dive, picks `surface.states.error:
+"Full-screen error page"` for a specific surface.
+
+Behavior: respected — the per-surface override wins. Surface that
+override in `ux_warnings` only if it appears unintentional (e.g.
+several surfaces silently override the same default; ask the user
+whether they want to update the global pattern instead).
+
+## Deleted PRD workflows mid-session
+
+The user is mid-interview, switches to another shell, edits
+`docs/PRD.yaml` to remove a workflow, then resumes. The agent's
+in-memory inventory still references the old flow.
+
+Behavior on resume:
+
+1. Re-read `docs/PRD.yaml`.
+2. Diff the workflows the state file knows about vs. the workflows
+   currently in PRD.
+3. If any flow was removed but is still referenced in
+   `state.defined_surfaces[*].traces_prd_flows`, prompt:
+
+   > "The PRD removed workflow `<flow>`. Surface `<id>` still
+   > references it. Remove the trace, or keep it?"
+
+4. Update `traces_prd_flows` based on the user's answer.
+
+If new flows were added, also offer to add candidate surfaces for
+them (re-running theme 4 step a only for the new flows).
+
+## Validation failures
+
+Same flow as `sdlc:prd`. Show field-level errors verbatim, list
+affected paths, offer via `AskUserQuestion`: "Fill in now, or accept
+draft status?" Re-run validation after re-entry.
+
+Common failure modes specific to UX:
+
+- **Surface yaml claims `status: complete` but `traces_prd_flows` is
+  empty**: validator fails. The user must either add a trace or accept
+  the surface staying `draft`.
+- **`UX.yaml.surface_inventory[i].file_path` points to a non-existent
+  file**: validator does NOT explicitly check this (the discovery scans
+  the docs/ folder), but `set_claude_md_pointer.py` still injects the
+  pointer. Recommend the agent verify file existence before declaring
+  Phase 8 complete and surface a warning if a file is missing.
+
+## Write-permission errors
+
+Report the path and OS error verbatim. Do not retry silently. Common
+causes: `docs/` directory doesn't exist (offer to create it),
+filesystem read-only (offer to write to a different path),
+`CLAUDE.md` is open in another editor (suggest the user close it).
+
+## Resume with stale state
+
+If the state file's `skill_version` is older than the current skill's
+version, warn the user and offer to restart cleanly. Don't auto-
+migrate state across versions.
+
+## Hallucination-guard violation
+
+If the user tries to batch-accept `⚠ inferred` surfaces or per-surface
+fields with shortcuts like "ok" or "all good", refuse and re-prompt.
+Each `⚠` item needs an explicit confirmation or correction. This
+applies to:
+
+- Phase 5 pre-fill confirmation.
+- Phase 6 theme 4 (`surface_inventory`).
+- Phase 6 theme 11 (`per_surface_deepdive`).
+
+## Monorepo mode
+
+When `PRD.metadata.monorepo == true`:
+
+- `UX.yaml` itself is monorepo-shaped (themes under
+  `products.<slug>.<theme>`).
+- Surface yamls are named
+  `docs/UX__<product-slug>__<surface-slug>.yaml` to avoid collisions
+  between products that have surfaces with the same id.
+- The interview runs **per product**: theme 4 enumerates each
+  product's surfaces separately; theme 11 deep-dives the union.
+- The coverage check is per-product: every product's
+  `use_cases.core_workflows` must be covered by at least one surface
+  from that product.
+
+If the PRD is monorepo but the user wants the UX skill to treat the
+products as if they were one shared UX (e.g. a unified design system),
+offer:
+
+> "Treat all products as one unified UX (single UX.yaml), or run
+> per-product UX interviews (one UX.yaml per product slug)?"
+
+Default to per-product; only switch to unified when the user explicitly
+asks.
+
+## Very large surface inventories
+
+If the user accepts the hard cap of 20 surfaces (per
+`surface-discovery.md`) and wants more, refuse politely and suggest:
+
+- Splitting the product into multiple products (and converting the
+  PRD to monorepo mode).
+- Pushing some surfaces to a later phase (drop from MVP inventory,
+  note in `ux_warnings: "phase-2 surface: <id>"`).
+
+## CLI surface family with no PRD CLI flows
+
+If `surface_family in ['cli', 'mixed']` but the PRD doesn't mention
+any CLI-style workflows, surface a `ux_warnings` entry and continue.
+The user may be designing the CLI alongside the PRD; the per-surface
+deep-dives will surface this.
+
+## User skips a required theme
+
+The skill cannot mark a required theme `todo` — that's a hard error.
+If the user tries, refuse politely:
+
+> "`<theme>` is required for downstream agents to consume the UX
+> spec. Either answer it now, or type `EXIT` to save progress as
+> `aborted`."

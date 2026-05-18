@@ -1,0 +1,39 @@
+metadata:
+  ux_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "66666666-6666-6666-6666-666666666666"
+  monorepo: false
+  status: "complete"      # claims complete; coverage will reveal a gap
+
+ux_warnings: []
+
+surface_family: web
+
+design_principles:
+  tenets: ["Keyboard-first"]
+
+navigation_model:
+  type: sitemap
+  top_level_nodes: ["/dashboard"]
+
+surface_inventory:
+  - surface_id: dashboard
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__dashboard.yaml
+    traces_prd_flows:
+      - "Add a task in under 3 seconds"
+      - "Mark tasks done from the keyboard"
+
+component_library:
+  name: "shadcn/ui"
+
+state_patterns:
+  error: "Inline error + retry"
+
+content_rules:
+  tone: "Professional + concise"
+
+accessibility:
+  wcag_target: wcag_aa
