@@ -1,0 +1,195 @@
+# Edge cases — sdlc-arch
+
+Read this when the happy path doesn't fit.
+
+## Missing or draft upstream artifacts
+
+The four upstream artifacts (`PRD.yaml`, `UX.yaml`, `DATA-MODEL.yaml`,
+`API.yaml`) MUST all exist with `metadata.status: complete` before the
+skill runs. Behaviour:
+
+- **Any missing** → stop and print which file is missing + which skill
+  to run.
+- **Any with `status: draft`** → stop and print
+  "Run `/sdlc:<skill>` to complete the artifact before invoking arch."
+- **Any failing its own validator** → stop. Print the validator's
+  stderr verbatim so the user sees the field-level errors.
+
+The skill never partially-runs against a partially-validated upstream
+chain. The risk of polluting a downstream artifact with stale assumptions
+is too high.
+
+## Invalid `<container>` argument in container mode
+
+User typed `/sdlc:arch backennd-api`. The agent:
+
+1. Lists all valid `container_id`s from `ARCH.yaml.containers[]`.
+2. If exactly one is a Levenshtein distance ≤ 2 from the typed string,
+   offer it as a "did you mean?" suggestion.
+3. Otherwise abort.
+
+Do NOT silently create the container. Container creation happens in
+system mode only.
+
+## Container in `ARCH.yaml` but no `ARCH__<container>.yaml`
+
+This is the normal state right after system-mode completion: the user
+has defined the inventory but not drilled down. Validator does not flag
+it — `file_path` is optional in `ARCH.yaml.containers[]`. Downstream
+test/task/deploy skills will refuse to operate on a container without
+its yaml.
+
+## External / data-store containers (cannot be drilled-down)
+
+If the user invokes `/sdlc:arch <id>` where `id` is an external
+container (`external: true`) or a data-store archetype
+(`primary-database`, `cache`, `blob-store`, etc.), abort with:
+
+> "Container `<id>` is `<archetype>` (`external: true` / data store).
+> We model its API surface in ARCH.yaml but don't author internal
+> components for external or storage-only containers. If this is wrong,
+> set `external: false` in ARCH.yaml.containers[id] first."
+
+## Conflicting scan signals
+
+Examples:
+
+- `UX.surface_family: web` but the team has no web container in
+  PRD.technical_constraints.
+- `PRD.technical_constraints.runtime_platform: cli` but `API.api_kind:
+  rest` (rare).
+- Two pre-fill sources disagree on a value.
+
+For all of these: surface the conflict to the user with both sources
+quoted; **never auto-resolve**. Use the literal phrasing:
+
+> "Conflicting signals for `<field>`:
+>   - `<source_a>` says `<value_a>`
+>   - `<source_b>` says `<value_b>`
+> Which should win?"
+
+Persist the user's choice with `confidence: confirmed`.
+
+## Container rename mid-session
+
+User decides `backend-api` should be called `core-api`. Behavior:
+
+1. Pause the active sub-session.
+2. Rename the entry in `defined_containers`.
+3. Update `containers[<id>].container_id` and `file_path` if set.
+4. If `docs/ARCH__backend-api.yaml` already exists: rename to
+   `docs/ARCH__core-api.yaml` (atomic move, fall back to copy+delete if
+   atomic fails).
+5. Rewrite every edge in `ARCH.yaml` whose `from` / `to` was the old
+   name.
+6. Walk every existing `docs/ARCH__*.yaml` and rewrite
+   `external_edges[].to` mentions of the old name.
+7. Update the state file's `sessions` map key
+   (`"container|backend-api"` → `"container|core-api"`).
+8. Continue the session.
+
+Surface a confirmation summary before doing steps 4–7. The user gets
+one "are you sure?" to back out.
+
+## Component split across containers
+
+User says: "Actually, the `notification-publisher` should live in the
+`worker` container, not `backend-api`." Behaviour:
+
+1. Pause the active sub-session.
+2. If the worker container's yaml doesn't yet exist, just add a note
+   to the system-level state and continue. The user will create the
+   worker yaml in a future `/sdlc:arch worker` invocation.
+3. If the worker yaml exists, write the component there in the next
+   `/sdlc:arch worker` invocation. Don't auto-cross-write — container
+   mode never writes to another container's file.
+
+In both cases, remove the component from the active container's
+`components[]` and rewrite affected `internal_edges` /
+`external_edges`.
+
+## Edge to a non-existent node
+
+Two cases:
+
+1. **Target node clearly should exist** (e.g. the user collapsed
+   `users-service` into `users` but the edge still says
+   `to: users-service`): retarget to the closest existing node and
+   warn.
+2. **Target node has no upstream evidence**: drop the edge, append a
+   warning to `arch_warnings`:
+   `"Dropped edge from <a> to <b> (<type>): target not in graph"`.
+
+Never invent a node to support an edge.
+
+## Mid-interview abort with partial state
+
+User types `EXIT` mid-theme. Behaviour:
+
+1. Set the sub-session's `status: aborted`.
+2. Write `partial_answers` to state.
+3. Write `docs/ARCH.yaml` or `docs/ARCH__<container>.yaml` if the
+   theme being aborted had committed answers — keep their values, do
+   NOT roll back. Set top-level `metadata.status: draft`.
+4. Confirm to user: "Saved at `<file>`. Resume with `/sdlc:arch
+   <args>` later."
+
+## Mid-interview transport / pattern change
+
+User decides mid-session that the architecture pattern should change.
+Behaviour:
+
+1. Acknowledge the change.
+2. Revisit any pattern-dependent answers (e.g. `cross_container_edges`
+   re-derivation). Pre-fill the new derivation; ask the user to
+   re-confirm.
+3. Update `pattern_confidence: confirmed`.
+4. Continue.
+
+## Write-permission errors
+
+If a write to `docs/ARCH.yaml` / `docs/ARCH__*.yaml` / state file
+fails:
+
+1. Capture the error.
+2. Report which file failed and the OS error.
+3. Save the in-memory partial state to a fallback location in `/tmp`
+   if possible, and tell the user where.
+4. Stop. Do not retry without user input.
+
+## Very large systems
+
+Defined as ≥ 12 containers or ≥ 25 components in any single container.
+
+- For very large container counts: split the system-mode container
+  inventory into chunks of 6 per `AskUserQuestion` batch. Confirm chunk
+  by chunk, then proceed to per-container drill-downs.
+- For very large component counts inside one container: prompt the
+  user to split the container before proceeding. Suggest splitting
+  along bounded contexts.
+
+## Monorepo mode
+
+If `PRD.metadata.monorepo: true` AND `PRD.products` is non-empty, the
+architecture artifact MAY be authored per product:
+
+- `docs/ARCH.yaml` then becomes a roll-up with one `products:`
+  sub-mapping per slug, each holding its own `containers` /
+  `architecture_pattern` / etc.
+- The agent asks the user up-front (Phase 4 of system mode) whether
+  to author one shared ARCH.yaml or one per product. Default for
+  monorepo: per-product.
+- Per-product authoring writes
+  `docs/ARCH__<product>.yaml` instead of `docs/ARCH.yaml`. Per-container
+  files become `docs/ARCH__<product>__<container>.yaml`. The pointer
+  bullet in CLAUDE.md is appended once per product.
+
+If unclear, ask the user.
+
+## Validator missing dependencies
+
+If the validator exits 3 (pydantic/pyyaml not installed):
+
+1. Surface the install hint to the user.
+2. Offer to skip validation for this run only (treat as `[DRAFT]`).
+3. Refuse to set `metadata.status: complete` without validation.

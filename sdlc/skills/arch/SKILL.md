@@ -1,526 +1,560 @@
 ---
 name: arch
 description: >
-  Manual architecture-authoring skill for C4-style spec-driven
-  development, downstream of sdlc-prd. Use /sdlc:arch [container]
-  [component] [code] to create, refine, or resume machine-readable
-  architecture specs and state for the current repository. Use
-  /sdlc:arch -d [container] [--auto] to re-derive typed dependency
-  edges from existing artifacts. Reads docs/PRD.yaml and (for sub-node
-  invocations) docs/ARCH.yaml, docs/UX.yaml, docs/DATA.yaml as
-  preconditions.
+  Explicitly invoked skill. Two modes: (a) /sdlc:arch — system architecture
+  (pattern + container inventory + cross-container edges) written to
+  docs/ARCH.yaml; (b) /sdlc:arch <container> — per-container deep-dive
+  (tech stack, deployment, components, internal edges) written to
+  docs/ARCH__<container>.yaml. A third form, /sdlc:arch -d [<container>],
+  re-derives the typed edge graph from API.yaml + DATA-MODEL.yaml + UX.yaml
+  without re-running the interview. Trigger only on /sdlc:arch or a direct
+  natural-language request to start the architecture skill — never
+  auto-trigger from generic architecture chatter. Reads docs/PRD.yaml,
+  docs/UX.yaml (+ UX__*), docs/DATA-MODEL.yaml, docs/API.yaml (+ API__*)
+  as preconditions and refuses to run if any upstream artifact is missing
+  or its metadata.status != complete.
 user-invocable: true
 disable-model-invocation: true
-model: opusplan
+model: opus
 effort: xhigh
-allowed-tools: Read, Write(docs/ARCH.yaml), Write(docs/ARCH__*.yaml), Write(.claude/skills-state/sdlc-arch.state.yaml), Write(.claude/skills-state/sdlc-arch.derivation-report-*.yaml), Bash, Glob, Grep
+allowed-tools: Read Write(CLAUDE.md) Write(docs/ARCH.yaml) Write(docs/ARCH__*.yaml) Write(.claude/skills-state/sdlc-arch.state.yaml) Write(.claude/skills-state/sdlc-arch.derivation-report-*.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion
 ---
 
 # sdlc-arch
 
-A manual, repo-local skill for capturing and maintaining a C4-style
-architecture description as scoped, schema-bound YAML files plus a
-persistent knowledge graph that survives across sessions.
+Guides the user through a structured interview that produces a validated
+`docs/ARCH.yaml` (system architecture: pattern, container inventory, identity
+and auth strategy, cross-container edges) plus one
+`docs/ARCH__<container>.yaml` per container (per-container deep-dive: tech
+stack, deployment, observability, ownership, internal components and edges).
+Downstream agents — `test`, `task`, `deploy` — consume these artifacts to
+generate test strategies, implementation tasks, and deployment configs.
 
-## Why this exists
+## What this skill does (at a glance)
 
-Architecture docs drift, balloon into prose, or never get written. This
-skill produces small YAML artifacts (one per container or
-container-component pair, plus optional per-code-unit splits), a typed
-dependency graph, and a state file that tracks each node's
-`defined | wip | complete` status. Future agent runs read these
-artifacts directly — they should not have to reconstruct knowledge from
-conversation history.
+The skill runs in **one of three modes**, dispatched on the invocation form:
 
-The skill is **manual-only** (`disable-model-invocation: true`). It will
-only run when the user explicitly types `/sdlc:arch`.
+| Invocation                  | Mode                      | Output                                  |
+|-----------------------------|---------------------------|------------------------------------------|
+| `/sdlc:arch`                | system interview          | `docs/ARCH.yaml`                         |
+| `/sdlc:arch <container>`    | container interview       | `docs/ARCH__<container>.yaml`            |
+| `/sdlc:arch -d`             | edge re-derivation, system| `docs/ARCH.yaml` (edges only)            |
+| `/sdlc:arch -d <container>` | edge re-derivation, one   | `docs/ARCH__<container>.yaml` (edges only)|
 
-The skill is **downstream of sdlc-prd**: it requires a validated
-`docs/PRD.yaml` before running (Step 0.5 below). The only other
-host-project assumption is a writable `docs/` directory and an optional
-Python 3 + pyyaml + jsonschema for post-write artifact validation.
+Interview modes follow the canonical 8-phase flow (see "Phase 1 — Resume
+check" through "Phase 8 — CLAUDE.md pointer & close" below). The `-d` mode
+skips the interview and runs only edge derivation + confirmation.
 
-## Invocation contract
+State is persisted **after every confirmed batch and after every per-item
+deep-dive**, so the user can `EXIT` at any time without losing progress.
 
-Two invocation families:
+## Files in this skill
 
-**Interview family** — drive an interview to author or refine a node.
-`$ARGUMENTS` is a whitespace-separated list of up to three positional
-node tokens:
+| File | Purpose |
+|---|---|
+| `SKILL.md` | This file — the workflow itself. |
+| `arch-questions.yaml` | Question inventory; each theme tagged with `mode: system | container`. |
+| `ARCH.schema.yaml` | Human-readable canonical schema for `docs/ARCH.yaml`. |
+| `ARCH__CONTAINER.schema.yaml` | Human-readable canonical schema for `docs/ARCH__<container>.yaml`. |
+| `validate_schema.py` | Pydantic v2 validator (ARCH.yaml + every ARCH__*.yaml + 4 cross-checks). |
+| `set_claude_md_pointer.py` | Deterministic CLAUDE.md pointer injector, called in Phase 8. |
+| `references/interview-mechanics.md` | AskUserQuestion batch format, EXIT semantics, importance-tier flows. Read on entering Phase 6. |
+| `references/container-discovery.md` | How to seed the container inventory from PRD + UX + DATA + API. Read in Phase 3 of system mode. |
+| `references/component-discovery.md` | How to seed components from API resources + UX surfaces owned by a container. Read in Phase 3 of container mode. |
+| `references/edge-derivation.md` | How API + DATA + UX seed the typed edge graph; -d mode rules. Read at Phase 6's edge-synthesis theme and at every -d invocation. |
+| `references/pattern-selection.md` | Narrative pattern guidance. Load with the YAML matrix. |
+| `references/pattern-selection.yaml` | Trimmed matrix: pattern × {best-when, tradeoffs, disqualifiers, ai-builder-considerations}. |
+| `references/container-taxonomy.yaml` | Container archetypes × {aliases, common-responsibilities, suggested-components}. |
+| `references/component-taxonomy.yaml` | Component archetypes × {aliases, typical-responsibilities, typical-edges}. |
+| `references/merge-validate.md` | Merge logic for existing artifacts, the 4 cross-checks, CLAUDE.md pointer rules. Read on entering Phase 7. |
+| `references/edge-cases.md` | Unusual situations and their handling. |
 
-| Token count | Active level                                  |
-|-------------|-----------------------------------------------|
-| 0           | root/context                                  |
-| 1           | container                                     |
-| 2           | container, component                          |
-| 3           | container, component, code                    |
-| > 3         | invalid — abort                               |
+Runtime files (NOT inside this skill directory):
 
-**Dependency-derivation family** — re-derive edges from existing
-artifacts. Triggered by the `-d` or `--dependencies` flag as the first
-token. Optional second token scopes derivation to a single container
-subtree. Optional `--auto` flag skips the confirmation prompt:
+| File | Purpose |
+|---|---|
+| `docs/ARCH.yaml` (project root) | System-level output artifact. |
+| `docs/ARCH__<container>.yaml` (project root) | Per-container output artifact. |
+| `.claude/skills-state/sdlc-arch.state.yaml` | Session state for resumability. |
+| `.claude/skills-state/sdlc-arch.derivation-report-<ISO8601>.yaml` | Optional report after a -d run. |
+| `CLAUDE.md` (project root) | Pointer bullet injected on completion. |
 
-| Form                                         | Scope                                |
-|----------------------------------------------|--------------------------------------|
-| `/sdlc:arch -d`                              | whole graph, interactive             |
-| `/sdlc:arch -d <container>`                  | container subtree, interactive       |
-| `/sdlc:arch -d --auto`                       | whole graph, no prompt; emit report  |
-| `/sdlc:arch -d <container> --auto`           | container subtree, no prompt; report |
+## Reserved EXIT command
 
-### Step 0 — Echo signature, validate
+At any prompt, the user can type `EXIT` (case-insensitive) into the free-text
+field of any `AskUserQuestion` call to abort. State is *always* saved after
+each confirmed batch — `EXIT` simply marks the session `status: aborted`
+and stops.
 
-Always emit the signature block exactly once. Each line is a bullet:
+There is no `SAVE` command — saving is implicit.
 
-```
-- /sdlc:arch
-- /sdlc:arch <container>
-- /sdlc:arch <container> <component>
-- /sdlc:arch <container> <component> <code>
-- /sdlc:arch -d
-- /sdlc:arch -d <container>
-- /sdlc:arch -d [<container>] --auto
-```
+## Invocation dispatch
 
-If invocation is **valid**, replace the leading `-` of the matching
-line with `→` and bold that whole line. Continue with Step 0.5.
+After reading the `$ARGUMENTS` string, classify the invocation:
 
-If invocation is **invalid**, prepend a single header line above the
-unmodified signature block and stop:
+1. **`-d` (or `--dependencies`) first token** → **edge-derivation mode**.
+   - `/sdlc:arch -d` → re-derive cross-container edges in `docs/ARCH.yaml`.
+   - `/sdlc:arch -d <container>` → re-derive internal edges in
+     `docs/ARCH__<container>.yaml`. `<container>` must exist in
+     `ARCH.yaml.containers[].container_id`; if not, list valid container_ids
+     and abort.
+   - Skip to **Phase 7-D** (edge derivation).
+2. **No arguments** → **system interview mode**. Output: `docs/ARCH.yaml`.
+3. **One argument that is not `-d`** → **container interview mode**.
+   The argument is interpreted as a `container_id`. It MUST exist in
+   `ARCH.yaml.containers[].container_id`; if not, list valid container_ids
+   and abort.
+   Output: `docs/ARCH__<container>.yaml`.
+4. **More than one positional argument, or unknown flag** → print
+   the four valid invocations and abort.
 
-```
-✗ Wrong invocation: <reason>
-```
+The skill **never** modifies a different mode's output. Container mode
+will not touch `docs/ARCH.yaml`; system mode will not touch any
+`docs/ARCH__*.yaml`. Cross-references go through the state file plus the
+already-on-disk artifacts read at Phase 2.
 
-Validation rules:
+## The 8-phase flow (interview modes)
 
-- Interview family: 0–3 non-flag arguments.
-- Dependency family: first token is `-d` or `--dependencies`; optional
-  second token is a container name; optional trailing `--auto`.
-- Each non-flag argument matches `^[a-z][a-z0-9]*(-[a-z0-9]+)*$` *after*
-  alias normalization (see `## Alias normalization`). Inputs in other
-  forms (e.g. `WebFrontend`, `web_frontend`) are normalized first; the
-  normalized form is used for the rest of the run.
-- Common reasons: `more than three positional arguments`,
-  `name does not match pattern`, `unknown flag`.
+The phases are the same for both system mode and container mode, but the
+themes differ. The mode-specific themes are listed at the end of the
+relevant phase under **System themes** / **Container themes**.
 
-## Processing flow
+### Phase 1 — Resume check
 
-### Step 0.5 — Preflight: required upstream artifacts
+Check for `.claude/skills-state/sdlc-arch.state.yaml`:
 
-**Invocation kind**:
-- *Root*: interview-family with zero positional args.
-- *Sub-node*: interview-family with 1+ args, OR any dependency-family
-  invocation (including bare `/sdlc:arch -d` — that needs
-  `docs/ARCH.yaml` to be meaningful).
+- If it exists with `status: in_progress` and the same **mode** as the
+  current invocation (and, for container mode, the same `container_id`),
+  ask:
+  > "I found an unfinished sdlc:arch session (`<mode>` mode<, container=X>) from
+  > `<last_updated>`. Would you like to **resume**, **restart** (discard previous
+  > answers), or **discard** (delete state and exit)?"
+- If `status: in_progress` but a *different* mode/container is requested,
+  warn the user and offer to start a new session alongside the existing one.
+  The state file holds a `sessions:` map keyed by `mode|container_id` —
+  multiple modes can live in the same file (see "Session state file").
+- If `status: complete` or `aborted` and the target output yaml exists, treat
+  this as an update flow — see `references/merge-validate.md`.
+- If no state file, continue to Phase 2.
 
-**Always required** — run for every invocation:
+### Phase 2 — Scan inputs
 
-1. If `docs/PRD.yaml` does not exist → abort:
-   ```
-   No docs/PRD.yaml found. Call /sdlc:prd first to define product
-   requirements.
-   ```
-2. Run `python "${CLAUDE_SKILL_DIR}/../prd/validate_schema.py" --path docs/PRD.yaml`:
-   - exit 0 → proceed.
-   - exit 1 → abort: `docs/PRD.yaml doesn't validate the schema. Run /sdlc:prd to fix.` (include validator stderr).
-   - exit 2 → abort: `docs/PRD.yaml exists but could not be read or parsed. Run /sdlc:prd to recreate it.`
-   - exit 3 → abort: `PRD validation requires pydantic v2 and pyyaml. Install them, then retry.`
+The architecture skill never re-asks anything already in the upstream
+artifacts. Read them once at startup and validate each via its upstream
+skill's validator.
 
-**Additional checks for sub-node invocations only**:
+Required upstream artifacts (all four MUST exist with `metadata.status:
+complete`):
 
-3. For each of `docs/ARCH.yaml`, `docs/UX.yaml`, `docs/DATA.yaml`: if
-   missing → abort:
-   ```
-   Sub-node invocation requires upstream SDLC artifacts. Missing: <path>
-   Complete upstream skills first:
-     docs/PRD.yaml  -> /sdlc:prd
-     docs/ARCH.yaml -> /sdlc:arch  (root invocation, no arguments)
-     docs/UX.yaml   -> /sdlc-ux    (skill not yet implemented)
-     docs/DATA.yaml -> /sdlc-data  (skill not yet implemented)
-   ```
-4. Schema-validate `docs/ARCH.yaml` via
-   `python "${CLAUDE_SKILL_DIR}/scripts/validate_artifacts.py" docs/ARCH.yaml`:
-   - exit 0 → proceed.
-   - exit 1 → abort: `docs/ARCH.yaml doesn't validate the architecture schema. Run /sdlc:arch (no arguments) to fix it.`
-   - exit 2 → warn "validation skipped (deps missing)" and continue.
+1. `docs/PRD.yaml` — validated via `python sdlc/skills/prd/validate_schema.py --path docs/PRD.yaml`.
+2. `docs/UX.yaml` + every `docs/UX__*.yaml` — validated via `python sdlc/skills/ux/validate_schema.py --path docs/UX.yaml`.
+3. `docs/DATA-MODEL.yaml` — validated via `python sdlc/skills/data/validate_schema.py --path docs/DATA-MODEL.yaml`.
+4. `docs/API.yaml` + every `docs/API__*.yaml` — validated via `python sdlc/skills/api/validate_schema.py --path docs/API.yaml`.
 
-Note: `docs/UX.yaml` and `docs/DATA.yaml` are checked for existence
-only — their schemas don't yet exist.
+If any validator exits non-zero, or any artifact has `metadata.status !=
+complete`, **stop**. Print a clear message naming the offending file and
+the upstream skill the user should run.
 
-Full exit-code mapping, all abort messages, and edge cases →
-`references/preflight.md`.
+**System mode** additionally reads:
+- existing `docs/ARCH.yaml` (merge baseline).
+- existing `docs/ARCH__*.yaml` files (read-only — to seed the container set
+  if `ARCH.yaml` is missing or empty).
+- `README*`, `architecture.*`, `design.*`, any existing diagrams under
+  `docs/` for hints.
 
-### Step 1 — Load context
+**Container mode** additionally reads:
+- `docs/ARCH.yaml` (REQUIRED — the `<container>` argument is validated
+  against it).
+- existing `docs/ARCH__<container>.yaml` (merge baseline).
 
-1. Read `CLAUDE.md` (if present).
-2. Read every file under `.claude/rules/` that has **no YAML
-   frontmatter**. These are general rule files that inform tone and
-   conventions; they are not architecture artifacts.
-3. Try to read `.claude/skills-state/sdlc-arch.state.yaml`.
+For both modes, build the **pre-fill map** classifying each candidate as
+`✓ found` (direct quote from upstream) or `⚠ inferred` (derived).
+Inferred items are the hallucination guard and must be confirmed one by
+one in Phase 5.
 
-If the state file exists and is non-empty, use it as the source of truth
-for the architecture knowledge graph and proceed to Step 2.
+For *what* to pre-fill from which upstream field, see
+`references/container-discovery.md` (system mode) and
+`references/component-discovery.md` (container mode).
 
-### Step 1b — Bootstrap (only if no usable state)
+### Phase 3 — Inventory seeding (mode-specific)
 
-1. Search `docs/` first, then the fallbacks `./`, `doc/`, `project/`,
-   `orga/`, `meta/`. Look for files whose names or contents indicate
-   architecture, spec, or design intent.
-2. If multiple sources disagree, surface the conflict and ask the user
-   which source wins **before** mutating state. Use the
-   `conflict-resolution` template from `references/prompt-templates.yaml`.
-3. If usable content is found, derive the knowledge graph (containers,
-   components, code units, aliases, per-node `status`) only as deeply
-   as the evidence supports. Normalize all discovered names to
-   kebab-case canonicals using the rule in `## Alias normalization`.
-4. Run the **edge-derivation procedure** (Step 3-alt) on the newly
-   built graph and present derived edges for confirmation before writing.
-5. Write the initial `docs/ARCH.yaml` and
-   `.claude/skills-state/sdlc-arch.state.yaml`.
-6. If no usable content is found, emit the **blank-start block** and
-   handle user response (`RETRY`, `ASK`, `EXIT`).
+Architecture is fundamentally about decomposition. Both modes start by
+proposing a draft inventory so the user can correct early.
 
-Full blank-start block text, response handling, and edge cases →
-`references/bootstrap.md`.
+**System mode — container inventory:**
 
-### Step 2 — Resolve the active node-path
+Source candidates, in priority order:
 
-Build the active node-path from the validated arguments after alias
-resolution (see `## Alias normalization`). Aliases must always resolve
-to the canonical (kebab-case) name stored in the graph; **never store
-an alias as a path component**.
+1. **API.yaml + API__*.yaml** — every `api_kind != none` API implies a
+   backend container. Resources grouped by `tags` or by `bounded_context`
+   hint at multiple backend services. Tag `✓ found`.
+2. **UX.yaml.surface_family** — `web | mobile | desktop | cli |
+   browser_extension | mixed` → frontend container(s). Tag `✓ found`.
+3. **DATA-MODEL.yaml.persistence.*_stores** — every store ≈ a candidate
+   container (database, cache, blob store, search index). Tag `✓ found`.
+4. **PRD.functional_requirements** — F-NNN features mentioning scheduled
+   work, batch ingestion, ETL, notifications, AI agents, third-party
+   integrations → worker / scheduler / integration containers. Tag
+   `⚠ inferred`.
+5. **PRD.security_compliance.auth_model** — `oauth2`/`sso` →
+   identity-provider container (external by default, internal only if PRD
+   says so). Tag `⚠ inferred`.
 
-- Full node-path exists in the graph → **EDIT mode**. Print a one-line
-  edit confirmation naming the canonical path.
-- Leaf is missing but its parent exists → **CREATE mode**. Print a
-  one-line create confirmation naming the canonical path.
-- Both leaf and parent are missing → emit a clear error that names the
-  missing parent and stop.
+Present the draft. Each `⚠ inferred` candidate gets its own AskUserQuestion
+call. Persist confirmations to `state.sessions[system].defined_containers`.
+See `references/container-discovery.md` for the full algorithm.
 
-### Step 2b — Load scoped artifacts
+**Container mode — component inventory:**
 
-Read only the YAML artifacts on the path from root to the active node.
-Compute paths from canonical names using the path-derivation rule in
-`## State schema`:
+Source candidates, in priority order:
 
-- Always: `docs/ARCH.yaml`
-- Container level and below: `docs/ARCH__<container>.yaml`
-- Component and code level: `docs/ARCH__<container>__<component>.yaml`
-- If a code unit has been split out (parent stub has `split-file:`):
-  also load `docs/ARCH__<container>__<component>__<code>.yaml`.
+1. **API__<resource>.yaml files owned by this container** — each resource
+   maps to one component by default (e.g. `users` resource →
+   `users-controller` + `users-service` + `users-repository`, or a single
+   `users` component if the user prefers a flat layout). Tag `✓ found`.
+2. **UX__<surface>.yaml files owned by this container** (frontend
+   containers only) — each surface ≈ a view component. Tag `✓ found`.
+3. **Container archetype** (from system mode → container-taxonomy) —
+   suggested components per archetype (e.g. `backend-api` →
+   routing/auth-middleware/repository-layer/use-cases). Tag `⚠ inferred`.
+4. **DATA persistence bindings** — if this container binds to redis or
+   blob store, propose `cache-client` / `blob-client` components. Tag
+   `⚠ inferred`.
 
-Do not load unrelated container or component files. Lean context is
-the point — siblings can drift from each other and that is fine.
+Present the draft as in system mode. Persist to
+`state.sessions[container|<id>].defined_components`. See
+`references/component-discovery.md`.
 
-### Step 3 — CREATE or EDIT
+### Phase 4 — Structural questions
 
-Drive an interview using the inventory for the active node level.
-Load only the relevant prompt template
-(`references/prompt-templates.yaml`), the relevant question inventory
-(`references/question-inventories.yaml`), and the matching taxonomy
-entry — not every reference file.
+Mode-specific scalars that determine the *shape* of the output:
 
-The interview never asks the user to enumerate edges. Edges are always
-**derived then confirmed** at the end of the interview (see Step 3c).
+**System mode:**
 
-#### CREATE
-- Identify the mandatory questions for this node level.
-- Ask only those still unanswered, in batches of 3–5. Number them
-  consecutively for display, even if the underlying inventory order
-  has gaps from skipped questions.
-- After each batch, evaluate sufficiency. If gaps remain, ask targeted
-  follow-ups until each mandatory question is resolved.
-- When every mandatory question is answered, proceed to Step 3c, then
-  mark the node `complete`.
+1. **`architecture_pattern.pattern`** — one of: `monolith | modular_monolith
+   | microservices | event_driven | hexagonal | serverless | plugin |
+   pipeline | other`. Pre-fill heuristics from PRD:
+   - `non_functional_requirements.scalability ∈ {large, hyperscale}` →
+     `microservices | event_driven` candidates.
+   - Single small team + simple domain → `monolith | modular_monolith`.
+   - Many event-y features in PRD (notifications, queues, ETL) →
+     `event_driven`.
+   Present as `⚠ inferred` recommendation; load
+   `references/pattern-selection.yaml` and `pattern-selection.md` to
+   surface the 2–3 top candidates with `best-when` / `tradeoffs`.
+2. **`identity_and_auth.identity_provider`** — `external_oidc | internal |
+   none`, and `token_strategy` — `jwt | session | api_key | mtls | none`.
+   Pre-fill from `PRD.security_compliance.auth_model` and
+   `API.auth.schemes`.
 
-#### EDIT
-- Reflect existing knowledge for the active node back to the user first.
-- Ask which parts are still valid, obsolete, or partly valid. Number
-  the questions consecutively.
-- Preserve confirmed-valid content byte-identically. Discard obsolete
-  content. Continue as in CREATE for any remaining gaps.
-- After content is settled, proceed to Step 3c.
+**Container mode:**
 
-#### Status semantics
-- `defined` — node exists by name only; no clarified content.
-- `wip` — node has partial clarified content; interview incomplete.
-- `complete` — every required question for the node is answered
-  **and** the user has confirmed the derived edge set.
+1. **`tech_stack.language` + `framework` + `runtime_version`** — pre-fill
+   from `PRD.technical_constraints.runtime_platform` /
+   `preferred_languages`. Show as `⚠ inferred`.
+2. **`deployment.shape`** — `container | serverless | static | managed_service
+   | long_running_service | scheduled_job`. Pre-fill from container archetype.
 
-#### Abort semantics
-At any point during Step 3 the user may type `EXIT` or `QUIT`.
+Persist all structural answers to state before proceeding.
 
-- Before any clarification is given for the active node → save with
-  `defined`.
-- After some clarification but before the interview is complete → save
-  with `wip` and write/update the scoped YAML artifact with the partial
-  content collected so far. Skip Step 3c.
+### Phase 5 — Pre-fill confirmation
 
-### Step 3c — Edge derivation and confirmation
+Present the pre-fill map **theme by theme**. Same rules as `sdlc:prd` and
+`sdlc:api`:
 
-After mandatory questions are settled (CREATE) or content is reconciled
-(EDIT), derive edges for the active node and present them for
-confirmation.
+- `✓ found` items can be batch-accepted with `ok`.
+- `⚠ inferred` items must be confirmed or corrected **one by one** in
+  their own AskUserQuestion call. No batch-acceptance. This is the
+  hallucination guard.
 
-1. Collect candidate edges by scanning the active node's freshly-written
-   content plus the artifacts already loaded in Step 2b. For each free-text
-   field (`overview`, `responsibilities`, code `summary` / `notes`):
-   - Match canonical names and aliases of other graph nodes (apply the
-     normalization rule in `## Alias normalization` to both the
-     scanned token and the candidate canonical).
-   - Classify the relationship by surrounding verbs/keywords using
-     `references/edge-vocabulary.yaml`. That file lists exemplar verbs
-     and disambiguators per edge type.
-2. Resolve each candidate's `to` to the most specific existing graph
-   node (see **Endpoint level rules**).
-3. Diff candidates against the active node's existing `edges:` list.
-4. Present the diff as a numbered list, e.g.:
+Write confirmed values to state with `<field>_confidence: confirmed` (explicit
+pick) or `inferred` (`⚠` accepted as-is).
 
-   ```
-   I derived these edges for api-gateway:
-     1. calls            → user-service/auth-controller
-     2. reads            → redis-cache
-     3. depends_on       → config-store
-     4. publishes        → audit-log
+### Phase 6 — Theme interview
 
-   Confirm all, or edit:
-     - "remove 2, 4"
-     - "add: subscribes_to billing-events"
-     - "retype 3 as calls"
-   ```
+Walk the themes in the order defined by `arch-questions.yaml`. Themes are
+tagged with `mode: system | container`; load only the themes for the active
+mode.
 
-5. Apply the user's response. Empty input, `yes`, or `confirm` accepts
-   all derived edges as-is.
-6. After confirmation, run the **decomposition-refinement check**: if
-   the active node was just newly decomposed (children added), scan
-   inbound edges across the graph that point at the active node's
-   parent and ask whether each should be re-pointed at one of the new
-   children. Batch in groups of 3–5.
+#### System themes (when `/sdlc:arch` was invoked)
 
-### Step 3-alt — `-d` / `--dependencies` mode
+1. `architecture_pattern` — `high` (asked in Phase 4 as a structural scalar;
+   theme adds rationale + tradeoff_notes + ai_builder_notes).
+2. `identity_and_auth` — `high` (same).
+3. `container_inventory` — `critical` per item. For each container: archetype,
+   purpose, `owns_api_resources`, `owns_ux_surfaces`, `persistence`,
+   `deployment_unit`, ownership, change_cadence. Each container's status
+   walks `defined → draft → confirmed`.
+4. `cross_container_edges` — `critical` synthesis. The agent derives the edge
+   graph from API + DATA + UX (see `references/edge-derivation.md`), then
+   presents it for confirmation/edit. **The user is never asked to enumerate
+   edges from scratch** — derivation is the path of least resistance.
 
-This mode skips the interview entirely.
+#### Container themes (when `/sdlc:arch <container>` was invoked)
 
-1. Determine scope: whole graph if no container token; otherwise the
-   subtree rooted at the named container.
-2. For every node in scope, run candidate-edge collection and resolution
-   from Step 3c (1–2).
-3. Diff against currently stored edges in the affected nodes.
-4. If `--auto`:
-   - Write all derived changes immediately.
-   - Emit a report file at
-     `.claude/skills-state/sdlc-arch.derivation-report-<ISO8601>.yaml`
-     listing adds, removes, and retypes per node.
-5. Otherwise:
-   - Present the diff per node, in the format from Step 3c (4).
-   - User confirms or edits per node.
-   - Write only confirmed changes.
-6. Skip Step 4 status updates — `-d` mode never changes node `status`,
-   only edges.
+1. `tech_stack` — `high` (asked in Phase 4 as a structural scalar; theme
+   adds package_manager, build_tool, key_libraries).
+2. `persistence_bindings` — `med` (pre-filled from system-level
+   `containers[id].persistence`). User confirms or refines.
+3. `deployment` — `high` (asked in Phase 4 as a structural scalar; theme
+   adds scaling, regions, replicas, scheduling).
+4. `observability` — `med` (logs / metrics / traces / alerts).
+5. `ownership` — `med` (team, change_cadence, on_call_rotation).
+6. `failure_modes` — `high` per item.
+7. `security_concerns` — `med`.
+8. `component_inventory` — `critical` per item.
+9. `per_component_deepdive` — `critical` per component. Mirrors
+   `sdlc:api`'s `per_resource_deepdive`: for each component, an interview
+   fills `component_id`, `archetype`, `purpose`, `responsibilities`,
+   `inputs`, `outputs`, `failure_modes`, and `traces_api_resources` /
+   `traces_ux_surfaces` / `traces_data_entities` where applicable.
+10. `internal_and_external_edges` — `critical` synthesis (see
+    `references/edge-derivation.md`).
 
-### Step 4 — Write (atomic)
+#### Tier mechanics
 
-1. Compute the target path(s) for the active node from the
-   path-derivation rule (`## State schema`).
-2. Render the new content for each target file in memory.
-3. **Atomic write** — for every target file, including
-   `.claude/skills-state/sdlc-arch.state.yaml`:
-   - Write the new content to `<path>.tmp` in the same directory.
-   - Rename `<path>.tmp` over `<path>` (`os.replace` semantics —
-     atomic on every modern filesystem).
-   - On any error mid-write, the original file is intact. The `.tmp`
-     file may be left behind for inspection; the next write overwrites
-     it.
-4. Update `.claude/skills-state/sdlc-arch.state.yaml`:
-   - bump `updated-at` (ISO 8601, UTC)
-   - update `mode` and `current-pointer` (canonical path, no aliases)
-   - update the `status` of touched nodes
-5. **Untouched nodes must remain byte-identical** in both
-   `.claude/skills-state/sdlc-arch.state.yaml` and any scoped
-   artifact. Never rewrite content you have not touched.
-6. Confirm to the user with the file path(s) written and the new node
-   status.
+Each question carries an `importance: med | high | critical` field. Tier
+flows are identical to `sdlc:api` and `sdlc:data` — see
+`references/interview-mechanics.md` for the AskUserQuestion prompts,
+iteration caps, and per-item state machines.
 
-### Step 4b — Validate
+The two non-negotiable rules in this phase:
 
-After writing, validate every file touched in Step 4 against the JSON
-Schema bundled with the skill:
+1. `⚠ inferred` candidates surface as the **position-1 recommended option**
+   in their `AskUserQuestion` call. They cannot be silently accepted.
+2. State is written after **every confirmed batch, mini-section, and
+   per-item deep-dive completion** — not at theme boundaries.
 
-```
-python "${CLAUDE_SKILL_DIR}/scripts/validate_artifacts.py" <path-1> [<path-2> ...]
+### Phase 7 — Write & validate
+
+Write or merge the active mode's output yaml:
+
+- System mode → `docs/ARCH.yaml`. Per-container files are NOT created
+  here. They are stubs only — referenced from `containers[].file_path`
+  if and only if the container has been drilled-down via container mode.
+- Container mode → `docs/ARCH__<container>.yaml`. Also, on first
+  completion of a container interview, update
+  `docs/ARCH.yaml.containers[id].file_path` to point to the new file,
+  and bump `ARCH.yaml.metadata.last_updated`. This is the **only** field
+  in `ARCH.yaml` that container mode is allowed to mutate.
+
+Then run:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/validate_schema.py" --path docs/ARCH.yaml
 ```
 
-The validator dispatches on filename (`sdlc-arch.state.yaml`) or
-`c4-level` (`context | container | component | code`) to the matching
-schema in `references/artifact-schemas/`.
+The validator validates `docs/ARCH.yaml` plus every sibling
+`docs/ARCH__*.yaml` and runs four cross-checks (all enabled in both modes):
 
-- Exit 0 → success. Confirm to the user.
-- Exit 1 → schema violation. Roll back: replace the just-written file
-  with the pre-write content saved before Step 4 (skill keeps an
-  in-memory copy of every replaced file for the duration of the
-  write). Report the violations to the user and stop without updating
-  state.
-- Exit 2 → Python or `pyyaml` / `jsonschema` not available. Emit a
-  one-line warning that validation was skipped and continue without
-  rolling back. Validation is a safety net, not a hard requirement.
+1. **API-resource coverage** — every API resource appears in some
+   container's `owns_api_resources`. Uncovered resources force `status:
+   draft` and are logged to `arch_warnings`.
+2. **UX-surface coverage** — every data-bearing UX surface appears in
+   some container's `owns_ux_surfaces`. Uncovered → `arch_warnings`.
+3. **DATA-store coverage** — every primary/secondary store in
+   `DATA-MODEL.yaml.persistence.*` appears in some container's
+   `persistence`. Uncovered → `arch_warnings`.
+4. **Edge endpoint integrity** — every edge `to` resolves to an existing
+   container (system-level edges) or `<container_id>/<component_id>`
+   (container-level external edges) or `<component_id>` (container-level
+   internal edges). Unresolved endpoints force `status: draft`.
 
-The validator also supports `--self-test` to validate bundled minimal
-fixtures — useful when checking the schemas themselves are healthy.
+For merge logic, the recovery flow on `[FAIL]`, and the CLAUDE.md pointer
+rules → see `references/merge-validate.md`.
 
-## State schema
+Set `metadata.status`:
 
-File: `.claude/skills-state/sdlc-arch.state.yaml`
+- `"complete"` — only when all required fields are filled, the validator
+  passes with `[OK]`, AND all four cross-checks pass.
+- `"draft"` — on early EXIT, when any required field is null, or when
+  any cross-check fails.
 
-The state file is a versioned YAML mapping. Top-level fields: `version`
-(`"1"`), `mode` (`CREATE | EDIT`), `current-pointer` (canonical path
-string), `updated-at` (ISO 8601 UTC), and a `graph.root` node tree
-where each node carries `kind`, `status` (`defined | wip | complete`),
-`edges:` (outbound typed edges), and `children:` (recursive).
+### Phase 7-D — Edge re-derivation (-d mode only)
 
-Authoritative structure: `references/artifact-schemas/state.schema.json`.
+This phase replaces Phases 3–6 when invocation starts with `-d`.
 
-State rules:
+1. Determine scope:
+   - `/sdlc:arch -d` → re-derive cross-container edges in
+     `docs/ARCH.yaml`.
+   - `/sdlc:arch -d <container>` → re-derive internal + external edges
+     in `docs/ARCH__<container>.yaml`. `<container>` must exist in
+     `ARCH.yaml.containers[].container_id`; if not, list valid
+     container_ids and abort.
+2. Run candidate-edge collection per `references/edge-derivation.md`:
+   parse API.yaml resources, DATA store bindings, UX surface usage, and
+   any free-text `overview`/`purpose` fields for canonical name matches.
+3. Diff the derived edge set against the currently-stored edges in the
+   affected nodes.
+4. Present the diff for each node as a numbered list (add / remove /
+   retype), e.g.:
 
-- Every `current-pointer` and `canonical` value uses canonical
-  identifiers — never aliases. Canonicals are kebab-case
-  (`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`).
-- Aliases live alongside canonical names but never replace them in path
-  positions.
-- Untouched nodes stay unchanged on every write.
-- Each node owns its outbound edges in its own `edges:` list. The `from`
-  side is implicit; only `type`, `to`, and optional `note` are stored.
-- An inbound view ("what points at me?") is computed on demand by
-  walking the graph and filtering by `to`.
+   ```
+   I derived these edges for `backend-api`:
+     KEEP   1. calls           → identity-provider
+     ADD    2. reads/writes    → primary-postgres
+     RETYPE 3. depends_on → publishes  → notification-bus
+     REMOVE 4. depends_on      → legacy-batch-runner
+   Confirm all, or edit: "remove 2", "add: subscribes_to billing-events", ...
+   ```
 
-### Path derivation
+5. Apply confirmed changes; write only the affected file(s). Edge-only
+   writes never change `metadata.status` — only edges and `last_updated`.
+6. Write a derivation report to
+   `.claude/skills-state/sdlc-arch.derivation-report-<ISO8601>.yaml`
+   listing additions / removals / retypes per node.
+7. Re-run the validator (Phase 7) to confirm edge endpoint integrity.
 
-The on-disk path of a node's owning artifact is **computed**, not
-stored. The skill never persists `file:` fields on nodes:
+### Phase 8 — CLAUDE.md pointer & close
 
-| Node                                  | Path                                                       |
-|---------------------------------------|------------------------------------------------------------|
-| root (context)                        | `docs/ARCH.yaml`                                           |
-| `<c>`                                 | `docs/ARCH__<c>.yaml`                                      |
-| `<c>/<cmp>`                           | `docs/ARCH__<c>__<cmp>.yaml`                               |
-| `<c>/<cmp>/<code>` (default)          | same file as `<c>/<cmp>` — entry inside its `code:` array |
-| `<c>/<cmp>/<code>` (split, opt-in)    | `docs/ARCH__<c>__<cmp>__<code>.yaml`                       |
+Call `set_claude_md_pointer.py` to inject or update this skill's bullet
+in the shared `## SDLC Documents` section of the project-root
+`CLAUDE.md`. Create the section if missing.
 
-Joining a multi-part name uses double underscore (`__`) as the
-delimiter; each part is the canonical kebab-case identifier as stored.
+Bullet format (the pointer script produces this text):
 
-### Edge type vocabulary
+```
+- `docs/ARCH.yaml` (+ `docs/ARCH__<container>.yaml`): System architecture — pattern, container inventory, identity/auth, and per-container components + typed edges. Load when implementing containers, planning tests, or generating tasks. Last updated by `sdlc-arch` on <ISO-8601 timestamp>.
+```
 
-Seven types: `depends_on`, `calls`, `reads`, `writes`, `publishes`,
-`subscribes_to`, `implements`. Each produces a distinct codegen
-implication. Do not extend this list without an architectural reason.
+For bullet detection and append behavior, see
+`references/merge-validate.md`.
 
-Hierarchical relationships (`contains`, `owns`) are **not** edges —
-they are encoded by the `children:` structure of the graph.
+After the CLAUDE.md write succeeds: set the active session's `status:
+complete` in the state file (keep the file as audit trail) and tell the
+user where the artifacts live.
 
-Full verb-to-type mapping and disambiguators: `references/edge-vocabulary.yaml`.
+## Session state file
 
-### Endpoint level rules
+Path: `.claude/skills-state/sdlc-arch.state.yaml`
 
-- Edge endpoints (`to`) and the implicit `from` may only resolve to a
-  container, component, or code node. The root/context node is never
-  an edge endpoint. Externals interact via `actors:` in the context
-  artifact.
-- An edge always points at the **most specific existing graph node**
-  that matches the user's intent. If the target container has no
-  components defined yet, the edge points at the container. When that
-  container is later decomposed, the decomposition-refinement check in
-  Step 3c offers to re-point such edges at a child.
-- Mixed-level edges are allowed (e.g. a container calling a component
-  in another container) so long as both endpoints resolve to existing
-  graph nodes.
+Unlike single-mode skills, arch keeps **per-mode sub-sessions** in a single
+file. Each invocation reads or writes one entry under `sessions:`:
 
-## Alias normalization
+```yaml
+session_file_version: "1"
+skill_version: "1.0"
+last_updated: <iso8601>
 
-User input is normalized to kebab-case for matching and validation.
-The canonical, kebab-case identifier as stored in the taxonomy or graph
-is what gets persisted. Normalization is applied to `$ARGUMENTS` on
-invocation and to any candidate node name encountered during interviews
-or derivation.
+sessions:
+  system:                       # /sdlc:arch
+    session_id: <uuid4>
+    started_at: <iso8601>
+    last_updated: <iso8601>
+    status: in_progress         # in_progress | complete | aborted
+    mode: system
+    pre_fill_confirmed: false
+    completed_themes: []
+    skipped_themes: []
+    todo_themes: []
+    pending_themes: []
+    current_theme: null
+    current_container: null     # during the container_inventory drill-down
+    defined_containers:         # list of {container_id, archetype, status: proposed|draft|confirmed|dropped, source}
+      []
+    dropped_container_candidates: []
+    partial_answers: {}         # mirrors docs/ARCH.yaml structure
 
-Summary of 6-step algorithm: CamelCase split → acronym split → lowercase
-→ punctuation/space collapse → double-dash collapse → strip
-leading/trailing dashes.
+  "container|backend-api":      # /sdlc:arch backend-api
+    session_id: <uuid4>
+    started_at: <iso8601>
+    last_updated: <iso8601>
+    status: in_progress
+    mode: container
+    container_id: backend-api
+    pre_fill_confirmed: false
+    completed_themes: []
+    skipped_themes: []
+    todo_themes: []
+    pending_themes: []
+    current_theme: null
+    current_component: null     # during the component_inventory drill-down
+    defined_components: []
+    dropped_component_candidates: []
+    partial_answers: {}         # mirrors docs/ARCH__backend-api.yaml structure
+```
 
-Full algorithm with examples: `references/alias-normalization.md`.
+Rules:
 
-## Artifact format
+- Generate `session_id` as a UUID4 on first creation of each sub-session.
+- Update the top-level `last_updated` and the sub-session `last_updated`
+  on every write.
+- Write the file **after every confirmed batch, mini-section, and per-item
+  step**, including pre-fill confirmations and Phase 3 inventory
+  confirmation.
+- On user `EXIT`: set the *active* sub-session's `status: aborted`, write
+  `partial_answers`, confirm to user, stop. Other sub-sessions are
+  untouched.
+- On Phase 8 completion: set the active sub-session's `status: complete`;
+  keep the file.
+- The validator ignores this file — it validates only `docs/ARCH.yaml`
+  and the sibling per-container yamls.
 
-All output files are **pure YAML** — no markdown prose, no commentary.
-Every artifact carries a top-level `updated-at:` field (ISO 8601, UTC)
-bumped on every write. `updated-by:` is always `sdlc-arch`.
+**Source of truth on resume:**
 
-Per-tier YAML templates (root/context, container, component+code,
-split-code), soft-cap / output-mapping rules, and field semantics:
-`references/artifact-templates.md`.
+- `docs/ARCH.yaml` (and any existing `docs/ARCH__<container>.yaml`) is the
+  on-disk source of truth for *answers*.
+- The state file is the source of truth for *interview progress*.
+- On resume: load the on-disk yamls first as the baseline, then layer the
+  sub-session's `partial_answers` on top.
+- If they conflict on the same key, ask the user which to keep — never
+  silently overwrite.
 
-Authoritative shapes are enforced by
-`references/artifact-schemas/*.schema.json` and validated at Step 4b.
+## Edges — the typed vocabulary
 
-## Architecture pattern selection (brief)
+The edge graph is the **unique value** this skill adds over PRD/UX/DATA/API.
+Edges are typed and directional. Seven types:
 
-Do not hard-bias toward any single pattern. Consider team count and
-ownership boundaries, independent deployment needs, expected scale
-asymmetry, domain complexity, external integrations, async workflow
-needs, plugin/extensibility needs, ops maturity, and observability
-tolerance.
+| Type            | Codegen implication                                            |
+|-----------------|----------------------------------------------------------------|
+| `depends_on`    | Hard build-time / startup dependency.                          |
+| `calls`         | Synchronous request (HTTP/RPC/function).                       |
+| `reads`         | Read access to a data store / cache / blob.                    |
+| `writes`        | Write access to a data store / cache / blob.                   |
+| `publishes`     | Emits events to a bus / queue / channel.                       |
+| `subscribes_to` | Consumes events from a bus / queue / channel.                  |
+| `implements`    | Realizes an abstract interface or contract.                    |
 
-For AI-built projects, also consult the `ai-builder-considerations:`
-section in the pattern matrix. Load `references/pattern-selection.yaml`
-only when actively selecting or revisiting a pattern at the context
-level. Narrative selection guidance: `references/pattern-selection.md`.
+Hierarchical relationships (`contains` / `owns`) are NOT edges — they
+are encoded by the document structure (`containers[].components[]`).
 
-## Existing-doc ingestion rules
+For verb-to-type mappings and derivation rules, see
+`references/edge-derivation.md`.
 
-- Read `.claude/rules/` general rule files (no frontmatter) for context.
-  Do not use `.claude/rules/` as an artifact write target — artifacts
-  live in `docs/`.
-- Prefer explicit architecture / spec / design docs when present.
-- If multiple docs disagree, ask the user which to trust **before**
-  mutating state, using the literal `conflict-resolution` template.
-- During bootstrap, infer only what the evidence supports: containers,
-  components, code-level units when clearly named, aliases, and
-  `defined | wip | complete` per node. Edges are produced by Step 1b's
-  call into the edge-derivation procedure (Step 3-alt), not invented
-  inline.
-- Do not over-infer. Missing evidence stays as missing evidence — leave
-  the node `defined` rather than guess.
-- Validation (Step 4b) runs **only on writes**. Old artifacts read
-  during bootstrap are read tolerantly — a schema violation in legacy
-  content is reported but does not block ingestion.
+## Edge cases
 
-## Example session
+For unusual situations (PRD/UX/DATA/API missing or in draft, container
+with no API/UX/DATA evidence, component split across containers,
+container rename mid-session, edge to non-existent node, monorepo mode,
+write-permission errors, very large systems) → `references/edge-cases.md`.
 
-See `references/example-session.md` for a full `/sdlc:arch` session
-walkthrough showing Step 0 signature output, a container-level
-interview, edge derivation, and confirmation.
+## Style of conversation
 
-## Reference index
+The architecture interview can be long. Keep it humane:
 
-Load reference files lazily, only when relevant to the active node and
-phase. Heavy data (taxonomies, question inventories, pattern matrix,
-schemas) deliberately lives outside this file to keep context lean.
+- Use the user's terminology as soon as they introduce it.
+- Keep `AskUserQuestion` batches to 2–4 questions; never more than 4.
+- Acknowledge progress at each theme boundary and at each container /
+  component boundary ("That's `backend-api` done — 5 components, 12
+  internal edges, 3 external. Next: `web-frontend`.").
+- For system mode's `container_inventory` and container mode's
+  `component_inventory`, explicitly call out that candidates were
+  synthesized from PRD + UX + DATA + API — don't pretend they came from
+  nowhere.
+- Always make multiple-choice the path of least resistance. Auto-derived
+  edges are confirmable in bulk; user-typed enumerations are a fallback
+  for edge cases.
+- After all themes are done, congratulate briefly and move to write &
+  validate. Do not repeat everything back at them.
 
-| File                                             | When to load                                                            |
-|--------------------------------------------------|-------------------------------------------------------------------------|
-| `references/preflight.md`                        | Step 0.5 — full abort-message catalog and exit-code mapping.            |
-| `references/bootstrap.md`                        | Step 1b — blank-start block, RETRY/ASK/EXIT handling, edge cases.      |
-| `references/c4-guidance.md`                      | When deciding what belongs at the active C4 level.                      |
-| `references/container-taxonomy.yaml`             | When naming or interviewing about a container.                          |
-| `references/component-taxonomy.yaml`             | When naming or interviewing about a component.                          |
-| `references/question-inventories.yaml`           | At the start of every interview phase.                                  |
-| `references/pattern-selection.yaml`              | Only at root/context level when selecting an architecture pattern.      |
-| `references/pattern-selection.md`                | Narrative selection guidance; load with `pattern-selection.yaml`.       |
-| `references/prompt-templates.yaml`               | When entering any phase — provides the prompt skeleton for that phase.  |
-| `references/ai-directed-notation.md`             | When reading or writing process-flow notation in any reference file.    |
-| `references/edge-vocabulary.yaml`                | At Step 3c, to classify candidate edges by verb / phrase.               |
-| `references/alias-normalization.md`              | When unsure about normalization algorithm or edge cases.                |
-| `references/artifact-templates.md`               | When authoring a new node — per-tier YAML templates and size rules.    |
-| `references/artifact-schemas/*.json`             | At Step 4b — JSON Schema validation of just-written artifacts.          |
-| `references/example-session.md`                  | When the user asks for help or an example walkthrough.                  |
-| `references/edge-cases.md`                       | When encountering unusual situations (legacy state, empty files, etc.). |
+## Quick reference: commands the user can type
+
+| User input | Effect |
+|---|---|
+| `EXIT` | Abort: type into the free-text field of any AskUserQuestion call. |
+| `confirm` | Accept a single inferred pre-fill (Phase 5). |
+| `ok` | Batch-accept all `✓ found` pre-fills in the current theme, OR accept the Phase 3 inventory as-is. |
+| `now` | Run the proposed optional theme (gate question). |
+| `skip` | Skip the proposed optional theme (gate question). |
+| `todo` | Defer the proposed optional theme; logs it to `arch_warnings`. |
+| `confirm all` | Accept all derived edges in an edge-confirmation diff. |

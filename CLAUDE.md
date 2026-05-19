@@ -16,9 +16,9 @@ project from a structured chain of artifacts. Skills are invoked as
 | `ux`         | `sdlc/skills/ux`    | `docs/PRD.yaml` + interview                                                                  | `docs/UX.yaml`, `docs/UX__<surface>.yaml`            |
 | `data`       | `sdlc/skills/data`  | `docs/PRD.yaml` + `docs/UX.yaml` + interview                                                 | `docs/DATA-MODEL.yaml`                               |
 | `api`        | `sdlc/skills/api`   | `docs/PRD.yaml` + `docs/UX.yaml` + `docs/DATA-MODEL.yaml` + interview                        | `docs/API.yaml`, `docs/API__<resource>.yaml`         |
-| `arch`       | `sdlc/skills/arch`  | `docs/PRD.yaml` + `docs/UX.yaml` + `docs/API.yaml` + `docs/DATA-MODEL.yaml` + interview                                                      | `docs/ARCH.yaml`, `docs/ARCH__<component>.yaml`      |
-| `test`       | `sdlc/skills/test`  | `docs/PRD.yaml` + `docs/API.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH__<component>.yaml` + interview                                       | `docs/TEST-STRATEGY__<component>.yaml`               |
-| `task`       | `sdlc/skills/task`  | `docs/API.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH__<component>.yaml` + `docs/TEST-STRATEGY__<component>.yaml`                                          | `docs/TASKS__<component>.json`                       |
+| `arch`       | `sdlc/skills/arch`  | `docs/PRD.yaml` + `docs/UX.yaml` + `docs/API.yaml` + `docs/DATA-MODEL.yaml` + interview                                                      | `docs/ARCH.yaml`, `docs/ARCH__<container>.yaml`      |
+| `test`       | `sdlc/skills/test`  | `docs/PRD.yaml` + `docs/API.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH__<container>.yaml` + interview                                       | `docs/TEST-STRATEGY__<container>.yaml`               |
+| `task`       | `sdlc/skills/task`  | `docs/API.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH__<container>.yaml` + `docs/TEST-STRATEGY__<container>.yaml`                                          | `docs/TASKS__<container>.json`                       |
 | `deploy`     | `sdlc/skills/deploy` | `docs/ARCH.yaml` + interview                                                                | `docs/DEPLOY.yaml`                                   |
 
 **Downstream consumers of every output are AI agents, not humans.** Optimize
@@ -37,7 +37,7 @@ Use these forms consistently across all skills:
 | `generated_by` tag in output                     | `sdlc-<skill>`                                | `sdlc-prd`                               |
 | Question inventory file (in skill folder)        | `<skill>-questions.yaml`                      | `prd-questions.yaml`, `ux-questions.yaml`|
 | Output spec file (in `docs/`)                    | UPPERCASE (with `-` for compounds)            | `PRD.yaml`, `DATA-MODEL.yaml`            |
-| Output sub-artifact (per surface/component)      | `<NAME>__<slug>.yaml`, slug in kebab-case     | `UX__login-flow.yaml`, `ARCH__auth.yaml` |
+| Output sub-artifact (per surface/container/...)  | `<NAME>__<slug>.yaml`, slug in kebab-case     | `UX__login-flow.yaml`, `ARCH__backend-api.yaml` |
 | Schema reference file (in skill folder)          | `<UPPERCASE-OUTPUT-NAME>.schema.yaml`         | `PRD.schema.yaml`, `UX.schema.yaml`      |
 | Bundled Python helpers                           | snake_case `.py`                              | `validate_schema.py`, `set_claude_md_pointer.py` |
 
