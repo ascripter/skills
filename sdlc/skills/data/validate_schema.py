@@ -901,21 +901,31 @@ def check_bounded_context_partition(root: object) -> List[str]:
     return errs
 
 
-def load_prd_must_have_features(prd_path: Path) -> List[str]:
-    """Return list of F-NNN strings from PRD.functional_requirements.must_have_features."""
+def load_prd_must_have_features(
+    prd_path: Path,
+) -> Dict[Optional[str], List[str]]:
+    """Return PRD must_have_features F-NNN IDs, scoped correctly.
+
+    Single-product mode: returns ``{None: [F-001, ...]}``.
+    Monorepo mode: returns ``{"<slug>": [F-001, ...], ...}`` — one entry per
+    product. Each product's features stay scoped to that product so the
+    feature-coverage cross-check can compare each product's entities against
+    only that product's features (rather than the union across all products,
+    which would force every product to trace every other product's features).
+    """
     if not prd_path.exists():
-        return []
+        return {None: []}
     try:
         raw = yaml.safe_load(prd_path.read_text(encoding="utf-8"))
     except yaml.YAMLError:
-        return []
+        return {None: []}
     if not isinstance(raw, dict):
-        return []
+        return {None: []}
 
-    features: List[str] = []
     monorepo = bool((raw.get("metadata") or {}).get("monorepo"))
 
-    def _pull(node: dict) -> None:
+    def _pull(node: dict) -> List[str]:
+        out: List[str] = []
         fr = node.get("functional_requirements") or {}
         mhf = fr.get("must_have_features") if isinstance(fr, dict) else None
         if isinstance(mhf, list):
@@ -923,17 +933,18 @@ def load_prd_must_have_features(prd_path: Path) -> List[str]:
                 s = str(item).strip()
                 m = _FEATURE_ID_RE.match(s)
                 if m:
-                    features.append(m.group(0).upper())
+                    out.append(m.group(0).upper())
+        return out
 
     if monorepo:
+        result: Dict[Optional[str], List[str]] = {}
         products = raw.get("products") or {}
         if isinstance(products, dict):
-            for prod in products.values():
+            for slug, prod in products.items():
                 if isinstance(prod, dict):
-                    _pull(prod)
-    else:
-        _pull(raw)
-    return features
+                    result[slug] = _pull(prod)
+        return result
+    return {None: _pull(raw)}
 
 
 def load_prd_data_volume(prd_path: Path) -> Optional[str]:
@@ -1066,7 +1077,7 @@ def validate_file(path: Path) -> int:
     # Per-product or single-product cross-checks.
     docs_dir = path.parent
     prd_path = docs_dir / "PRD.yaml"
-    prd_features = load_prd_must_have_features(prd_path)
+    prd_features_by_scope = load_prd_must_have_features(prd_path)
     prd_volume = load_prd_data_volume(prd_path)
 
     relationship_errs: List[str] = []
@@ -1076,7 +1087,7 @@ def validate_file(path: Path) -> int:
     uncovered_features: List[str] = []
     volume_errs: List[str] = []
 
-    def _per_scope(scope_label: str, root: object) -> None:
+    def _per_scope(scope_label: str, root: object, scope_features: List[str]) -> None:
         scope = scope_label if scope_label else ""
         for e_ in check_relationship_integrity(root):
             relationship_errs.append(f"{scope}{e_}")
@@ -1091,14 +1102,16 @@ def validate_file(path: Path) -> int:
             volume_errs.append(f"{scope}{volume_err}")
 
         traced = collect_traced_features(root)
-        for f in check_feature_coverage(prd_features, traced):
-            uncovered_features.append(f)
+        for f in check_feature_coverage(scope_features, traced):
+            uncovered_features.append(f"{scope}{f}")
 
     if dm.metadata.monorepo and dm.products:
         for slug, product in dm.products.items():
-            _per_scope(f"products.{slug}.", product)
+            scope_features = prd_features_by_scope.get(slug, [])
+            _per_scope(f"products.{slug}.", product, scope_features)
     else:
-        _per_scope("", dm)
+        single_features = prd_features_by_scope.get(None, [])
+        _per_scope("", dm, single_features)
 
     missing = check_required(dm)
     status = dm.metadata.status
@@ -1160,10 +1173,11 @@ def validate_file(path: Path) -> int:
             (len(p.entities or {}) for p in (dm.products or {}).values())
             if (dm.metadata.monorepo and dm.products) else [len(dm.entities or {})]
         )
+        total_features = sum(len(v) for v in prd_features_by_scope.values())
         print(
             f"[OK] DATA-MODEL.yaml is valid and complete ({path}); "
             f"{n_entities} entit(y/ies); "
-            f"{len(prd_features)} PRD F-NNN feature(s) all covered."
+            f"{total_features} PRD F-NNN feature(s) all covered."
         )
         return 0
 
@@ -1173,10 +1187,11 @@ def validate_file(path: Path) -> int:
         if (dm.metadata.monorepo and dm.products)
         else len(dm.entities or {})
     )
+    total_features = sum(len(v) for v in prd_features_by_scope.values())
     print(
         f"[DRAFT] DATA-MODEL.yaml is a draft ({path}); "
         f"{n_entities_msg} entit(y/ies) defined; "
-        f"{len(prd_features)} PRD F-NNN feature(s) discovered upstream."
+        f"{total_features} PRD F-NNN feature(s) discovered upstream."
     )
     if missing:
         print(f"\n{len(missing)} required field(s) missing:")
