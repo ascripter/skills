@@ -13,10 +13,6 @@ upstream skill that owns it:
 > "Cannot start the API interview — `docs/<file>.yaml` is missing.
 > Run `/sdlc:<skill>` first."
 
-For DATA specifically: if the `sdlc:data` skill hasn't been built yet,
-a hand-written `docs/DATA-MODEL.yaml` is acceptable (see
-"DATA-MODEL hand-written stand-in" below).
-
 ### Upstream input has `metadata.status: draft`
 
 Same flow as `sdlc:ux` for a draft PRD. Offer two choices via
@@ -31,40 +27,6 @@ Same flow as `sdlc:ux` for a draft PRD. Offer two choices via
 
 Do NOT proceed. Print the upstream validator's error output verbatim
 and ask the user to fix it first.
-
-### DATA-MODEL hand-written stand-in
-
-Because `sdlc:data` doesn't exist at the time this skill was written,
-users may hand-write `docs/DATA-MODEL.yaml`. The minimum shape the
-api skill needs is:
-
-```yaml
-entities:
-  User:
-    fields:
-      id: { type: uuid, primary_key: true }
-      email: { type: string, unique: true }
-      created_at: { type: timestamp }
-  Order:
-    fields:
-      id: { type: uuid, primary_key: true }
-      user_id: { type: uuid, references: User.id }
-      total: { type: integer }  # cents
-      created_at: { type: timestamp }
-```
-
-The api skill only reads the top-level `entities:` keys (and accepts
-both the map shape above and a list-of-`{name: ...}` shape). Any
-richer detail downstream agents care about (relationships, indexes,
-constraints) is opaque to the api skill.
-
-If the user starts the api skill without DATA-MODEL.yaml at all:
-
-> "No `docs/DATA-MODEL.yaml` found. The api skill needs at least a
-> hand-written one to validate `primary_entity` references. Want me
-> to scaffold a starter file with one entity per UX surface noun?"
-
-The user can accept, decline (and write their own), or EXIT.
 
 ## Resource-inventory edge cases
 
@@ -153,29 +115,39 @@ endpoints in different resources independently override to the same
 scheme; ask the user whether they want to update the global
 `auth.schemes` instead).
 
-## Deleted DATA entity mid-session
+## DATA-MODEL changed mid-session
 
-The user is mid-interview, switches to another shell, edits
-`docs/DATA-MODEL.yaml` to remove an entity, then resumes. The agent's
-in-memory inventory still references the old entity.
+The user is mid-interview, re-runs `/sdlc:data` (or hand-edits
+`docs/DATA-MODEL.yaml`) to add, rename, or remove an entity, then
+resumes. The agent's in-memory inventory still references the old
+entity set.
 
 Behaviour on resume:
 
-1. Re-read `docs/DATA-MODEL.yaml`.
-2. Diff the entities the state file knows about vs. the entities
+1. Re-validate `docs/DATA-MODEL.yaml` with
+   `python sdlc/skills/data/validate_schema.py --path docs/DATA-MODEL.yaml`.
+   If it now fails or has `status: draft`, stop and ask the user to
+   finish `sdlc:data` before continuing.
+2. Compare `DATA-MODEL.metadata.session_id` and `last_updated` against
+   what the api state file recorded on first scan. If they differ,
+   announce it: *"DATA-MODEL was updated since you started this
+   session — re-checking entity references."*
+3. Diff the entities the api state file knows about vs. the entities
    currently in DATA.
-3. If any entity was removed but is still referenced in
+4. If any entity was removed but is still referenced in
    `state.defined_resources[*].primary_entity` or in a `$ref:
    data-model://<Name>`, prompt:
 
-   > "DATA-MODEL removed entity `<name>`. Resource `<id>` still
+   > "DATA-MODEL no longer has entity `<name>`. Resource `<id>` still
    > references it. Update primary_entity, drop the resource, or
    > leave the broken link (will fail validation)?"
 
-4. Update based on the user's answer.
-
-If new entities were added, also offer to add candidate resources
-for them (re-running theme 8 step a only for the new entities).
+5. If any entity was renamed (detectable when the user kept the
+   `traces_prd_features` / `traces_ux_surfaces` constant but the
+   entity name moved), offer to rewrite `primary_entity` and any
+   `data-model://<Old>` $refs in one move.
+6. If new entities were added, offer to add candidate resources for
+   them (re-running theme 8 step a only for the new entities).
 
 ## Validation failures
 

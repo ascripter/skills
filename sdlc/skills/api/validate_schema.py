@@ -598,14 +598,16 @@ def load_ux_data_bearing_surfaces(docs_dir: Path) -> List[str]:
 def load_data_model_entities(data_path: Path) -> Optional[List[str]]:
     """Return list of DATA-MODEL entity names, or None if the file is absent.
 
-    Accepts two shapes (the data skill is not yet built; this is permissive):
+    The canonical shape (produced by sdlc-data) is a dict keyed by
+    PascalCase entity name:
+
       entities:
         User: { ... }
         Order: { ... }
-      OR
-      entities:
-        - name: User
-        - name: Order
+
+    A list-of-`{name: ...}` shape is also accepted for resilience against
+    older or hand-written fixtures, but the dict shape is the source of
+    truth.
     """
     if not data_path.exists():
         return None

@@ -1,0 +1,50 @@
+metadata:
+  ux_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "22222222-2222-2222-2222-222222222222"
+  monorepo: false
+  status: "draft"
+
+ux_warnings: []
+
+surface_family: web
+surface_family_confidence: confirmed
+
+design_principles:
+  tenets:
+    - "Keyboard-first"
+    - "One primary action per screen"
+    - "Speed over discoverability"
+
+navigation_model:
+  type: sitemap
+  top_level_nodes:
+    - "/dashboard"
+    - "/projects"
+    - "/settings"
+
+surface_inventory:
+  - surface_id: dashboard
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__dashboard.yaml
+    traces_prd_flows:
+      - "Add a task in under 3 seconds"
+      - "Mark tasks done from the keyboard"
+
+component_library:
+  name: "shadcn/ui"
+  name_confidence: confirmed
+
+state_patterns:
+  error: "Inline error in affected region + retry button"
+  error_confidence: confirmed
+
+content_rules:
+  tone: "Professional + concise"
+  tone_confidence: confirmed
+
+accessibility:
+  wcag_target: wcag_aa
+  wcag_target_confidence: confirmed

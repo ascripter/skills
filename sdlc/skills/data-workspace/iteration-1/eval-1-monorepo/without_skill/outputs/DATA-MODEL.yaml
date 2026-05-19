@@ -1,0 +1,975 @@
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-19T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+  monorepo: true
+  status: "draft"
+
+data_warnings:
+  - "Per-scope feature-coverage check in validator treats the union of PRD F-NNN IDs as required per product; F-003 (auth admin console) is intentionally not traced in the billing product, so billing surfaces a soft uncovered-feature warning. Acceptable for draft status."
+
+products:
+
+  # ===========================================================================
+  # AUTH — Go server, OIDC-compliant identity service.
+  # PRD must-haves: F-001 OIDC, F-002 Refresh tokens, F-003 Admin console.
+  # ===========================================================================
+  auth:
+
+    persistence:
+      primary_store: postgres
+      primary_store_confidence: inferred
+      primary_store_rationale: >
+        Relational store fits user/session/tenant data with strong consistency
+        and FK enforcement. Mature Go drivers (pgx) and broad ops familiarity.
+      polyglot: true
+      secondary_stores:
+        - kind: redis
+          role: cache
+          rationale: >
+            Hot session lookups and short-lived token introspection cache;
+            also drives rate-limiting and OIDC nonce/PKCE state.
+      secondary_stores_confidence: inferred
+      file_blob_store: none
+      file_blob_store_bucket: null
+      file_blob_store_rationale: "No binary assets in scope for auth."
+
+    id_strategy:
+      scheme: uuid_v7
+      scheme_confidence: inferred
+      scheme_rationale: >
+        Time-ordered UUIDs keep insert locality on indexes while remaining
+        globally unique across tenants and friendly to log correlation.
+      natural_keys:
+        - entity: Tenant
+          fields: [slug]
+          reason: "Tenant slug is the public identifier used in URLs."
+        - entity: User
+          fields: [tenant_id, email]
+          reason: "Email is unique within a tenant, not globally."
+
+    entities:
+
+      Tenant:
+        description: "Top-level multi-tenant boundary; every other entity is scoped to a tenant."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+            unique: true
+          slug:
+            type: string
+            nullable: false
+            unique: true
+            comment: "URL-safe public identifier; immutable after creation."
+          name:
+            type: string
+            nullable: false
+          status:
+            type: enum
+            nullable: false
+            default: "'active'"
+            comment: "TenantStatus enum."
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+          updated_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+        traces_prd_features: ["F-001", "F-003"]
+        traces_ux_surfaces: null
+
+      User:
+        description: "End user authenticated via OIDC; belongs to exactly one tenant."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+            unique: true
+          tenant_id:
+            type: uuid
+            nullable: false
+            references: "Tenant.id"
+            on_delete: restrict
+            comment: "Tenant scope."
+          email:
+            type: string
+            nullable: false
+            comment: "Login identifier; case-insensitive; unique within tenant."
+          email_verified:
+            type: bool
+            nullable: false
+            default: "false"
+          display_name:
+            type: string
+            nullable: true
+          status:
+            type: enum
+            nullable: false
+            default: "'active'"
+            comment: "UserStatus enum."
+          last_login_at:
+            type: timestamptz
+            nullable: true
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+          updated_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+        traces_prd_features: ["F-001", "F-003"]
+        traces_ux_surfaces: null
+
+      OidcProvider:
+        description: "Configured upstream OIDC identity provider per tenant (e.g. Google, Okta)."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          tenant_id:
+            type: uuid
+            nullable: false
+            references: "Tenant.id"
+            on_delete: cascade
+          name:
+            type: string
+            nullable: false
+          issuer_url:
+            type: string
+            nullable: false
+            comment: "OIDC issuer URL; discovery doc derived from here."
+          client_id:
+            type: string
+            nullable: false
+          client_secret_enc:
+            type: text
+            nullable: false
+            comment: "Envelope-encrypted client secret; KMS-wrapped."
+          enabled:
+            type: bool
+            nullable: false
+            default: "true"
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+        traces_prd_features: ["F-001"]
+        traces_ux_surfaces: null
+
+      Session:
+        description: "An authenticated user session; one row per active login."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          user_id:
+            type: uuid
+            nullable: false
+            references: "User.id"
+            on_delete: cascade
+          tenant_id:
+            type: uuid
+            nullable: false
+            references: "Tenant.id"
+            on_delete: cascade
+            comment: "Denormalized for fast tenant-scoped session queries."
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+          expires_at:
+            type: timestamptz
+            nullable: false
+          last_seen_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+          revoked_at:
+            type: timestamptz
+            nullable: true
+          ip_address:
+            type: string
+            nullable: true
+          user_agent:
+            type: text
+            nullable: true
+        traces_prd_features: ["F-001", "F-002"]
+        traces_ux_surfaces: null
+
+      RefreshToken:
+        description: "Rotating refresh token bound to a session; revocable; single-use."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          session_id:
+            type: uuid
+            nullable: false
+            references: "Session.id"
+            on_delete: cascade
+          token_hash:
+            type: string
+            nullable: false
+            unique: true
+            comment: "SHA-256 hash of the issued refresh token; raw token never stored."
+          issued_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+          expires_at:
+            type: timestamptz
+            nullable: false
+          rotated_to_id:
+            type: uuid
+            nullable: true
+            references: "RefreshToken.id"
+            on_delete: set_null
+            comment: "Self-reference: points to the successor token after rotation."
+          revoked_at:
+            type: timestamptz
+            nullable: true
+          revoke_reason:
+            type: string
+            nullable: true
+        traces_prd_features: ["F-002"]
+        traces_ux_surfaces: null
+
+      AdminUser:
+        description: "Operator account for the admin console; separate from tenant end users."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          email:
+            type: string
+            nullable: false
+            unique: true
+          password_hash:
+            type: string
+            nullable: false
+            comment: "Argon2id hash; never logged."
+          mfa_enrolled:
+            type: bool
+            nullable: false
+            default: "false"
+          role:
+            type: enum
+            nullable: false
+            comment: "AdminRole enum (super_admin, support, read_only)."
+          disabled_at:
+            type: timestamptz
+            nullable: true
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+        traces_prd_features: ["F-003"]
+        traces_ux_surfaces: null
+
+      AuditLog:
+        description: "Append-only audit trail for admin and security-sensitive actions."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          actor_admin_id:
+            type: uuid
+            nullable: true
+            references: "AdminUser.id"
+            on_delete: set_null
+          actor_user_id:
+            type: uuid
+            nullable: true
+            references: "User.id"
+            on_delete: set_null
+          tenant_id:
+            type: uuid
+            nullable: true
+            references: "Tenant.id"
+            on_delete: set_null
+          action:
+            type: string
+            nullable: false
+            comment: "Dotted action name, e.g. 'admin.tenant.suspend'."
+          target_type:
+            type: string
+            nullable: true
+          target_id:
+            type: string
+            nullable: true
+          payload:
+            type: jsonb
+            nullable: true
+          ip_address:
+            type: string
+            nullable: true
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+        traces_prd_features: ["F-003"]
+        traces_ux_surfaces: null
+
+    relationships:
+      - from_entity: User
+        from_field: tenant_id
+        to_entity: Tenant
+        to_field: id
+        cardinality: "1:N"
+        on_delete: restrict
+        on_update: cascade
+        comment: "A tenant has many users; deleting a tenant with users is blocked."
+      - from_entity: OidcProvider
+        from_field: tenant_id
+        to_entity: Tenant
+        to_field: id
+        cardinality: "1:N"
+        on_delete: cascade
+        on_update: cascade
+        comment: "A tenant has many OIDC providers; cascade on tenant removal."
+      - from_entity: Session
+        from_field: user_id
+        to_entity: User
+        to_field: id
+        cardinality: "1:N"
+        on_delete: cascade
+        on_update: cascade
+        comment: "A user has many sessions."
+      - from_entity: Session
+        from_field: tenant_id
+        to_entity: Tenant
+        to_field: id
+        cardinality: "1:N"
+        on_delete: cascade
+        on_update: cascade
+        comment: "Denormalized tenant scope on sessions."
+      - from_entity: RefreshToken
+        from_field: session_id
+        to_entity: Session
+        to_field: id
+        cardinality: "1:N"
+        on_delete: cascade
+        on_update: cascade
+        comment: "A session has many refresh tokens over its lifetime (rotation chain)."
+      - from_entity: RefreshToken
+        from_field: rotated_to_id
+        to_entity: RefreshToken
+        to_field: id
+        cardinality: "1:1"
+        on_delete: set_null
+        on_update: cascade
+        comment: "Rotation chain pointer; each token points to its single successor."
+      - from_entity: AuditLog
+        from_field: actor_admin_id
+        to_entity: AdminUser
+        to_field: id
+        cardinality: "1:N"
+        on_delete: set_null
+        on_update: cascade
+        comment: "Optional actor — admin who performed the action."
+      - from_entity: AuditLog
+        from_field: actor_user_id
+        to_entity: User
+        to_field: id
+        cardinality: "1:N"
+        on_delete: set_null
+        on_update: cascade
+        comment: "Optional actor — end user who performed the action."
+      - from_entity: AuditLog
+        from_field: tenant_id
+        to_entity: Tenant
+        to_field: id
+        cardinality: "1:N"
+        on_delete: set_null
+        on_update: cascade
+        comment: "Tenant scope of the audited action when applicable."
+
+    enums_and_lookups:
+      enums:
+        TenantStatus: [active, suspended, deleted]
+        UserStatus: [active, invited, suspended, deleted]
+        AdminRole: [super_admin, support, read_only]
+      lookup_tables: null
+
+    indexes_and_queries:
+      access_patterns:
+        - description: "Lookup user by tenant_id + lowercased email (login path)."
+          entity: User
+          fields: [tenant_id, email]
+          expected_qps: null
+          latency_budget_ms: 50
+          read_or_write: read
+        - description: "List active sessions for a user (sign-out-all flow)."
+          entity: Session
+          fields: [user_id, revoked_at]
+          expected_qps: null
+          latency_budget_ms: 100
+          read_or_write: read
+        - description: "Resolve refresh token by hash on refresh endpoint."
+          entity: RefreshToken
+          fields: [token_hash]
+          expected_qps: null
+          latency_budget_ms: 50
+          read_or_write: read
+        - description: "Admin console: list recent audit events for a tenant."
+          entity: AuditLog
+          fields: [tenant_id, created_at]
+          expected_qps: null
+          latency_budget_ms: 200
+          read_or_write: read
+      expected_indexes:
+        - entity: User
+          fields: [tenant_id, email]
+          unique: true
+          type: composite
+          name: ux_user_tenant_email
+        - entity: Session
+          fields: [user_id]
+          unique: false
+          type: btree
+          name: ix_session_user
+        - entity: Session
+          fields: [tenant_id, created_at]
+          unique: false
+          type: composite
+          name: ix_session_tenant_created
+        - entity: RefreshToken
+          fields: [token_hash]
+          unique: true
+          type: btree
+          name: ux_refresh_token_hash
+        - entity: AuditLog
+          fields: [tenant_id, created_at]
+          unique: false
+          type: composite
+          name: ix_audit_tenant_created
+
+    integrity_and_constraints:
+      default_on_delete: restrict
+      default_on_delete_rationale: >
+        Conservative default: prevent accidental tenant/user removal cascading
+        into security-relevant rows. Cascades are explicit per relationship.
+      unique_constraints:
+        - entity: User
+          fields: [tenant_id, email]
+          name: ux_user_tenant_email
+        - entity: OidcProvider
+          fields: [tenant_id, issuer_url]
+          name: ux_oidc_provider_tenant_issuer
+      check_constraints:
+        - entity: Session
+          expression: "expires_at > created_at"
+          name: ck_session_expires_after_created
+          comment: "Sessions cannot expire in the past relative to creation."
+        - entity: RefreshToken
+          expression: "expires_at > issued_at"
+          name: ck_refresh_expires_after_issued
+          comment: null
+
+    data_classification:
+      pii_fields:
+        - "User.email"
+        - "User.display_name"
+        - "AdminUser.email"
+        - "Session.ip_address"
+        - "Session.user_agent"
+        - "AuditLog.ip_address"
+      pii_fields_confidence: inferred
+      regulated_fields: []
+      regulated_fields_confidence: inferred
+      encrypted_at_rest:
+        - "OidcProvider.client_secret_enc"
+        - "AdminUser.password_hash"
+      encryption_kms_ref: "alias/auth-data-key"
+      retention_policy_default: "Indefinite while tenant active; 30 days post-deletion for soft-deleted rows."
+
+    bounded_contexts: null
+
+    audit_and_lifecycle:
+      audit_columns:
+        created_at: true
+        updated_at: true
+        created_by: false
+        updated_by: false
+        deleted_at: false
+      soft_delete: false
+      archive_strategy: null
+      applies_to: null
+
+  # ===========================================================================
+  # BILLING — TypeScript server, monthly invoicing + Stripe integration.
+  # PRD must-haves: F-001 Invoice generation, F-002 Stripe integration.
+  # ===========================================================================
+  billing:
+
+    persistence:
+      primary_store: postgres
+      primary_store_confidence: inferred
+      primary_store_rationale: >
+        Financial data needs strong transactional guarantees and FK integrity
+        across invoice -> line item -> payment chains. Postgres aligns with
+        the wider platform's preferred RDBMS.
+      polyglot: false
+      secondary_stores: null
+      secondary_stores_confidence: inferred
+      file_blob_store: s3
+      file_blob_store_bucket: "billing-invoices-pdf"
+      file_blob_store_rationale: "Rendered invoice PDFs stored off the primary DB; URL referenced from Invoice rows."
+
+    id_strategy:
+      scheme: uuid_v7
+      scheme_confidence: inferred
+      scheme_rationale: >
+        Time-ordered UUIDs preserve insert locality on invoice/payment indexes
+        and read naturally chronologically.
+      natural_keys:
+        - entity: Invoice
+          fields: [invoice_number]
+          reason: "Human-facing sequential invoice number required for accounting/regulatory."
+
+    entities:
+
+      Customer:
+        description: "Billing-side representation of a tenant; mirrors auth.Tenant by tenant_id."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          tenant_id:
+            type: uuid
+            nullable: false
+            unique: true
+            comment: "FK by value to auth.Tenant.id (cross-product; not enforced at DB level)."
+          name:
+            type: string
+            nullable: false
+          billing_email:
+            type: string
+            nullable: false
+          stripe_customer_id:
+            type: string
+            nullable: true
+            unique: true
+            comment: "Stripe-issued customer identifier; null until first Stripe sync."
+          tax_id:
+            type: string
+            nullable: true
+          country:
+            type: string
+            nullable: false
+            comment: "ISO-3166 alpha-2."
+          currency:
+            type: string
+            nullable: false
+            default: "'USD'"
+            comment: "ISO-4217."
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+          updated_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+        traces_prd_features: ["F-001", "F-002"]
+        traces_ux_surfaces: null
+
+      Invoice:
+        description: "Monthly invoice issued to a customer; immutable once finalized."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          customer_id:
+            type: uuid
+            nullable: false
+            references: "Customer.id"
+            on_delete: restrict
+          invoice_number:
+            type: string
+            nullable: false
+            unique: true
+            comment: "Human-readable sequential number, e.g. 'INV-2026-000123'."
+          period_start:
+            type: date
+            nullable: false
+          period_end:
+            type: date
+            nullable: false
+          status:
+            type: enum
+            nullable: false
+            default: "'draft'"
+            comment: "InvoiceStatus enum."
+          subtotal_cents:
+            type: bigint
+            nullable: false
+            default: "0"
+          tax_cents:
+            type: bigint
+            nullable: false
+            default: "0"
+          total_cents:
+            type: bigint
+            nullable: false
+            default: "0"
+          currency:
+            type: string
+            nullable: false
+            comment: "ISO-4217; denormalized from Customer at issue time."
+          stripe_invoice_id:
+            type: string
+            nullable: true
+            unique: true
+            comment: "Stripe invoice id once pushed to Stripe."
+          pdf_url:
+            type: string
+            nullable: true
+            comment: "S3 URL of the rendered PDF; populated after finalize."
+          issued_at:
+            type: timestamptz
+            nullable: true
+          due_at:
+            type: timestamptz
+            nullable: true
+          paid_at:
+            type: timestamptz
+            nullable: true
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+          updated_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+        traces_prd_features: ["F-001", "F-002"]
+        traces_ux_surfaces: null
+
+      InvoiceLineItem:
+        description: "Individual chargeable line on an invoice."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          invoice_id:
+            type: uuid
+            nullable: false
+            references: "Invoice.id"
+            on_delete: cascade
+          description:
+            type: string
+            nullable: false
+          quantity:
+            type: decimal
+            nullable: false
+            default: "1"
+          unit_price_cents:
+            type: bigint
+            nullable: false
+          amount_cents:
+            type: bigint
+            nullable: false
+            comment: "Materialized quantity * unit_price_cents to keep totals stable."
+          metric_key:
+            type: string
+            nullable: true
+            comment: "Optional usage metric key (e.g. 'api_calls', 'seats')."
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+        traces_prd_features: ["F-001"]
+        traces_ux_surfaces: null
+
+      Payment:
+        description: "Payment attempt against an invoice; one invoice can have multiple (retries, partial)."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          invoice_id:
+            type: uuid
+            nullable: false
+            references: "Invoice.id"
+            on_delete: restrict
+          customer_id:
+            type: uuid
+            nullable: false
+            references: "Customer.id"
+            on_delete: restrict
+          amount_cents:
+            type: bigint
+            nullable: false
+          currency:
+            type: string
+            nullable: false
+          status:
+            type: enum
+            nullable: false
+            comment: "PaymentStatus enum."
+          stripe_payment_intent_id:
+            type: string
+            nullable: true
+            unique: true
+          stripe_charge_id:
+            type: string
+            nullable: true
+          failure_code:
+            type: string
+            nullable: true
+          failure_message:
+            type: text
+            nullable: true
+          processed_at:
+            type: timestamptz
+            nullable: true
+          created_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+          updated_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+        traces_prd_features: ["F-002"]
+        traces_ux_surfaces: null
+
+      StripeWebhookEvent:
+        description: "Append-only log of received Stripe webhook events; drives idempotent state sync."
+        primary_key: id
+        fields:
+          id:
+            type: uuid
+            nullable: false
+            primary_key: true
+          stripe_event_id:
+            type: string
+            nullable: false
+            unique: true
+            comment: "Stripe-issued event id; deduplication key."
+          event_type:
+            type: string
+            nullable: false
+            comment: "e.g. 'invoice.paid', 'payment_intent.succeeded'."
+          api_version:
+            type: string
+            nullable: true
+          payload:
+            type: jsonb
+            nullable: false
+          received_at:
+            type: timestamptz
+            nullable: false
+            default: "now()"
+          processed_at:
+            type: timestamptz
+            nullable: true
+          processing_status:
+            type: enum
+            nullable: false
+            default: "'pending'"
+            comment: "WebhookStatus enum."
+          processing_error:
+            type: text
+            nullable: true
+        traces_prd_features: ["F-002"]
+        traces_ux_surfaces: null
+
+    relationships:
+      - from_entity: Invoice
+        from_field: customer_id
+        to_entity: Customer
+        to_field: id
+        cardinality: "1:N"
+        on_delete: restrict
+        on_update: cascade
+        comment: "A customer has many invoices over time."
+      - from_entity: InvoiceLineItem
+        from_field: invoice_id
+        to_entity: Invoice
+        to_field: id
+        cardinality: "1:N"
+        on_delete: cascade
+        on_update: cascade
+        comment: "Line items live and die with their invoice."
+      - from_entity: Payment
+        from_field: invoice_id
+        to_entity: Invoice
+        to_field: id
+        cardinality: "1:N"
+        on_delete: restrict
+        on_update: cascade
+        comment: "Multiple payment attempts per invoice; never delete with payments."
+      - from_entity: Payment
+        from_field: customer_id
+        to_entity: Customer
+        to_field: id
+        cardinality: "1:N"
+        on_delete: restrict
+        on_update: cascade
+        comment: "Denormalized customer link for fast customer-scoped payment queries."
+
+    enums_and_lookups:
+      enums:
+        InvoiceStatus: [draft, open, paid, void, uncollectible]
+        PaymentStatus: [pending, succeeded, failed, refunded]
+        WebhookStatus: [pending, processed, failed, skipped]
+      lookup_tables: null
+
+    indexes_and_queries:
+      access_patterns:
+        - description: "List a customer's invoices, most recent first."
+          entity: Invoice
+          fields: [customer_id, issued_at]
+          expected_qps: null
+          latency_budget_ms: 200
+          read_or_write: read
+        - description: "Fetch invoice with its line items (invoice detail page)."
+          entity: InvoiceLineItem
+          fields: [invoice_id]
+          expected_qps: null
+          latency_budget_ms: 200
+          read_or_write: read
+        - description: "Idempotency check on incoming Stripe webhook (dedupe by stripe_event_id)."
+          entity: StripeWebhookEvent
+          fields: [stripe_event_id]
+          expected_qps: null
+          latency_budget_ms: 50
+          read_or_write: read
+        - description: "Find payment by Stripe payment intent id (webhook reconciliation)."
+          entity: Payment
+          fields: [stripe_payment_intent_id]
+          expected_qps: null
+          latency_budget_ms: 50
+          read_or_write: read
+      expected_indexes:
+        - entity: Invoice
+          fields: [customer_id, issued_at]
+          unique: false
+          type: composite
+          name: ix_invoice_customer_issued
+        - entity: Invoice
+          fields: [invoice_number]
+          unique: true
+          type: btree
+          name: ux_invoice_number
+        - entity: Invoice
+          fields: [stripe_invoice_id]
+          unique: true
+          type: btree
+          name: ux_invoice_stripe_id
+        - entity: InvoiceLineItem
+          fields: [invoice_id]
+          unique: false
+          type: btree
+          name: ix_line_item_invoice
+        - entity: Payment
+          fields: [invoice_id]
+          unique: false
+          type: btree
+          name: ix_payment_invoice
+        - entity: Payment
+          fields: [stripe_payment_intent_id]
+          unique: true
+          type: btree
+          name: ux_payment_stripe_pi
+        - entity: StripeWebhookEvent
+          fields: [stripe_event_id]
+          unique: true
+          type: btree
+          name: ux_webhook_stripe_event
+
+    integrity_and_constraints:
+      default_on_delete: restrict
+      default_on_delete_rationale: >
+        Financial integrity: invoices, payments and webhook events are
+        regulated artifacts — never silently cascade-delete. Cascade is used
+        only for owned subordinates (line items).
+      unique_constraints:
+        - entity: Invoice
+          fields: [invoice_number]
+          name: ux_invoice_number
+        - entity: StripeWebhookEvent
+          fields: [stripe_event_id]
+          name: ux_webhook_stripe_event
+      check_constraints:
+        - entity: Invoice
+          expression: "period_end >= period_start"
+          name: ck_invoice_period_valid
+          comment: null
+        - entity: Invoice
+          expression: "total_cents = subtotal_cents + tax_cents"
+          name: ck_invoice_total_consistent
+          comment: "Totals are derived; enforce arithmetic invariant."
+        - entity: Payment
+          expression: "amount_cents > 0"
+          name: ck_payment_amount_positive
+          comment: null
+        - entity: InvoiceLineItem
+          expression: "amount_cents >= 0"
+          name: ck_line_item_amount_nonneg
+          comment: null
+
+    data_classification:
+      pii_fields:
+        - "Customer.name"
+        - "Customer.billing_email"
+        - "Customer.tax_id"
+      pii_fields_confidence: inferred
+      regulated_fields:
+        - "Customer.tax_id"
+        - "Invoice.total_cents"
+        - "Payment.amount_cents"
+      regulated_fields_confidence: inferred
+      encrypted_at_rest:
+        - "Customer.tax_id"
+      encryption_kms_ref: "alias/billing-data-key"
+      retention_policy_default: "7 years for invoices/payments (tax/audit); webhook events 1 year."
+
+    bounded_contexts: null
+
+    audit_and_lifecycle:
+      audit_columns:
+        created_at: true
+        updated_at: true
+        created_by: false
+        updated_by: false
+        deleted_at: false
+      soft_delete: false
+      archive_strategy: "Move finalized invoices older than 2 years to cold storage; PDFs stay in S3 Glacier."
+      applies_to: null
+
+    external_data_sources:
+      - name: stripe
+        sync_model: webhook
+        conflict_resolution: "Stripe is authoritative for payment state; local state is reconciled from stripe_event_id stream."
+        refresh_interval: "real-time (webhook) with hourly reconciliation sweep"
+        maps_to_entity: Payment

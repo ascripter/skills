@@ -1,11 +1,106 @@
-# Minimal DATA-MODEL fixture. Only the top-level `entities:` block is
-# read by the api skill's entity-link check.
+# Real sdlc-data shaped DATA-MODEL fixture, complete + valid.
+# The api validator reads only `entities` keys for its entity-link check.
+# This fixture defines { User, Order }; the sibling API.yaml references
+# primary_entity: Widget — which doesn't exist — so the api validator
+# is expected to exit 1 with "[FAIL]" naming Widget.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-19T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "88888888-8888-8888-8888-888888888888"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  primary_store: postgres
+  primary_store_confidence: confirmed
+  primary_store_rationale: "Default fixture store."
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+  scheme_confidence: confirmed
+  scheme_rationale: "Time-orderable PKs."
+
 entities:
   User:
+    description: "Authenticated end-user."
+    primary_key: id
     fields:
-      id: { type: uuid, primary_key: true }
-      email: { type: string, unique: true }
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+      email:
+        type: string
+        nullable: false
+        unique: true
+      created_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+    traces_prd_features: []
+    traces_ux_surfaces: []
   Order:
+    description: "A purchase order."
+    primary_key: id
     fields:
-      id: { type: uuid, primary_key: true }
-      user_id: { type: uuid, references: User.id }
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+      user_id:
+        type: uuid
+        nullable: false
+        references: User.id
+        on_delete: restrict
+      total_cents:
+        type: bigint
+        nullable: false
+        check: "total_cents >= 0"
+      created_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+    traces_prd_features: []
+    traces_ux_surfaces: []
+
+relationships:
+  - from_entity: Order
+    from_field: user_id
+    to_entity: User
+    to_field: id
+    cardinality: "1:N"
+    on_delete: restrict
+    comment: "A user has many orders."
+
+enums_and_lookups:
+  enums: {}
+  lookup_tables: []
+
+indexes_and_queries:
+  access_patterns:
+    - description: "List orders for a user, newest first."
+      entity: Order
+      fields: [user_id, created_at]
+      read_or_write: read
+  expected_indexes:
+    - entity: Order
+      fields: [user_id, created_at]
+      unique: false
+      type: btree
+
+integrity_and_constraints:
+  default_on_delete: restrict
+  unique_constraints: []
+  check_constraints: []
+
+data_classification:
+  pii_fields:
+    - User.email
+  regulated_fields: []
+  encrypted_at_rest: []
+  retention_policy_default: "Indefinite"

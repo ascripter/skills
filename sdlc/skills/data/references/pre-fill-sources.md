@@ -45,7 +45,7 @@ data skill **respects them as authoritative** (`✓ found`):
 |--------------------------------------------------------|--------------------------------------------|
 | `schema.prisma` model blocks                            | `entities.<Name>` with full fields         |
 | `alembic.ini` + `migrations/`                          | `migrations_and_evolution.tool: alembic`   |
-| `db/migrate/*.rb` (Rails)                              | `migrations_and_evolution.tool: django_migrate` (label as ActiveRecord in rationale) |
+| `db/migrate/*.rb` (Rails)                              | `migrations_and_evolution.tool: activerecord` |
 | `prisma/migrations/`                                   | `migrations_and_evolution.tool: prisma_migrate` |
 | `models/` with SQLAlchemy `Base` subclasses            | `entities.<Name>` candidates               |
 | `db/seeds.rb` / `prisma/seed.ts` / `fixtures/`         | `seed_and_fixtures.seed_strategy`, `dev_fixtures_path` |

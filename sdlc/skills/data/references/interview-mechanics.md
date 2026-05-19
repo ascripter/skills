@@ -168,11 +168,21 @@ If the user types EXIT mid-entity:
 
 ### Auto-derived fields
 
-If `audit_and_lifecycle.audit_columns` was answered in an earlier theme
-(e.g. user picked `[created_at, updated_at, deleted_at]`), the agent
-auto-adds those columns to every entity's `fields` block during step (d)
-unless the user opts out per-entity. This avoids 20× "yes add created_at"
-prompts.
+`audit_and_lifecycle.audit_columns` is answered up-front in **Phase 4
+(audit-columns preliminary)** — before the per-entity drill-down begins
+— precisely so it can drive auto-add behavior here. If that preliminary
+question has been answered (e.g. user picked
+`[created_at, updated_at, deleted_at]`), the agent auto-adds those
+columns to every entity's `fields` block during step (d) unless the
+user opts out per-entity. This avoids 20× "yes add created_at" prompts.
+
+If the user skipped or hadn't yet answered the Phase 4 preliminary
+(possible on a partial resume), step (d) instead asks once at the start
+of the FIRST entity: *"Add `created_at`/`updated_at` to every entity by
+default?"* — and writes the answer back to
+`state.partial_answers.audit_and_lifecycle.audit_columns` so subsequent
+entities inherit it. The full `audit_and_lifecycle` theme later expands
+the picture (soft delete, archive).
 
 ## Position-1 hallucination guard
 

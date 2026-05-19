@@ -1,0 +1,17 @@
+{
+  "eval_id": 1,
+  "eval_name": "monorepo-two-products",
+  "prompt": "Produce a docs/DATA-MODEL.yaml in monorepo mode (two products: 'auth' and 'billing'). The PRD declares auth (Go server) with features F-001 OIDC / F-002 Refresh tokens / F-003 Admin console, and billing (TypeScript server) with F-001 Invoice generation / F-002 Stripe integration. No UX inputs are present. Produce a valid monorepo-shaped DATA-MODEL.yaml with entities and feature traces under each product.",
+  "assertions": [
+    {"text": "Output file docs/DATA-MODEL.yaml exists"},
+    {"text": "metadata.monorepo is true"},
+    {"text": "products dict has both 'auth' and 'billing' keys"},
+    {"text": "No top-level theme blocks (entities/persistence/etc) at the root — only under products.<slug>"},
+    {"text": "products.auth.entities has at least User and Session (or equivalent identity entities)"},
+    {"text": "products.billing.entities has at least Invoice and Payment (or equivalent)"},
+    {"text": "Every must_have_feature in each product is traced by at least one entity in that product"},
+    {"text": "Each product has its own persistence.primary_store"},
+    {"text": "Each product has its own id_strategy.scheme"},
+    {"text": "validate_schema.py exits 0 on the produced file"}
+  ]
+}

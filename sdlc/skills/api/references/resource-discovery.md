@@ -22,6 +22,9 @@ The candidate set is the union of three axes:
    `DATA-MODEL.yaml.entities`, propose one CRUD resource:
    - `User` entity → `users` resource at `/v1/users`
    - `Order` entity → `orders` resource at `/v1/orders`
+   Entities listed in `enums_and_lookups.lookup_tables` are usually
+   read-only — propose `list-<resource>` + `get-<resource>` only,
+   skip Create/Update/Delete.
 2. **PRD features that don't map 1:1 to an entity**. Cross-entity
    workflows often deserve their own endpoint group:
    - PRD feature "Bulk-import tasks from CSV" →
@@ -34,6 +37,16 @@ The candidate set is the union of three axes:
      `dashboard` resource at `/v1/dashboard` (read-only summary)
    - UX surface `notifications` panel →
      `notifications` resource at `/v1/notifications`
+
+### Grouping by bounded context (when DATA.bounded_contexts is set)
+
+If `DATA-MODEL.yaml.bounded_contexts` is non-null, use it as the
+default grouping axis: propose one set of resources per context, and
+prefix `base_path` with the context name where it would otherwise
+collide (e.g. `auth/users` vs `billing/users`). Cross-context
+relationships still go via `data-model://<EntityName>` `$ref`s — the
+context grouping is purely organizational. Tag-group each resource by
+its context so the synthesized OpenAPI document keeps the structure.
 
 Don't try to be exhaustive — the user will add, remove, or rename
 resources during the per-item drill-down. Aim for a starter inventory
@@ -230,6 +243,27 @@ Propose the canonical CRUD set adapted to the resource's verbs:
 - `update-<resource>` — `PUT <base_path>/{id}` or `PATCH` — updates
 - `delete-<resource>` — `DELETE <base_path>/{id}` — removes
 
+Pre-fills from DATA-MODEL:
+
+- **Path-param `{id}` format**: read `DATA-MODEL.id_strategy.scheme`
+  and the entity's `primary_key` field to pick `format: uuid` /
+  `format: int64` / a pattern — see
+  `references/openapi-embedding.md` "Identifier formats" table.
+  Composite primary keys split into multiple path segments.
+- **DELETE semantics**: if
+  `DATA-MODEL.audit_and_lifecycle.soft_delete: true`, mark
+  `delete-<resource>` as soft-delete (`204 No Content`, no body) and
+  add an `sdlc_note` in the endpoint description so downstream code
+  generators wire the soft-delete column rather than a DROP.
+- **List endpoints from `indexes_and_queries.access_patterns`**: walk
+  every access pattern whose `entity` matches this resource's
+  `primary_entity` AND `read_or_write` is `read` or `both`. Propose
+  one query-parameter combo per pattern (e.g. an access pattern over
+  `[owner_id, created_at]` becomes `GET /v1/projects?owner_id=...`
+  with default sort by `created_at`). When a pattern's trailing field
+  is monotonic (timestamp, ulid, serial), propose it as the
+  `pagination.stable_sort_field` if cursor pagination is enabled.
+
 Add custom actions for any PRD feature the canonical CRUD doesn't
 cover (e.g. `POST /users/{id}/reset-password` for a "reset password"
 feature). The agent proposes them per-feature.
@@ -244,17 +278,30 @@ supported and how to write request/response schemas.
 
 Propose schemas based on the primary DATA entity:
 
-- `<Entity>` — full read DTO (omit persistence-only fields)
-- `<Entity>Create` — POST payload (omit server-set fields like `id`,
-  `created_at`, `updated_at`)
-- `<Entity>Update` — PUT/PATCH payload (all fields optional for PATCH;
-  required as in Create for PUT)
+- `<Entity>` — full read DTO. **Omit by default** every field
+  referenced as `<Entity>.<field>` in
+  `DATA-MODEL.data_classification.regulated_fields`,
+  `encrypted_at_rest`, and any password / token / secret hashes.
+  Surface each `pii_fields` entry to the user for an explicit
+  keep/omit decision per resource.
+- `<Entity>Create` — POST payload. Additionally omit server-set
+  fields (`id` when `id_strategy.scheme` is server-generated, any
+  field with `default: now()`, audit columns).
+- `<Entity>Update` — PATCH payload (all fields optional). PUT is rare
+  but if present requires the same fields as Create.
 - `<Entity>List` — paginated list wrapper (only when pagination is
-  envelope-style rather than raw array)
+  envelope-style rather than raw array; `projects_from: null`).
+- `<Entity>Admin` (optional) — re-exposes regulated/encrypted fields
+  behind an admin scope. Propose only when the user explicitly asks.
+- `<Entity>Public` (optional) — cross-tenant read DTO that hides PII.
 
-Each schema includes `projects_from: <EntityName>` so downstream
-agents know which DATA entity it derives from. See
-`references/openapi-embedding.md` for the DTO-vs-entity discipline.
+Embed `enum:` lists inline for any field whose DATA type is `enum` —
+the values come from `DATA-MODEL.enums_and_lookups.enums.<EnumName>`.
+
+Each object DTO carries `projects_from: <EntityName>` (required for
+single-entity DTOs; `null` only for cross-entity wrappers like
+`<Entity>List`). See `references/openapi-embedding.md` for the
+DTO-vs-entity discipline and the data_classification-anchored rules.
 
 #### d) Re-confirm traces
 

@@ -207,6 +207,19 @@ questions:
     confidence_field: false
     importance: med
 
+  - theme: persistence
+    id: file_blob_store_bucket
+    schema_path: persistence.file_blob_store_bucket
+    question: "Bucket / container / mount path for the blob store? (e.g. 'acme-uploads', 'gs://acme-prod', '/var/uploads')"
+    hint: "Codegen needs this to wire up signed-URL helpers and lifecycle policies. Use a placeholder if the bucket is provisioned per environment."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    required_if: "file_blob_store != 'none'"
+    capture_rationale: false
+    confidence_field: false
+    importance: med
+
   # ---------------------------------------------------------------------------
   # ID Strategy
   # ---------------------------------------------------------------------------
@@ -264,8 +277,8 @@ questions:
   - theme: entities
     id: entity-fields
     schema_path: entity.fields
-    question: "Fields for this entity. List as 'name: type [nullable] [unique] [primary_key] [default=...]'. Include the id field explicitly."
-    hint: "Each field becomes a column in codegen + a DTO property downstream. Field types must come from the schema enum: uuid, string, text, int, bigint, decimal, float, bool, date, time, timestamp, timestamptz, json, jsonb, enum, binary, blob, array, other."
+    question: "Fields for this entity. For each field: 'name: type [nullable] [unique] [primary_key] [default=...] [references=Entity.field [on_delete=...]] [check=...] [comment=...]'. Include the id field explicitly."
+    hint: "Each field becomes a column in codegen + a DTO property downstream. Field types must come from the schema enum: uuid, string, text, int, bigint, decimal, float, bool, date, time, timestamp, timestamptz, json, jsonb, enum, binary, blob, array, other. The per-field batch flow in references/interview-mechanics.md elicits these attributes 2-4 fields at a time via AskUserQuestion; this single-question form is a fallback for free-text batches."
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -661,6 +674,7 @@ questions:
       - "sqlx"
       - "knex"
       - "django_migrate"
+      - "activerecord"
       - "other"
     free_text_allowed: true
     required: false
@@ -867,8 +881,8 @@ questions:
   - theme: external_data_sources
     id: sources_list
     schema_path: external_data_sources
-    question: "External data sources and their sync model? Format: 'name | sync_model (pull|push|webhook|stream) | maps_to_entity | conflict_resolution'."
-    hint: "Each pre-filled from PRD.functional_requirements.integrations_required. Mapping to an entity is required when the source writes data we persist."
+    question: "External data sources and their sync model? Format: 'name | sync_model (pull|push|webhook|stream) | maps_to_entity | conflict_resolution | refresh_interval'."
+    hint: "Each pre-filled from PRD.functional_requirements.integrations_required. Mapping to an entity is required when the source writes data we persist. refresh_interval examples: 'real-time (webhook)', 'hourly poll', 'daily cron at 02:00 UTC'."
     suggested_answers: []
     free_text_allowed: true
     required: false

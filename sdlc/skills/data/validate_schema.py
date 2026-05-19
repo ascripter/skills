@@ -10,18 +10,24 @@ Run from the project root:
 
 Validates:
     1. docs/DATA-MODEL.yaml (or --path) — single-file data model.
-    2. Cross-checks (skipped/warning-only as documented per check):
-       - Feature coverage: every PRD must_have_features F-NNN appears in some
-         entity's traces_prd_features. Failure -> force draft.
+    2. Cross-checks (7 total; hardness as marked):
+       - Required fields present: REQUIRED_PATHS + ENTITY_REQUIRED_PATHS.
+         Failure -> hard error in status:complete.
        - Relationship integrity: every from_entity / to_entity / join_table
          exists in `entities`. Failure -> hard error in status:complete.
+       - Field references: every entities.<E>.fields.<f>.references value
+         resolves to a real Entity.field. Failure -> hard error.
        - Classification integrity: every Entity.field in pii_fields /
          regulated_fields / encrypted_at_rest resolves. Failure -> hard error.
        - Bounded-context partition: when bounded_contexts present, every
          entity belongs to exactly one context. Failure -> hard error.
-       - Volume-vs-scale gate: if PRD data_volume_estimate in {terabytes,
-         petabytes}, scale_and_retention must be non-null. Failure -> force draft.
        - Mode-mismatch: monorepo: true requires products:; false forbids it.
+         Failure -> hard error (raised by the pydantic model_validator).
+       - Feature coverage: every PRD must_have_features F-NNN appears in some
+         entity's traces_prd_features. Failure -> force draft (soft).
+       - Volume-vs-scale gate: if PRD data_volume_estimate in {terabytes,
+         petabytes}, scale_and_retention must be non-null. Failure -> force
+         draft (soft).
 
 Exit codes:
     0 — schema valid; either status='complete' (with all required fields filled
@@ -244,6 +250,7 @@ class MigrationTool(str, Enum):
     sqlx = "sqlx"
     knex = "knex"
     django_migrate = "django_migrate"
+    activerecord = "activerecord"
     other = "other"
 
 
@@ -315,6 +322,7 @@ class Persistence(_Permissive):
     primary_store_rationale: Optional[str] = None
     polyglot: Optional[bool] = None
     secondary_stores: Optional[List[SecondaryStore]] = None
+    secondary_stores_confidence: Optional[Confidence] = None
     file_blob_store: Optional[FileBlobStore] = None
     file_blob_store_bucket: Optional[str] = None
     file_blob_store_rationale: Optional[str] = None
@@ -387,6 +395,7 @@ class CheckConstraint(_Permissive):
 
 class IntegrityAndConstraints(_Permissive):
     default_on_delete: Optional[OnDelete] = None
+    default_on_delete_rationale: Optional[str] = None
     unique_constraints: Optional[List[UniqueConstraint]] = None
     check_constraints: Optional[List[CheckConstraint]] = None
 
@@ -682,9 +691,11 @@ def check_required(dm: DataModel) -> List[str]:
                 continue
             if path in ("relationships", "data_classification.pii_fields",
                         "indexes_and_queries.access_patterns"):
-                # Key must be present (not None); empty list is OK except
-                # for access_patterns which we treat as required-to-have-at-least-one
-                # to ensure the agent thought about query patterns.
+                # Key must be present (not None); empty list is OK.
+                # An explicit "no edges / no PII / no listed patterns" answer
+                # is valid — the agent has thought about it and recorded it.
+                # The feature-coverage cross-check is the real "did you think
+                # about scope" guard.
                 if val is None:
                     missing.append(f"{scope_label}{path}")
                 continue

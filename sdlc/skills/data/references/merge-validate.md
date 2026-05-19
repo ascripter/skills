@@ -118,7 +118,8 @@ user asks.
 
 ## Cross-check recovery flows
 
-The validator reports six cross-check categories. Each has a different
+The validator reports eight check categories (the seven explicit
+cross-checks plus the required-fields gate). Each has a different
 recovery path:
 
 | Cross-check                       | If hard-fail at status:complete   | Recovery |

@@ -126,8 +126,13 @@ files at startup and validate each via its upstream skill:
        preliminary `external_dependencies`
      - `technical_constraints.runtime_platform` → narrows `api_kind`
        (e.g. `cli` → strong default `api_kind: none`)
-     - `non_functional_requirements` → hints for rate_limiting +
-       error retry semantics
+     - `non_functional_requirements.scalability ∈ {large, hyperscale}`
+       → strong hint for `pagination.strategy: cursor` and stricter
+       `rate_limiting` defaults (per_user + per_ip together).
+     - `non_functional_requirements.performance_targets` → verbatim
+       rationale for `rate_limiting.burst` / `sustained` values.
+     - `non_functional_requirements.reliability: mission_critical` →
+       hint for `errors.retry_semantics` (5xx + 429 with Retry-After).
      - `metadata.monorepo` + `products: <slug>:` → if true, the API
        skill runs the interview **per product** and writes one
        `API.yaml` per product slug. (See `references/edge-cases.md`.)
@@ -147,22 +152,42 @@ files at startup and validate each via its upstream skill:
      - `navigation_model.top_level_nodes` → hints for base_path
        grouping (e.g. `/dashboard` → `dashboard` resource)
 
-3. **`docs/DATA-MODEL.yaml`** — required. (If the `sdlc:data` skill
-   hasn't been built yet, a hand-written DATA-MODEL.yaml with a
-   top-level `entities:` map is sufficient — see
-   `references/edge-cases.md` "DATA-MODEL hand-written stand-in".)
+3. **`docs/DATA-MODEL.yaml`** — required.
 
-   - If the file is absent → stop. Print:
+   ```bash
+   python sdlc/skills/data/validate_schema.py --path docs/DATA-MODEL.yaml
+   ```
+
+   - Same `status: complete` and exit-code-0 gate as PRD/UX. If the file
+     is absent → stop. Print:
      > "Cannot start the API interview — `docs/DATA-MODEL.yaml` is
-     > missing. Run `/sdlc:data` first (or hand-write a minimal
-     > DATA-MODEL.yaml with an `entities:` block)."
-   - Extract every entity name and its field shape. These become:
-     - The candidate axis for `resource_inventory` (one resource per
-       primary entity, more or fewer as the user prefers).
-     - The pool of valid `primary_entity` references (the entity-link
-       check fails any reference that's not in this set).
-     - The source of truth for `$ref: data-model://<EntityName>` in
-       per-resource schemas. See `references/openapi-embedding.md`.
+     > missing. Run `/sdlc:data` first."
+   - Extract the fields the API skill needs:
+     - `entities` keys (PascalCase) → candidate axis for
+       `resource_inventory` (one resource per primary entity by default).
+     - `entities` keys → pool of valid `primary_entity` references
+       (the entity-link check fails any reference that's not in this set).
+     - `entities` keys → source of truth for
+       `$ref: data-model://<EntityName>` in per-resource schemas. See
+       `references/openapi-embedding.md`.
+     - `id_strategy.scheme` → path-parameter `format` for `{id}` segments
+       (`uuid_v4|uuid_v7|ulid` → `format: uuid`; `serial_int|bigserial`
+       → `type: integer`; `nanoid|natural_key` → `type: string`).
+     - `data_classification.pii_fields` + `regulated_fields` +
+       `encrypted_at_rest` → authoritative "omit from public DTOs"
+       list. DTOs MUST omit these fields by default; the user can opt
+       a field back in per resource with an explicit confirmation.
+     - `audit_and_lifecycle.soft_delete: true` → DELETE endpoints
+       become soft-delete (status 204 + the row stays). Default is
+       hard-delete.
+     - `enums_and_lookups.enums` → pre-fill DTO `enum:` constraints
+       wherever a DTO field maps to one of these enums.
+     - `bounded_contexts` (when present) → propose grouping resources
+       by context (one tag group per context). Cross-context references
+       still go via `data-model://` $refs.
+     - `indexes_and_queries.access_patterns` → pre-fill list endpoints
+       (one per pattern) and the `pagination.stable_sort_field` hint
+       when the pattern's `fields` list ends in a monotonic column.
 
 4. Existing `docs/API.yaml` and `docs/API__*.yaml` — if present, treat
    as the merge baseline (Phase 7).
@@ -442,8 +467,8 @@ Rules:
 For unusual situations (PRD/UX/DATA missing or in draft, surface with
 no obvious resource, DATA entity deleted mid-session, conflicting auth
 across resources, mid-interview transport_style change, validation
-failures, write-permission errors, very large APIs, monorepo mode,
-hand-written DATA-MODEL stand-in) → `references/edge-cases.md`.
+failures, write-permission errors, very large APIs, monorepo mode) →
+`references/edge-cases.md`.
 
 ## Style of conversation
 

@@ -38,7 +38,10 @@ truth.
    batching. The `entities` theme is the lone `critical` — full per-entity
    drill-down.
 6. **Write + validate** → merge into `docs/DATA-MODEL.yaml`, run
-   `validate_schema.py` (Pydantic + 6 cross-checks).
+   `validate_schema.py` (Pydantic + 7 cross-checks: required fields,
+   relationship integrity, field references, classification integrity,
+   bounded-context partition, feature coverage, volume-vs-scale gate;
+   mode-mismatch is enforced by the Pydantic model itself).
 7. **CLAUDE.md pointer + close** → inject the pointer block, mark state
    `complete`.
 
@@ -163,6 +166,17 @@ shortcuts.
 
 These determine *the shape of DATA-MODEL.yaml*, not its content.
 
+Two patterns coexist here and the convention matters:
+
+- **Yaml-less structural questions** (monorepo, bounded_contexts,
+  audit-columns preliminary) have no entry in `data-questions.yaml`
+  because they are meta — they describe the document's shape rather
+  than its content. Phase 4 hard-codes their prompts.
+- **Yaml-backed structural questions** (polyglot) have an entry in
+  `data-questions.yaml` under their natural theme (e.g. `persistence`)
+  AND get asked in Phase 4. Phase 6 sees them already-answered and
+  skips the duplicate.
+
 Ask in order:
 
 1. **Monorepo mode** — inherited from `PRD.metadata.monorepo`. Show as
@@ -178,30 +192,57 @@ Ask in order:
 3. **Polyglot persistence** — pre-fill from `PRD.data_model.storage_preferences`.
    If multiple stores are listed, default to `polyglot: true` and ask the
    user to confirm. See `references/polyglot-persistence.md` for the
-   secondary-store interview script.
+   secondary-store interview script. (Yaml-backed: the `polyglot` entry
+   under the `persistence` theme is consumed here, not in Phase 6.)
+4. **Audit-columns preliminary** — `audit_and_lifecycle` is theme 9 in
+   `data-questions.yaml`, but its `audit_columns` answer (created_at /
+   updated_at / created_by / updated_by / deleted_at) influences every
+   per-entity drill-down in theme 3 (`entities`). Ask up-front, in Phase
+   4, with a strong default:
+   > "Add `created_at` and `updated_at` to every entity by default?
+   > (Per-entity opt-out is possible. We'll revisit the full audit
+   > picture — soft delete, archive — in theme `audit_and_lifecycle`.)"
+   Persist the answer to `state.partial_answers.audit_and_lifecycle.
+   audit_columns`. The full theme later refines it.
 
 Persist all structural answers to state before proceeding.
 
 ### Phase 5 — Pre-fill confirmation
 
 Present the pre-fill map **theme by theme** (skipping `entities` — that
-gets its own treatment in Phase 6). Render each themed block as:
+gets its own treatment in Phase 6). For each theme:
 
-```
-## Persistence (pre-filled)
+1. **Display** the themed block as a summary (read-only preview) so the
+   user can see all pre-fills together:
 
-  ✓ primary_store          : postgres                 [from PRD.data_model.storage_preferences]
-  ⚠ polyglot               : true                     [inferred from secondary store: redis]
-    secondary_stores       : (not pre-filled — will ask)
-  ⚠ file_blob_store        : s3                       [inferred from regulatory_requirements: gdpr → audit log retention]
+   ```
+   ## Persistence (pre-filled)
 
-For each ⚠ inferred item, type **confirm** to accept, or correct it.
-For ✓ found items, you can batch-accept by typing **ok**.
-```
+     ✓ primary_store          : postgres                 [from PRD.data_model.storage_preferences]
+     ⚠ polyglot               : true                     [inferred from secondary store: redis]
+       secondary_stores       : (not pre-filled — will ask in Phase 6)
+     ⚠ file_blob_store        : s3                       [inferred from regulatory_requirements: gdpr → audit log retention]
+   ```
+
+2. **Confirm via AskUserQuestion**, one structured call per `⚠ inferred`
+   item — never bulk-accept. The candidate sits at position 1 with the
+   `"(Recommended) "` prefix; the user must explicitly select it or pick
+   another option. This is the position-1 hallucination guard from
+   `references/interview-mechanics.md`.
+
+3. **Batch-accept `✓ found` items** with a single AskUserQuestion
+   multi-select call ("which of these found values should I keep
+   verbatim?") — `✓ found` items come from direct quotes upstream, so
+   bulk acceptance is appropriate here, with an "uncheck to edit"
+   escape hatch.
+
+The free-text shortcuts `confirm` / `ok` listed in the *Quick reference*
+table below are accepted when the user types them into the "Other"
+field of an AskUserQuestion call — they are not chat-mode commands.
 
 **Critical rule** (hallucination guard): `⚠ inferred` items must NOT be
-batch-accepted via "ok" or "1a, 2b". Each one needs an explicit
-confirmation or correction. Pre-filled inferences are where wrong
+batch-accepted. Each one needs an explicit selection or correction in
+its own AskUserQuestion call. Pre-filled inferences are where wrong
 requirements sneak in unnoticed.
 
 Write the confirmed values into the state file. Set

@@ -73,6 +73,8 @@ persistence:
                                    #     role: cache | search | queue | analytics |
                                    #           timeseries | other
                                    #     rationale: string
+  secondary_stores_confidence: null  # confirmed | inferred | assumption
+                                   # certainty of the secondary-store inventory as a whole
   file_blob_store: null            # one of: none | s3 | gcs | azure_blob |
                                    #         minio | local_fs | other
   file_blob_store_bucket: null     # string — bucket / container / mount path
@@ -126,8 +128,10 @@ entities:                          # REQUIRED — dict[<PascalCaseEntityName>, E
         type: timestamptz
         nullable: false
         default: "now()"
-    traces_prd_features: null      # list[string] — F-NNN feature IDs this
-                                   # entity realizes (e.g. ["F-001", "F-002"])
+    traces_prd_features: ["F-001"] # REQUIRED list[string] — F-NNN feature IDs this
+                                   # entity realizes. Empty list `[]` is valid for
+                                   # purely-backend entities (e.g. AuditLog); `null`
+                                   # is rejected by the validator.
     traces_ux_surfaces: null       # list[string] — UX surface_ids that read/write
                                    # this entity (e.g. ["dashboard", "user-detail"])
 
@@ -189,6 +193,8 @@ indexes_and_queries:               # REQUIRED — block may be present-but-empty
 integrity_and_constraints:         # REQUIRED — block may be present-but-empty.
   default_on_delete: null          # one of: cascade | restrict | set_null | no_action
                                    # applied to FKs that don't specify their own
+  default_on_delete_rationale: null  # string — why this default? (cascade is dangerous;
+                                   # restrict surfaces issues at delete time)
   unique_constraints: null         # list[UniqueConstraint]; each:
                                    #   - entity: PascalCaseEntityName
                                    #     fields: [snake_case, ...]   # composite OK
@@ -280,7 +286,8 @@ migrations_and_evolution:          # optional
   null
   # tool: alembic                  # one of: alembic | flyway | liquibase |
   #                                #         prisma_migrate | drizzle_kit |
-  #                                #         sqlx | knex | django_migrate | other
+  #                                #         sqlx | knex | django_migrate |
+  #                                #         activerecord | other
   # zero_downtime_strategy: "Expand-contract: add column nullable, backfill, then enforce NOT NULL."
   # rollback_policy: "Every migration must have a tested down() — verified in CI."
 

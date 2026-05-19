@@ -1,0 +1,521 @@
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-19T00:00:00Z"
+  generated_by: sdlc-data
+  session_id: "33333333-3333-3333-3333-333333333333"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+# ---------------------------------------------------------------------------
+# persistence
+# ---------------------------------------------------------------------------
+persistence:
+  primary_store: postgres
+  primary_store_confidence: inferred
+  primary_store_rationale: >
+    Acme Tasks is a small-team web app (TypeScript) with light scale needs.
+    Postgres gives strong relational guarantees, easy local dev with SQLite-
+    compatible tooling (e.g. Prisma/Drizzle), and a clear path to managed
+    hosting (Neon, Supabase, RDS).
+  polyglot: false
+  secondary_stores: []
+  secondary_stores_confidence: inferred
+  file_blob_store: none
+  file_blob_store_bucket: null
+  file_blob_store_rationale: "No attachments / file uploads in the MVP scope."
+
+# ---------------------------------------------------------------------------
+# id_strategy
+# ---------------------------------------------------------------------------
+id_strategy:
+  scheme: uuid_v7
+  scheme_confidence: inferred
+  scheme_rationale: >
+    UUIDv7 gives globally-unique, time-ordered IDs that are safe to expose in
+    URLs and avoid hot-spotting on B-tree indexes. Time-ordering keeps inserts
+    locality-friendly for the dashboard's "newest first" task list.
+  natural_keys:
+    - entity: User
+      fields: [email]
+      reason: "Email is the login identifier and must be globally unique."
+
+# ---------------------------------------------------------------------------
+# entities
+# ---------------------------------------------------------------------------
+entities:
+
+  User:
+    description: "Authenticated end-user of Acme Tasks (a team lead or indie dev)."
+    primary_key: id
+    fields:
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+        unique: true
+        comment: "UUIDv7."
+      email:
+        type: string
+        nullable: false
+        unique: true
+        comment: "Login identifier; case-insensitive."
+      display_name:
+        type: string
+        nullable: false
+        comment: "Shown in UI."
+      password_hash:
+        type: string
+        nullable: true
+        comment: "Argon2id hash; null when user signs in via SSO only."
+      created_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+      updated_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+    traces_prd_features: []
+    traces_ux_surfaces: ["dashboard"]
+
+  Project:
+    description: >
+      A bucket that groups Tasks. Matches the /projects top-level nav node
+      from UX.navigation_model.
+    primary_key: id
+    fields:
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+        unique: true
+      owner_id:
+        type: uuid
+        nullable: false
+        references: "User.id"
+        on_delete: cascade
+        comment: "The user who owns the project."
+      name:
+        type: string
+        nullable: false
+      slug:
+        type: string
+        nullable: false
+        comment: "URL-safe identifier scoped to owner."
+      archived:
+        type: bool
+        nullable: false
+        default: "false"
+      created_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+      updated_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+    traces_prd_features: []
+    traces_ux_surfaces: ["dashboard"]
+
+  Task:
+    description: >
+      The core domain object. Quick-add (F-001) writes one of these; the
+      dashboard task-list feed and keyboard-driven actions (F-002) read/
+      update it.
+    primary_key: id
+    fields:
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+        unique: true
+      project_id:
+        type: uuid
+        nullable: true
+        references: "Project.id"
+        on_delete: set_null
+        comment: >
+          Quick-add (F-001) can create a task without picking a project; the
+          inbox view shows project_id IS NULL.
+      creator_id:
+        type: uuid
+        nullable: false
+        references: "User.id"
+        on_delete: cascade
+        comment: "User who created the task."
+      assignee_id:
+        type: uuid
+        nullable: true
+        references: "User.id"
+        on_delete: set_null
+      title:
+        type: string
+        nullable: false
+        comment: "Short text — the only required field for F-001 quick add."
+      description:
+        type: text
+        nullable: true
+      status:
+        type: enum
+        nullable: false
+        default: "'open'"
+        comment: "TaskStatus enum: open | in_progress | done."
+      priority:
+        type: enum
+        nullable: false
+        default: "'normal'"
+        comment: "TaskPriority enum: low | normal | high | urgent."
+      due_date:
+        type: date
+        nullable: true
+      completed_at:
+        type: timestamptz
+        nullable: true
+        comment: "Set when F-002 keyboard shortcut marks the task done."
+      sort_order:
+        type: float
+        nullable: false
+        default: "0"
+        comment: >
+          Fractional ranking so reorder via keyboard (F-002) is O(1) without
+          renumbering all rows.
+      created_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+      updated_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+    traces_prd_features: ["F-001", "F-002"]
+    traces_ux_surfaces: ["dashboard"]
+
+  UserKeybinding:
+    description: >
+      Per-user override of the default keyboard shortcuts. Backs F-002
+      (every primary action reachable without a mouse) and the future
+      /settings surface.
+    primary_key: id
+    fields:
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+        unique: true
+      user_id:
+        type: uuid
+        nullable: false
+        references: "User.id"
+        on_delete: cascade
+      action:
+        type: string
+        nullable: false
+        comment: "Canonical action id, e.g. 'task.quick_add', 'task.toggle_done'."
+      key_combo:
+        type: string
+        nullable: false
+        comment: "e.g. 'Mod+K', 'X', 'J'."
+      created_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+    traces_prd_features: ["F-002"]
+    traces_ux_surfaces: ["dashboard"]
+
+  Session:
+    description: "Auth session for a logged-in user."
+    primary_key: id
+    fields:
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+        unique: true
+      user_id:
+        type: uuid
+        nullable: false
+        references: "User.id"
+        on_delete: cascade
+      token_hash:
+        type: string
+        nullable: false
+        unique: true
+        comment: "SHA-256 of opaque session token; raw token never stored."
+      expires_at:
+        type: timestamptz
+        nullable: false
+      created_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+      last_seen_at:
+        type: timestamptz
+        nullable: true
+    traces_prd_features: []
+    traces_ux_surfaces: ["dashboard"]
+
+# ---------------------------------------------------------------------------
+# relationships
+# ---------------------------------------------------------------------------
+relationships:
+  - from_entity: Project
+    from_field: owner_id
+    to_entity: User
+    to_field: id
+    cardinality: "1:N"
+    on_delete: cascade
+    on_update: no_action
+    join_table: null
+    comment: "A user owns many projects."
+
+  - from_entity: Task
+    from_field: project_id
+    to_entity: Project
+    to_field: id
+    cardinality: "1:N"
+    on_delete: set_null
+    on_update: no_action
+    join_table: null
+    comment: >
+      A project has many tasks; a task may be project-less (inbox) so we
+      set_null rather than cascade.
+
+  - from_entity: Task
+    from_field: creator_id
+    to_entity: User
+    to_field: id
+    cardinality: "1:N"
+    on_delete: cascade
+    on_update: no_action
+    join_table: null
+    comment: "A user creates many tasks."
+
+  - from_entity: Task
+    from_field: assignee_id
+    to_entity: User
+    to_field: id
+    cardinality: "1:N"
+    on_delete: set_null
+    on_update: no_action
+    join_table: null
+    comment: "A user may be assigned to many tasks; assignment is optional."
+
+  - from_entity: UserKeybinding
+    from_field: user_id
+    to_entity: User
+    to_field: id
+    cardinality: "1:N"
+    on_delete: cascade
+    on_update: no_action
+    join_table: null
+    comment: "A user has many keybinding overrides."
+
+  - from_entity: Session
+    from_field: user_id
+    to_entity: User
+    to_field: id
+    cardinality: "1:N"
+    on_delete: cascade
+    on_update: no_action
+    join_table: null
+    comment: "A user has many sessions; deleting a user revokes them all."
+
+# ---------------------------------------------------------------------------
+# enums_and_lookups
+# ---------------------------------------------------------------------------
+enums_and_lookups:
+  enums:
+    TaskStatus: [open, in_progress, done]
+    TaskPriority: [low, normal, high, urgent]
+  lookup_tables: []
+
+# ---------------------------------------------------------------------------
+# indexes_and_queries
+# ---------------------------------------------------------------------------
+indexes_and_queries:
+  access_patterns:
+    - description: >
+        Dashboard task-list feed: list a user's open tasks, newest first
+        (backs the /dashboard task-list region and F-002 keyboard scrolling).
+      entity: Task
+      fields: [creator_id, status, sort_order, created_at]
+      expected_qps: 5.0
+      latency_budget_ms: 100
+      read_or_write: read
+
+    - description: >
+        Quick-add insert (F-001): write a new Task row in under 3 seconds
+        end-to-end including network — DB write itself must be <20ms.
+      entity: Task
+      fields: [id, creator_id, title, created_at]
+      expected_qps: 2.0
+      latency_budget_ms: 20
+      read_or_write: write
+
+    - description: "Toggle a task done from the keyboard (F-002)."
+      entity: Task
+      fields: [id, status, completed_at, updated_at]
+      expected_qps: 2.0
+      latency_budget_ms: 20
+      read_or_write: write
+
+    - description: "Look up user by email at login."
+      entity: User
+      fields: [email]
+      expected_qps: 0.5
+      latency_budget_ms: 50
+      read_or_write: read
+
+    - description: "Validate a session token hash on every authenticated request."
+      entity: Session
+      fields: [token_hash, expires_at]
+      expected_qps: 20.0
+      latency_budget_ms: 10
+      read_or_write: read
+
+    - description: "Resolve a user's keybinding for an action (F-002)."
+      entity: UserKeybinding
+      fields: [user_id, action]
+      expected_qps: 1.0
+      latency_budget_ms: 20
+      read_or_write: read
+
+  expected_indexes:
+    - entity: User
+      fields: [email]
+      unique: true
+      type: btree
+      name: ux_user_email
+    - entity: Session
+      fields: [token_hash]
+      unique: true
+      type: btree
+      name: ux_session_token_hash
+    - entity: Session
+      fields: [user_id]
+      unique: false
+      type: btree
+      name: ix_session_user_id
+    - entity: Project
+      fields: [owner_id]
+      unique: false
+      type: btree
+      name: ix_project_owner_id
+    - entity: Project
+      fields: [owner_id, slug]
+      unique: true
+      type: composite
+      name: ux_project_owner_slug
+    - entity: Task
+      fields: [creator_id, status, sort_order]
+      unique: false
+      type: composite
+      name: ix_task_creator_status_sort
+    - entity: Task
+      fields: [project_id, status]
+      unique: false
+      type: composite
+      name: ix_task_project_status
+    - entity: Task
+      fields: [assignee_id, status]
+      unique: false
+      type: composite
+      name: ix_task_assignee_status
+    - entity: UserKeybinding
+      fields: [user_id, action]
+      unique: true
+      type: composite
+      name: ux_keybinding_user_action
+
+# ---------------------------------------------------------------------------
+# integrity_and_constraints
+# ---------------------------------------------------------------------------
+integrity_and_constraints:
+  default_on_delete: restrict
+  default_on_delete_rationale: >
+    Restrict by default so accidental deletes surface as errors. FKs that
+    intentionally cascade (e.g. Session -> User) or set null (e.g.
+    Task.project_id -> Project) declare it explicitly.
+  unique_constraints:
+    - entity: User
+      fields: [email]
+      name: uq_user_email
+    - entity: Project
+      fields: [owner_id, slug]
+      name: uq_project_owner_slug
+    - entity: UserKeybinding
+      fields: [user_id, action]
+      name: uq_keybinding_user_action
+    - entity: Session
+      fields: [token_hash]
+      name: uq_session_token_hash
+  check_constraints:
+    - entity: Task
+      expression: "status IN ('open','in_progress','done')"
+      name: ck_task_status
+      comment: "Belt-and-suspenders alongside the TaskStatus enum."
+    - entity: Task
+      expression: "priority IN ('low','normal','high','urgent')"
+      name: ck_task_priority
+    - entity: Task
+      expression: "(status = 'done') = (completed_at IS NOT NULL)"
+      name: ck_task_done_iff_completed_at
+      comment: "completed_at set iff status is done."
+
+# ---------------------------------------------------------------------------
+# data_classification
+# ---------------------------------------------------------------------------
+data_classification:
+  pii_fields:
+    - "User.email"
+    - "User.display_name"
+  regulated_fields: []
+  encrypted_at_rest:
+    - "User.password_hash"
+    - "Session.token_hash"
+  encryption_kms_ref: null
+  retention_policy_default: >
+    Indefinite for User/Project/Task; Sessions expire and are hard-deleted
+    on expires_at.
+
+# ---------------------------------------------------------------------------
+# audit_and_lifecycle (optional but useful here)
+# ---------------------------------------------------------------------------
+audit_and_lifecycle:
+  audit_columns:
+    created_at: true
+    updated_at: true
+    created_by: false
+    updated_by: false
+    deleted_at: false
+  soft_delete: false
+  soft_delete_rationale: >
+    MVP scope: hard delete is fine for tasks; restoring deleted tasks is
+    not a must-have.
+  archive_strategy: null
+  applies_to: null
+
+# ---------------------------------------------------------------------------
+# migrations_and_evolution
+# ---------------------------------------------------------------------------
+migrations_and_evolution:
+  tool: drizzle_kit
+  tool_confidence: inferred
+  zero_downtime_strategy: >
+    Expand-contract: add columns nullable, backfill, then enforce NOT NULL
+    in a follow-up migration.
+  rollback_policy: "Every migration must have a tested down()."
+
+# ---------------------------------------------------------------------------
+# transactions_and_consistency
+# ---------------------------------------------------------------------------
+transactions_and_consistency:
+  default_isolation: read_committed
+  default_isolation_rationale: >
+    Postgres default; matches the workload (no long-running reports, no
+    cross-row invariants beyond what FKs and CHECKs enforce).
+  transaction_boundaries:
+    - "Quick-add wraps the Task insert and any sort_order rebalancing in one tx."
+    - "Toggle-done updates status + completed_at in one tx."

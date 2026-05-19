@@ -22,7 +22,7 @@ use_cases:
   core_workflows: ["Add a task quickly"]
 
 functional_requirements:
-  must_have_features: ["Quick add"]
+  must_have_features: ["F-001: Quick add — add a task in under 3 seconds."]
 
 technical_constraints:
   primary_language: python

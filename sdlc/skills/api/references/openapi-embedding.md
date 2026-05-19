@@ -61,14 +61,18 @@ Required:
   scalar aliases.
 - `properties` — for `type: object`. Each property is a JSON Schema
   2020-12 subset.
+- `projects_from` — SDLC sibling. **Required** for object DTOs: the
+  DATA entity name this DTO projects from (must exist in
+  `DATA-MODEL.entities`). Set to `null` only for genuine cross-entity
+  wrappers — paginated list envelopes, search responses, RFC-7807
+  Problem, aggregated dashboard payloads. Downstream agents wire
+  ORM↔DTO mappers off this field; a missing `projects_from` on a
+  single-entity DTO is a soft fail (validator warns).
 
 Recommended:
 
 - `required` — list of property names that are non-null.
 - `description` — one-line, optional.
-- `projects_from` — SDLC sibling. The DATA entity name this DTO
-  projects from. Set to `null` for DTOs that don't map to a single
-  entity (e.g. paginated list wrappers, search response).
 
 ### Per-property (a JSON Schema 2020-12 subset)
 
@@ -170,26 +174,101 @@ are **wire DTOs**, NOT persistent entities. The line:
 - **Persistent entity** = a row in storage (ORM model, database
   schema, document store). Defined in `docs/DATA-MODEL.yaml`.
   Includes fields like `password_hash`, `internal_flags`,
-  `soft_deleted_at`, server-only metadata.
+  `deleted_at`, server-only metadata.
 - **DTO (Data Transfer Object)** = the shape sent over the wire to a
   client. May omit persistence-only fields, rename for client
   ergonomics, add computed fields. Defined in this skill.
 
-Examples of the difference:
+### What to omit — anchored in DATA-MODEL
 
-| Concern | DATA entity (`User`) | API DTO (`User`) |
+`DATA-MODEL.yaml.data_classification` is the **authoritative source**
+for "what must not leak through public DTOs". When drafting a DTO for
+entity `<E>`, omit by default any field referenced as `<E>.<field>` in:
+
+- `data_classification.regulated_fields` — PHI / PCI / other regulated
+  data. Never expose in a public DTO; exposing requires a *named
+  admin-only DTO* (e.g. `UserAdmin`) with the user's explicit override
+  per resource.
+- `data_classification.encrypted_at_rest` — column-encrypted. Same
+  default-omit rule (the wire value would either be ciphertext or a
+  fresh decrypt the server shouldn't reveal lightly).
+- `data_classification.pii_fields` — case-by-case: PII like `email` is
+  usually present in the owner's own DTO but omitted from
+  `<E>Public` / cross-tenant DTOs. The agent must surface each PII
+  field per resource and let the user pick.
+
+Always omit (DATA convention, not in `data_classification`):
+
+- Password / token / secret hashes (`*_hash`, `*_secret`, `password_*`).
+- Soft-delete sentinels (`deleted_at`, `is_deleted`) — filter at the
+  read layer, never surface.
+- Server-only timestamps the client doesn't need (`indexed_at`,
+  `last_synced_at`).
+
+### Soft-delete and DELETE semantics
+
+If `DATA-MODEL.audit_and_lifecycle.soft_delete: true`, the
+`delete-<resource>` endpoint is **soft-delete**: returns `204 No
+Content`, sets `deleted_at` server-side, and subsequent reads filter
+the row out. The DTO does NOT include `deleted_at`. If
+`soft_delete: false` (or unset), DELETE is a hard-delete — the row is
+gone, subsequent reads return `404`.
+
+Tell the user during theme 10 which mode the resource will run in so
+the choice ends up traceable.
+
+### Identifier formats — driven by `id_strategy.scheme`
+
+The path parameter `{id}` and DTO `id` field format follow
+`DATA-MODEL.id_strategy.scheme`:
+
+| `id_strategy.scheme` | DTO `id` | Path-param `format` |
 |---|---|---|
-| Authentication hashes | `password_hash: string` | omit |
-| Soft-delete flags | `deleted_at: timestamp\|null` | omit; filter on read |
-| Internal state | `internal_state: enum` | omit |
-| Public id | `id: uuid` | `id: uuid` |
-| Email | `email: string` | `email: string` (often omit for non-admin DTOs) |
-| Computed fields | n/a | `full_name: string` (computed from first+last) |
-| Renamed fields | `created_at: timestamp` | `created_at: timestamp` (or `createdAt` for JS clients) |
+| `uuid_v4`, `uuid_v7` | `type: string, format: uuid` | `format: uuid` |
+| `ulid` | `type: string, format: ulid` (custom) | `pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"` |
+| `nanoid` | `type: string` | `pattern: "^[A-Za-z0-9_-]{10,21}$"` |
+| `serial_int`, `bigserial` | `type: integer, format: int64` | `format: int64` |
+| `natural_key` | `type: string` | application-specific |
+| `mixed` | follow per-entity `primary_key` field type | follow per-entity |
 
-When in doubt: ask the user during theme 10. Suggest sane projections
-(`User`, `UserCreate`, `UserUpdate`, `UserPublic`) and let them
-override.
+For composite primary keys (`primary_key: [tenant_id, slug]`), the
+path takes both segments: `/v1/tenants/{tenant_id}/items/{slug}`.
+
+### Enum DTO fields — pulled from `enums_and_lookups`
+
+If a DTO field maps to a DATA field of `type: enum` or to a
+`lookup_tables` entry, embed the enum values directly:
+
+```yaml
+schemas:
+  Order:
+    projects_from: Order
+    properties:
+      status:
+        type: string
+        enum: [pending, paid, shipped, refunded]  # from DATA.enums_and_lookups.enums.OrderStatus
+```
+
+Downstream codegen needs the enum inline because enums in the OpenAPI
+output drive client-side types.
+
+### DTO projections — recommended starter set
+
+For each entity `<E>` with no overrides:
+
+- `<E>` — the canonical read DTO (omit per `data_classification`).
+- `<E>Create` — the POST body (omit server-set fields: `id`,
+  `created_at`, `updated_at`, any `default: now()` field).
+- `<E>Update` — the PATCH body (all properties optional; PUT is rare
+  but if present requires the same fields as Create).
+- `<E>Admin` (optional) — privileged read DTO that re-exposes
+  regulated / sensitive fields; gated behind an admin scope.
+- `<E>Public` (optional) — cross-tenant read DTO that further hides
+  PII (e.g. exposes only `id`, `display_name`).
+
+When in doubt: ask the user during theme 10. The default-omit rule
+above is conservative — re-adding a field is a one-line override; a
+leaked field is a security incident.
 
 ## OpenAPI deep-validation is out of scope for v1
 
