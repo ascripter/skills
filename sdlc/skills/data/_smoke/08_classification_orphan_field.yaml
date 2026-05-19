@@ -1,0 +1,50 @@
+# Invalid: data_classification.pii_fields references a field that doesn't exist.
+# Should fail the classification-integrity cross-check at status: complete.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "88888888-8888-8888-8888-888888888888"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  User:
+    description: "End user."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      email: { type: string, nullable: false, unique: true }
+    traces_prd_features: []
+
+relationships: []
+
+enums_and_lookups:
+  enums: {}
+
+indexes_and_queries:
+  access_patterns:
+    - description: "Login by email."
+      entity: User
+      fields: [email]
+      read_or_write: read
+
+integrity_and_constraints:
+  default_on_delete: restrict
+
+data_classification:
+  pii_fields:
+    - User.email           # OK — field exists
+    - User.nonexistent     # FAIL — field doesn't exist on User
+  regulated_fields: []
+  encrypted_at_rest: []

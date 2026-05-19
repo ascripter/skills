@@ -1,0 +1,54 @@
+# Invalid: relationships[0].to_entity refers to an entity that doesn't exist.
+# Should fail the relationship-integrity cross-check at status: complete.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "99999999-9999-9999-9999-999999999999"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  User:
+    description: "End user."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      widget_id: { type: uuid, nullable: true }
+    traces_prd_features: []
+
+relationships:
+  - from_entity: User
+    from_field: widget_id
+    to_entity: Widget        # Widget is not defined in `entities`
+    to_field: id
+    cardinality: "1:N"
+    on_delete: restrict
+
+enums_and_lookups:
+  enums: {}
+
+indexes_and_queries:
+  access_patterns:
+    - description: "Read users."
+      entity: User
+      fields: [id]
+      read_or_write: read
+
+integrity_and_constraints:
+  default_on_delete: restrict
+
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []

@@ -1,0 +1,52 @@
+# Invalid (when paired with sibling PRD.yaml): PRD declares F-001, F-002, F-003;
+# only F-001 is traced by an entity. Should fail feature-coverage cross-check
+# when status: complete. Validator MUST be run with --path pointing at this file
+# so it discovers the sibling PRD.yaml.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  Task:
+    description: "A unit of work."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      title: { type: string, nullable: false }
+    traces_prd_features:
+      - "F-001"
+    # F-002 and F-003 are NOT traced by any entity.
+
+relationships: []
+
+enums_and_lookups:
+  enums: {}
+
+indexes_and_queries:
+  access_patterns:
+    - description: "List tasks."
+      entity: Task
+      fields: [id]
+      read_or_write: read
+
+integrity_and_constraints:
+  default_on_delete: restrict
+
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []

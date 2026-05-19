@@ -1,0 +1,37 @@
+# Sibling PRD with 3 must-have features. Only F-001 is traced by DATA-MODEL.yaml,
+# so the feature-coverage cross-check should flag F-002 and F-003.
+
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "10101010-1010-1010-1010-101010101010"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+problem_opportunity:
+  problem_statement: "Tasks are hard to track."
+
+users_personas:
+  primary_users:
+    - "Engineering team leads"
+
+use_cases:
+  core_workflows:
+    - "Add a task"
+
+functional_requirements:
+  must_have_features:
+    - "F-001: Add a task"
+    - "F-002: Mark task done"
+    - "F-003: Comment on a task"
+
+technical_constraints:
+  primary_language: python
+  runtime_platform: server
+
+product_identity:
+  name: "Smoke Project"
+  one_liner: "A fixture for feature-coverage testing."

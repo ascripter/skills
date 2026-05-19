@@ -1,0 +1,77 @@
+# Valid monorepo fixture with two products. status: complete.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "55555555-5555-5555-5555-555555555555"
+  monorepo: true
+  status: "complete"
+
+data_warnings: []
+
+products:
+  billing:
+    persistence:
+      primary_store: postgres
+      polyglot: false
+    id_strategy:
+      scheme: uuid_v7
+    entities:
+      Invoice:
+        description: "A billable invoice."
+        primary_key: id
+        fields:
+          id: { type: uuid, primary_key: true, nullable: false }
+          amount_cents: { type: bigint, nullable: false }
+          customer_id: { type: uuid, nullable: false }
+        traces_prd_features: []
+        traces_ux_surfaces: []
+    relationships: []
+    enums_and_lookups:
+      enums:
+        InvoiceStatus: [draft, open, paid, void]
+    indexes_and_queries:
+      access_patterns:
+        - description: "Get invoices for a customer."
+          entity: Invoice
+          fields: [customer_id]
+          read_or_write: read
+    integrity_and_constraints:
+      default_on_delete: restrict
+    data_classification:
+      pii_fields: []
+      regulated_fields: []
+      encrypted_at_rest: []
+
+  notifications:
+    persistence:
+      primary_store: postgres
+      polyglot: false
+    id_strategy:
+      scheme: uuid_v7
+    entities:
+      Notification:
+        description: "A queued user notification."
+        primary_key: id
+        fields:
+          id: { type: uuid, primary_key: true, nullable: false }
+          recipient_id: { type: uuid, nullable: false }
+          payload: { type: jsonb, nullable: false }
+        traces_prd_features: []
+        traces_ux_surfaces: []
+    relationships: []
+    enums_and_lookups:
+      enums: {}
+    indexes_and_queries:
+      access_patterns:
+        - description: "List notifications for a recipient."
+          entity: Notification
+          fields: [recipient_id]
+          read_or_write: read
+    integrity_and_constraints:
+      default_on_delete: restrict
+    data_classification:
+      pii_fields: []
+      regulated_fields: []
+      encrypted_at_rest: []

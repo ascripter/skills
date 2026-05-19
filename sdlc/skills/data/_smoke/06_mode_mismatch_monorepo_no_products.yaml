@@ -1,0 +1,11 @@
+# Invalid: monorepo: true but no products key. Caught by model_validator.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "66666666-6666-6666-6666-666666666666"
+  monorepo: true
+  status: "draft"
+
+# missing: products

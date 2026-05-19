@@ -1,0 +1,100 @@
+# Minimal valid single-product DATA-MODEL fixture. status: complete.
+# All required fields filled; all cross-checks pass.
+# No sibling PRD.yaml exists in this folder, so feature-coverage check sees
+# zero PRD features (uncovered_features list is empty -> passes).
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "11111111-1111-1111-1111-111111111111"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  primary_store: postgres
+  primary_store_confidence: confirmed
+  primary_store_rationale: "Team is fluent; strong transactional needs."
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+  scheme_confidence: confirmed
+  scheme_rationale: "Time-orderable PKs; no surrogate-leak concerns."
+
+entities:
+  User:
+    description: "Authenticated end-user."
+    primary_key: id
+    fields:
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+      email:
+        type: string
+        nullable: false
+        unique: true
+      created_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+    traces_prd_features: []
+    traces_ux_surfaces: []
+  Project:
+    description: "A workspace owned by a user."
+    primary_key: id
+    fields:
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+      name:
+        type: string
+        nullable: false
+      owner_id:
+        type: uuid
+        nullable: false
+        references: User.id
+        on_delete: cascade
+    traces_prd_features: []
+    traces_ux_surfaces: []
+
+relationships:
+  - from_entity: Project
+    from_field: owner_id
+    to_entity: User
+    to_field: id
+    cardinality: "1:N"
+    on_delete: cascade
+    comment: "A user has many projects."
+
+enums_and_lookups:
+  enums: {}
+  lookup_tables: []
+
+indexes_and_queries:
+  access_patterns:
+    - description: "List projects owned by a user, newest first."
+      entity: Project
+      fields: [owner_id, created_at]
+      read_or_write: read
+  expected_indexes:
+    - entity: Project
+      fields: [owner_id, created_at]
+      unique: false
+      type: btree
+
+integrity_and_constraints:
+  default_on_delete: restrict
+  unique_constraints: []
+  check_constraints: []
+
+data_classification:
+  pii_fields:
+    - User.email
+  regulated_fields: []
+  encrypted_at_rest: []
+  retention_policy_default: "Indefinite"

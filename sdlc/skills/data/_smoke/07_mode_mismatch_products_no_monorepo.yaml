@@ -1,0 +1,14 @@
+# Invalid: products is set but monorepo: false. Caught by model_validator.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "77777777-7777-7777-7777-777777777777"
+  monorepo: false
+  status: "draft"
+
+products:
+  billing:
+    persistence:
+      primary_store: postgres

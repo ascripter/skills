@@ -1,0 +1,27 @@
+# Valid draft: status: draft with gaps. Validator should exit 0 [DRAFT].
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "44444444-4444-4444-4444-444444444444"
+  monorepo: false
+  status: "draft"
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  User:
+    description: "Authenticated user."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+    # traces_prd_features missing — OK at draft status.
+
+# relationships key missing entirely — OK at draft.
+# Many other blocks omitted — OK at draft.

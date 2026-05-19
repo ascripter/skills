@@ -1,0 +1,40 @@
+# Invalid: persistence.primary_store has an unknown enum value.
+# Should fail at schema validation step (pydantic ValidationError).
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "22222222-2222-2222-2222-222222222222"
+  monorepo: false
+  status: "draft"
+
+persistence:
+  primary_store: cockroach   # not in the PrimaryStore enum
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v4
+
+entities:
+  User:
+    description: "Test entity."
+    primary_key: id
+    fields:
+      id:
+        type: uuid
+        primary_key: true
+
+relationships: []
+
+enums_and_lookups:
+  enums: {}
+
+indexes_and_queries:
+  access_patterns: []
+
+integrity_and_constraints:
+  default_on_delete: restrict
+
+data_classification:
+  pii_fields: []

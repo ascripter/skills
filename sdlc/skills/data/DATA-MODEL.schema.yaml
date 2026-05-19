@@ -1,0 +1,383 @@
+# =============================================================================
+# DATA-MODEL.yaml — Canonical Schema Reference (persistent data model)
+# =============================================================================
+# Documents the full structure of docs/DATA-MODEL.yaml. NOT a runtime config — it
+# is the human-readable source of truth that `validate_schema.py` enforces.
+#
+# Two top-level shapes are supported, mirroring PRD.yaml / UX.yaml / API.yaml:
+#   1. SINGLE-PRODUCT (default): theme blocks live at the top level.
+#   2. MULTI-PRODUCT (monorepo): themes live under `products.<slug>.<theme>`.
+#      Triggered when the upstream PRD has `metadata.monorepo: true`.
+#
+# Conventions:
+#   - `null` (not omission) means "explicitly unanswered".
+#   - For trade-off fields, a sibling `<field>_rationale` (string) captures
+#     the *why*.
+#   - For pre-filled answers, a sibling `<field>_confidence` captures
+#     certainty: confirmed | inferred | assumption.
+#   - Enum values are lowercase snake_case strings.
+#   - Entity names are PascalCase (e.g. `User`, `Order`, `LineItem`).
+#   - Field names are snake_case (e.g. `created_at`, `user_id`).
+#   - `data_classification` lists fields by `Entity.field` reference, not
+#     inline on each field. Downstream agents cross-reference both blocks.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# metadata — always at top level, present in both single- and multi-product mode
+# -----------------------------------------------------------------------------
+metadata:
+  data_model_version: "1.0"                # schema version this file conforms to
+  last_updated: "2026-05-18T12:00:00Z"     # ISO-8601 UTC timestamp of last write
+  generated_by: sdlc-data                  # always literal string "sdlc-data"
+  session_id: "00000000-0000-0000-0000-000000000000"  # UUID of the interview session
+  monorepo: false                          # mirrors PRD.metadata.monorepo
+  status: "draft"                          # "draft" | "complete"
+                                           # writer sets to "complete" only when:
+                                           #   1) all required fields are filled,
+                                           #   2) the validator passes schema +
+                                           #      every cross-check (feature
+                                           #      coverage, relationship integrity,
+                                           #      classification integrity,
+                                           #      bounded-context partition,
+                                           #      mode-mismatch, volume-vs-scale).
+
+# data_warnings — informational notes. Used for:
+#   * uncovered PRD F-NNN features ("F-007 has no entity trace")
+#   * surface-coverage gaps ("surface 'foo' has no entity trace")
+#   * classification orphans ("data_classification.pii_fields[2] = User.foo not in User")
+#   * low-confidence answers
+#   * merge conflicts
+#   * deferred optional themes (now/skip/todo) recorded for downstream visibility
+data_warnings: []
+
+# =============================================================================
+# SINGLE-PRODUCT MODE — themes at top level, in interview order
+# (omit the entire `products:` key in this mode)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# persistence — the primary durable store and any secondary stores
+# (cache, blob, search). Pre-filled from PRD.data_model.storage_preferences.
+# -----------------------------------------------------------------------------
+persistence:
+  primary_store: null              # REQUIRED — one of:
+                                   #   postgres | mysql | sqlite | mongodb |
+                                   #   dynamodb | sqlserver | oracle | other
+  primary_store_confidence: null   # confirmed | inferred | assumption
+  primary_store_rationale: null    # string — why this store?
+  polyglot: false                  # bool — true if any secondary_stores present
+  secondary_stores: null           # list[SecondaryStore]; each:
+                                   #   - kind: redis | memcached | elasticsearch |
+                                   #           opensearch | meilisearch | kafka |
+                                   #           rabbitmq | clickhouse | duckdb | other
+                                   #     role: cache | search | queue | analytics |
+                                   #           timeseries | other
+                                   #     rationale: string
+  file_blob_store: null            # one of: none | s3 | gcs | azure_blob |
+                                   #         minio | local_fs | other
+  file_blob_store_bucket: null     # string — bucket / container / mount path
+  file_blob_store_rationale: null  # string — why this blob store?
+
+# -----------------------------------------------------------------------------
+# id_strategy — primary-key generation scheme + natural-key policy
+# -----------------------------------------------------------------------------
+id_strategy:
+  scheme: null                     # REQUIRED — one of:
+                                   #   uuid_v4 | uuid_v7 | ulid | nanoid |
+                                   #   serial_int | bigserial | natural_key | mixed
+  scheme_confidence: null
+  scheme_rationale: null           # string — why this scheme?
+  natural_keys: null               # list[NaturalKey]; each:
+                                   #   - entity: PascalCaseEntityName
+                                   #     fields: [snake_case, ...]   # composite OK
+                                   #     reason: string
+
+# -----------------------------------------------------------------------------
+# entities — the heart of the data model. Dict keyed by PascalCaseEntityName.
+# Each entity carries its fields, primary key, and traceability back to PRD
+# features / UX surfaces.
+# -----------------------------------------------------------------------------
+entities:                          # REQUIRED — dict[<PascalCaseEntityName>, Entity]
+                                   # MUST be non-empty in status: complete.
+  User:                            # example entity
+    description: "Authenticated end-user of the platform."
+    primary_key: id                # string OR list[string] (for composite keys)
+    fields:                        # REQUIRED — dict[snake_case, Field]
+      id:
+        type: uuid                 # one of: uuid | string | text | int | bigint |
+                                   #         decimal | float | bool | date | time |
+                                   #         timestamp | timestamptz | json | jsonb |
+                                   #         enum | binary | blob | array | other
+        nullable: false            # bool — default false
+        primary_key: true          # bool — default false
+        unique: true               # bool — default false
+        default: null              # string | null — SQL/codegen default expression
+        references: null           # null OR "<Entity>.<field>" string (FK)
+        on_delete: null            # one of: cascade | restrict | set_null |
+                                   #         no_action (applies only if references)
+        check: null                # string — check constraint expression
+        comment: null              # string — human-readable note
+      email:
+        type: string
+        nullable: false
+        unique: true
+        comment: "Login identifier; case-insensitive."
+      created_at:
+        type: timestamptz
+        nullable: false
+        default: "now()"
+    traces_prd_features: null      # list[string] — F-NNN feature IDs this
+                                   # entity realizes (e.g. ["F-001", "F-002"])
+    traces_ux_surfaces: null       # list[string] — UX surface_ids that read/write
+                                   # this entity (e.g. ["dashboard", "user-detail"])
+
+# -----------------------------------------------------------------------------
+# relationships — explicit edges between entities. Inline FK references on
+# field-level (entities.<E>.fields.<f>.references) are still allowed, but
+# this block is the canonical place to express cardinality + cascade rules
+# and any many-to-many join tables.
+# -----------------------------------------------------------------------------
+relationships:                     # REQUIRED — list[Relationship]; may be empty
+                                   # if the model has no cross-entity edges.
+                                   # Each:
+  - from_entity: null              # PascalCaseEntityName (must exist in `entities`)
+    from_field: null               # snake_case field on from_entity
+    to_entity: null                # PascalCaseEntityName (must exist in `entities`)
+    to_field: null                 # snake_case field on to_entity
+    cardinality: null              # one of: "1:1" | "1:N" | "N:M"
+    on_delete: null                # one of: cascade | restrict | set_null | no_action
+    on_update: null                # one of: cascade | restrict | set_null | no_action
+    join_table: null               # PascalCaseEntityName — required only when
+                                   # cardinality == "N:M" (and join_table must
+                                   # itself be an entity in `entities`)
+    comment: null                  # string — semantics, e.g. "A user has many orders."
+
+# -----------------------------------------------------------------------------
+# enums_and_lookups — first-class enum types + entities that act as lookups.
+# Lookup entities are real rows in the DB but conceptually closed sets.
+# -----------------------------------------------------------------------------
+enums_and_lookups:                 # REQUIRED — block may be present-but-empty.
+  enums: null                      # dict[<EnumName>, list[string]]; e.g.
+                                   #   OrderStatus: [pending, paid, shipped, refunded]
+  lookup_tables: null              # list[<PascalCaseEntityName>] — entities in
+                                   # `entities` that are static lookup tables
+                                   # (so codegen can treat them specially).
+
+# -----------------------------------------------------------------------------
+# indexes_and_queries — expected query patterns and the indexes that serve them.
+# Drives downstream index DDL, query optimisation, and access-pattern review.
+# -----------------------------------------------------------------------------
+indexes_and_queries:               # REQUIRED — block may be present-but-empty.
+  access_patterns: null            # list[AccessPattern]; each:
+                                   #   - description: string (e.g. "list orders by user, newest first")
+                                   #     entity: PascalCaseEntityName
+                                   #     fields: [snake_case, ...]
+                                   #     expected_qps: float | null
+                                   #     latency_budget_ms: int | null
+                                   #     read_or_write: read | write | both
+  expected_indexes: null           # list[Index]; each:
+                                   #   - entity: PascalCaseEntityName
+                                   #     fields: [snake_case, ...]
+                                   #     unique: bool
+                                   #     type: btree | hash | gin | gist |
+                                   #           fulltext | composite | other
+                                   #     name: string | null (codegen may auto-name)
+
+# -----------------------------------------------------------------------------
+# integrity_and_constraints — DB-level invariants beyond per-field constraints.
+# -----------------------------------------------------------------------------
+integrity_and_constraints:         # REQUIRED — block may be present-but-empty.
+  default_on_delete: null          # one of: cascade | restrict | set_null | no_action
+                                   # applied to FKs that don't specify their own
+  unique_constraints: null         # list[UniqueConstraint]; each:
+                                   #   - entity: PascalCaseEntityName
+                                   #     fields: [snake_case, ...]   # composite OK
+                                   #     name: string | null
+  check_constraints: null          # list[CheckConstraint]; each:
+                                   #   - entity: PascalCaseEntityName
+                                   #     expression: "amount > 0"     # SQL expr
+                                   #     name: string | null
+                                   #     comment: string | null
+
+# -----------------------------------------------------------------------------
+# data_classification — privacy / compliance tagging at the field level.
+# Fields are referenced as "Entity.field". Heavily pre-filled from
+# PRD.security_compliance (data_sensitivity, regulatory_requirements,
+# encryption_at_rest). Downstream `api` uses this to gate DTO exposure;
+# `arch` uses it for KMS/segregation decisions.
+# -----------------------------------------------------------------------------
+data_classification:               # REQUIRED — block may have empty lists.
+  pii_fields: null                 # list[string] — "Entity.field" — personally
+                                   # identifying information (email, name, phone).
+  regulated_fields: null           # list[string] — "Entity.field" — PHI (HIPAA),
+                                   # PCI (card data), or other regulated content.
+  encrypted_at_rest: null          # list[string] — "Entity.field" — must be
+                                   # column-encrypted independent of disk encryption.
+  encryption_kms_ref: null         # string — KMS key alias or ARN; e.g.
+                                   #   "alias/data-classification-default"
+  retention_policy_default: null   # string — default retention; e.g.
+                                   #   "Indefinite" | "7 years" | "30 days post-deletion"
+
+# -----------------------------------------------------------------------------
+# bounded_contexts — OPTIONAL, opt-in DDD grouping above entities. When
+# present, every entity in `entities` must be assigned to exactly one
+# context. When absent (default), `entities` is treated as one flat context.
+# -----------------------------------------------------------------------------
+bounded_contexts:                  # optional — dict[<context_name>, BoundedContext]
+  null
+  # auth:
+  #   description: "Identity, sessions, tokens."
+  #   entities: [User, Session, Token]
+  # billing:
+  #   description: "Invoices, payments, subscriptions."
+  #   entities: [Invoice, Payment, Subscription]
+
+# -----------------------------------------------------------------------------
+# audit_and_lifecycle — OPTIONAL. Pre-filled from PRD.security_compliance.audit_logging.
+# Defines whether entities carry audit columns and how deletion is modelled.
+# -----------------------------------------------------------------------------
+audit_and_lifecycle:               # optional
+  null
+  # audit_columns:
+  #   created_at: true
+  #   updated_at: true
+  #   created_by: true               # FK to User.id by convention
+  #   updated_by: true
+  #   deleted_at: true               # implies soft_delete: true
+  # soft_delete: true                # bool — affects every read query
+  # archive_strategy: "Move to cold storage after 90 days deleted_at."
+  # applies_to: null                 # null = all entities; list = subset
+
+# -----------------------------------------------------------------------------
+# versioning_and_history — OPTIONAL. Row-level versioning, event sourcing,
+# temporal tables.
+# -----------------------------------------------------------------------------
+versioning_and_history:            # optional
+  null
+  # record_versioning: row_version  # none | row_version | temporal_table | event_sourcing
+  # history_retention: "2 years"
+  # applies_to: [Order, Invoice]    # list[<PascalCaseEntityName>] | null = all
+
+# -----------------------------------------------------------------------------
+# scale_and_retention — OPTIONAL by default, REQUIRED if
+# PRD.data_model.data_volume_estimate ∈ {terabytes, petabytes}.
+# Drives partitioning, sharding, retention policies.
+# -----------------------------------------------------------------------------
+scale_and_retention:               # optional (promoted to required for TB+/PB+)
+  null
+  # partitioning_key: created_at   # string — column name or expression
+  # partitioning_strategy: range   # one of: range | list | hash | none
+  # sharding_key: tenant_id        # string | null — null = single-shard
+  # retention_policies:            # list[RetentionPolicy]
+  #   - entity: AuditLog
+  #     ttl: "1 year"
+  #     policy: hard_delete         # hard_delete | archive | anonymize
+
+# -----------------------------------------------------------------------------
+# migrations_and_evolution — OPTIONAL.
+# -----------------------------------------------------------------------------
+migrations_and_evolution:          # optional
+  null
+  # tool: alembic                  # one of: alembic | flyway | liquibase |
+  #                                #         prisma_migrate | drizzle_kit |
+  #                                #         sqlx | knex | django_migrate | other
+  # zero_downtime_strategy: "Expand-contract: add column nullable, backfill, then enforce NOT NULL."
+  # rollback_policy: "Every migration must have a tested down() — verified in CI."
+
+# -----------------------------------------------------------------------------
+# transactions_and_consistency — OPTIONAL.
+# -----------------------------------------------------------------------------
+transactions_and_consistency:      # optional
+  null
+  # default_isolation: read_committed  # read_committed | repeatable_read |
+  #                                    # serializable | snapshot
+  # transaction_boundaries:
+  #   - "Order placement spans Order + LineItem + InventoryReservation in one tx."
+
+# -----------------------------------------------------------------------------
+# caching_layer — OPTIONAL. Linked to persistence.secondary_stores when
+# polyglot is true and a redis/memcached store is present.
+# -----------------------------------------------------------------------------
+caching_layer:                     # optional
+  null
+  # layer: redis                   # one of: none | in_process | redis |
+  #                                #         memcached | other
+  # cached_entities:
+  #   - entity: User
+  #     ttl: "5m"
+  #     invalidation: "On write to User; ttl fallback."
+  #   - entity: Project
+  #     ttl: "1h"
+  #     invalidation: "Manual purge on PUT /projects/{id}."
+
+# -----------------------------------------------------------------------------
+# search_and_analytics — OPTIONAL.
+# -----------------------------------------------------------------------------
+search_and_analytics:              # optional
+  null
+  # fulltext_engine: postgres_fts  # none | postgres_fts | elasticsearch |
+  #                                # opensearch | meilisearch | typesense
+  # indexed_entities:              # only when fulltext_engine != none
+  #   - entity: Project
+  #     fields: [name, description]
+  # analytics_target: bigquery     # none | bigquery | snowflake | redshift |
+  #                                # duckdb | other
+  # cdc_strategy: outbox           # none | debezium | outbox | trigger | other
+
+# -----------------------------------------------------------------------------
+# seed_and_fixtures — OPTIONAL.
+# -----------------------------------------------------------------------------
+seed_and_fixtures:                 # optional
+  null
+  # seed_strategy: "Idempotent SQL script run in entrypoint; checks SeedMarker."
+  # dev_fixtures_path: "fixtures/dev/"
+
+# -----------------------------------------------------------------------------
+# external_data_sources — OPTIONAL. Pre-filled from
+# PRD.functional_requirements.integrations_required. Each entry describes
+# how an outside data feed is ingested.
+# -----------------------------------------------------------------------------
+external_data_sources:             # optional — list[ExternalDataSource]
+  null
+  # - name: stripe
+  #   sync_model: webhook            # pull | push | webhook | stream
+  #   conflict_resolution: "Last-writer-wins; Stripe is source of truth for amounts."
+  #   refresh_interval: "real-time (webhook)"
+  #   maps_to_entity: Payment
+
+# =============================================================================
+# MULTI-PRODUCT MODE (monorepo) — uncomment and use *instead of* the top-level
+# blocks above. Each entry under `products:` mirrors the single-product shape.
+# Triggered when the upstream PRD has metadata.monorepo: true.
+# =============================================================================
+#
+# products:
+#   billing:
+#     persistence:
+#       primary_store: postgres
+#     id_strategy:
+#       scheme: uuid_v7
+#     entities:
+#       Invoice:
+#         primary_key: id
+#         fields:
+#           id: { type: uuid, primary_key: true, nullable: false }
+#           amount_cents: { type: bigint, nullable: false }
+#           customer_id: { type: uuid, nullable: false, references: Customer.id }
+#         traces_prd_features: [F-001, F-002]
+#     relationships:
+#       - from_entity: Invoice
+#         from_field: customer_id
+#         to_entity: Customer
+#         to_field: id
+#         cardinality: "1:N"
+#         on_delete: restrict
+#     enums_and_lookups: { enums: { InvoiceStatus: [draft, open, paid, void] } }
+#     indexes_and_queries: { access_patterns: [], expected_indexes: [] }
+#     integrity_and_constraints: { default_on_delete: restrict }
+#     data_classification:
+#       pii_fields: ["Customer.email"]
+#       regulated_fields: []
+#       encrypted_at_rest: []
+#   notifications:
+#     # ...

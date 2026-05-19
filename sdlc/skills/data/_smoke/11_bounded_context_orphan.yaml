@@ -1,0 +1,68 @@
+# Invalid: bounded_contexts is set but entity Notification is not assigned to
+# any context. Should fail bounded-context-partition cross-check at status: complete.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  User:
+    description: "End user."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+    traces_prd_features: []
+  Session:
+    description: "Authentication session."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      user_id: { type: uuid, nullable: false }
+    traces_prd_features: []
+  Notification:
+    description: "Outbound notification."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+    traces_prd_features: []
+
+relationships: []
+
+enums_and_lookups:
+  enums: {}
+
+indexes_and_queries:
+  access_patterns:
+    - description: "Get user by id."
+      entity: User
+      fields: [id]
+      read_or_write: read
+
+integrity_and_constraints:
+  default_on_delete: restrict
+
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []
+
+bounded_contexts:
+  auth:
+    description: "Identity & sessions."
+    entities:
+      - User
+      - Session
+    # Notification is NOT in any context — orphan.

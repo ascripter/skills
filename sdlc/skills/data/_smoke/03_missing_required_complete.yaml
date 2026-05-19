@@ -1,0 +1,33 @@
+# Invalid: status: complete but entities is empty.
+# Should fail because `entities` is required-and-non-empty.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-18T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "33333333-3333-3333-3333-333333333333"
+  monorepo: false
+  status: "complete"
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities: {}
+
+relationships: []
+
+enums_and_lookups:
+  enums: {}
+
+indexes_and_queries:
+  access_patterns: []
+
+integrity_and_constraints:
+  default_on_delete: restrict
+
+data_classification:
+  pii_fields: []
