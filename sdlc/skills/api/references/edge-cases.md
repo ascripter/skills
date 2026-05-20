@@ -37,7 +37,7 @@ resource owning — e.g. "Send a weekly digest email" or
 "Theme switcher (light/dark)". Behaviour:
 
 - If the feature is genuinely non-API (UI-only theming, internal cron
-  job, batch process): add the F-NNN to `non_api_features`. The
+  job, batch process): add the FR-NNN to `non_api_features`. The
   feature-coverage check passes without a trace.
 - If the feature spans multiple resources but doesn't fit any one:
   propose a cross-cutting resource (`/v1/digest`, `/v1/admin`, …)
@@ -47,8 +47,8 @@ resource owning — e.g. "Send a weekly digest email" or
 
 ### Same resource implements many features
 
-Fine. List every matching F-NNN in `traces_prd_features`. The
-coverage check is satisfied as long as each F-NNN appears in at least
+Fine. List every matching FR-NNN in `traces_prd_features`. The
+coverage check is satisfied as long as each FR-NNN appears in at least
 one resource's traces; one resource can carry several features.
 
 ### Resource has no primary entity

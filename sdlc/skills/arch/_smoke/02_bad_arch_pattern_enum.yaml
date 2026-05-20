@@ -1,0 +1,32 @@
+# 02 — Invalid architecture_pattern.pattern enum value.
+# Expectation: validator exits 1 with pydantic ValidationError.
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "22222222-2222-2222-2222-222222222222"
+  status: "draft"
+
+architecture_pattern:
+  pattern: spaghetti        # invalid: not in ArchPattern enum
+  pattern_confidence: assumption
+  rationale: "Bad enum on purpose."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "irrelevant"
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: defined
+
+edges: []

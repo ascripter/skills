@@ -1,5 +1,5 @@
-# Invalid (when paired with sibling PRD.yaml): PRD declares F-001, F-002, F-003;
-# only F-001 is traced by an entity. Should fail feature-coverage cross-check
+# Invalid (when paired with sibling PRD.yaml): PRD declares FR-001, FR-002, FR-003;
+# only FR-001 is traced by an entity. Should fail feature-coverage cross-check
 # when status: complete. Validator MUST be run with --path pointing at this file
 # so it discovers the sibling PRD.yaml.
 
@@ -28,8 +28,8 @@ entities:
       id: { type: uuid, primary_key: true, nullable: false }
       title: { type: string, nullable: false }
     traces_prd_features:
-      - "F-001"
-    # F-002 and F-003 are NOT traced by any entity.
+      - "FR-001"
+    # FR-002 and FR-003 are NOT traced by any entity.
 
 relationships: []
 

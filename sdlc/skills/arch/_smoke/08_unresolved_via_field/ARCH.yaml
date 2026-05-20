@@ -1,0 +1,46 @@
+# 08 — Edge.via_resource_id points to a resource not in any API__*.yaml.
+# Expectation: validator exits 1 (claims complete but via_* resolution fails).
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "88888888-8888-8888-8888-888888888888"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "via_* resolution test."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: frontend
+    archetype: web-frontend
+    purpose: "Frontend."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: static_asset
+    external: false
+    status: confirmed
+  - container_id: backend
+    archetype: backend-api
+    purpose: "Backend."
+    owns_api_resources: ["users"]
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+
+edges:
+  - from: frontend
+    to: backend
+    type: calls
+    via_resource_id: ghosts        # not a resource in any API__*.yaml
+    note: "should fail via_resource_id resolution"

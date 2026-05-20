@@ -12,7 +12,7 @@ metadata:
   status: "complete"
 
 data_warnings:
-  - "PRD.data_model block absent — primary_store, id_strategy, and entity list derived entirely from F-NNN + UX signals; all marked inferred where applicable."
+  - "PRD.data_model block absent — primary_store, id_strategy, and entity list derived entirely from FR-NNN + UX signals; all marked inferred where applicable."
   - "PRD.security_compliance block absent — pii_fields scoped conservatively to User.email only."
   - "Optional themes deferred: versioning_and_history, scale_and_retention, migrations_and_evolution, transactions_and_consistency, caching_layer, search_and_analytics, seed_and_fixtures, external_data_sources."
 
@@ -27,7 +27,7 @@ persistence:
   secondary_stores: []
   file_blob_store: none
   file_blob_store_bucket: null
-  file_blob_store_rationale: "No file/blob features in PRD F-001/F-002."
+  file_blob_store_rationale: "No file/blob features in PRD FR-001/FR-002."
 
 # -----------------------------------------------------------------------------
 # id_strategy — primary-key generation scheme
@@ -76,8 +76,8 @@ entities:
         nullable: false
         default: "now()"
     traces_prd_features:
-      - "F-001"
-      - "F-002"
+      - "FR-001"
+      - "FR-002"
     traces_ux_surfaces:
       - "dashboard"
   User:
@@ -108,8 +108,8 @@ entities:
         nullable: false
         default: "now()"
     traces_prd_features:
-      - "F-001"
-      - "F-002"
+      - "FR-001"
+      - "FR-002"
     traces_ux_surfaces:
       - "dashboard"
 

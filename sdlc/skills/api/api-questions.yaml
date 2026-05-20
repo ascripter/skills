@@ -92,7 +92,7 @@ themes:
     synthesis: true
     description: >
       The full list of API resources. Synthesized from DATA-MODEL entities
-      + UX surface interactions + PRD F-NNN features; per-item drill-down
+      + UX surface interactions + PRD FR-NNN features; per-item drill-down
       confirms each resource's id, base_path, primary_entity, and traces
       back to PRD features + UX surfaces.
 
@@ -685,8 +685,8 @@ questions:
   - theme: per_resource_deepdive
     id: traces_prd_features
     schema_path: resource.traces_prd_features
-    question: "Which PRD must_have_features (F-NNN) does this resource implement?"
-    hint: "Drives the feature-coverage check. Every PRD F-NNN must end up traced here OR listed in non_api_features."
+    question: "Which PRD must_have_features (FR-NNN) does this resource implement?"
+    hint: "Drives the feature-coverage check. Every PRD FR-NNN must end up traced here OR listed in non_api_features."
     suggested_answers: []
     free_text_allowed: true
     required: true

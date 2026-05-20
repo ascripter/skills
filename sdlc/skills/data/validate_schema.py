@@ -23,7 +23,7 @@ Validates:
          entity belongs to exactly one context. Failure -> hard error.
        - Mode-mismatch: monorepo: true requires products:; false forbids it.
          Failure -> hard error (raised by the pydantic model_validator).
-       - Feature coverage: every PRD must_have_features F-NNN appears in some
+       - Feature coverage: every PRD must_have_features FR-NNN appears in some
          entity's traces_prd_features. Failure -> force draft (soft).
        - Volume-vs-scale gate: if PRD data_volume_estimate in {terabytes,
          petabytes}, scale_and_retention must be non-null. Failure -> force
@@ -296,7 +296,7 @@ class FieldSpec(_Permissive):
     primary_key: Optional[bool] = None
     unique: Optional[bool] = None
     default: Optional[Any] = None
-    references: Optional[str] = None       # "Entity.field"
+    references: Optional[str] = None  # "Entity.field"
     on_delete: Optional[OnDelete] = None
     check: Optional[str] = None
     comment: Optional[str] = None
@@ -599,9 +599,7 @@ class DataModel(BaseModel):
 
         if self.metadata.monorepo:
             if not self.products:
-                raise ValueError(
-                    "metadata.monorepo is true but `products` is missing or empty"
-                )
+                raise ValueError("metadata.monorepo is true but `products` is missing or empty")
             if any_single:
                 raise ValueError(
                     "monorepo mode set but top-level theme blocks are present; "
@@ -642,7 +640,7 @@ ENTITY_REQUIRED_PATHS: List[str] = [
 # Paths where the key must be PRESENT (not None) but an empty list is allowed.
 # Matches the top-level pattern for `relationships`, `pii_fields`, and
 # `access_patterns`: the user has to explicitly answer the question, but
-# "I don't trace any F-NNN feature" is a valid answer for purely-backend
+# "I don't trace any FR-NNN feature" is a valid answer for purely-backend
 # entities like AuditLog. The feature-coverage cross-check enforces global
 # completeness across all entities.
 ENTITY_PRESENT_ONLY_PATHS: set = {"traces_prd_features"}
@@ -689,8 +687,11 @@ def check_required(dm: DataModel) -> List[str]:
                 if not isinstance(val, dict) or len(val) == 0:
                     missing.append(f"{scope_label}{path}")
                 continue
-            if path in ("relationships", "data_classification.pii_fields",
-                        "indexes_and_queries.access_patterns"):
+            if path in (
+                "relationships",
+                "data_classification.pii_fields",
+                "indexes_and_queries.access_patterns",
+            ):
                 # Key must be present (not None); empty list is OK.
                 # An explicit "no edges / no PII / no listed patterns" answer
                 # is valid — the agent has thought about it and recorded it.
@@ -729,7 +730,7 @@ def check_required(dm: DataModel) -> List[str]:
 # Cross-checks
 # =============================================================================
 
-_FEATURE_ID_RE = re.compile(r"^F-\d+", re.IGNORECASE)
+_FEATURE_ID_RE = re.compile(r"^FR-\d+", re.IGNORECASE)
 
 
 def _entity_names(root: object) -> List[str]:
@@ -772,22 +773,14 @@ def check_relationship_integrity(root: object) -> List[str]:
         if te and te not in enames:
             errs.append(f"relationships[{i}].to_entity: '{te}' not in entities")
         if fe in enames and ff and ff not in _entity_field_names(root, fe):
-            errs.append(
-                f"relationships[{i}].from_field: '{ff}' not a field on '{fe}'"
-            )
+            errs.append(f"relationships[{i}].from_field: '{ff}' not a field on '{fe}'")
         if te in enames and tf and tf not in _entity_field_names(root, te):
-            errs.append(
-                f"relationships[{i}].to_field: '{tf}' not a field on '{te}'"
-            )
+            errs.append(f"relationships[{i}].to_field: '{tf}' not a field on '{te}'")
         if card == Cardinality.many_many:
             if not jt:
-                errs.append(
-                    f"relationships[{i}].join_table: required when cardinality == 'N:M'"
-                )
+                errs.append(f"relationships[{i}].join_table: required when cardinality == 'N:M'")
             elif jt not in enames:
-                errs.append(
-                    f"relationships[{i}].join_table: '{jt}' not in entities"
-                )
+                errs.append(f"relationships[{i}].join_table: '{jt}' not in entities")
     return errs
 
 
@@ -855,10 +848,7 @@ def check_classification_integrity(root: object) -> List[str]:
                 continue
             ent, _, fld = ref.partition(".")
             if ent not in entities:
-                errs.append(
-                    f"data_classification.{list_name}[{i}]: entity "
-                    f"'{ent}' not found"
-                )
+                errs.append(f"data_classification.{list_name}[{i}]: entity " f"'{ent}' not found")
                 continue
             if fld not in _entity_field_names(root, ent):
                 errs.append(
@@ -882,21 +872,16 @@ def check_bounded_context_partition(root: object) -> List[str]:
         ctx_ents = getattr(ctx, "entities", None) or []
         for ent in ctx_ents:
             if ent not in enames:
-                errs.append(
-                    f"bounded_contexts.{ctx_name}.entities: '{ent}' not in entities"
-                )
+                errs.append(f"bounded_contexts.{ctx_name}.entities: '{ent}' not in entities")
                 continue
             assignments[ent].append(ctx_name)
 
     for ent, ctxs in assignments.items():
         if len(ctxs) == 0:
-            errs.append(
-                f"bounded_contexts: entity '{ent}' is not assigned to any context"
-            )
+            errs.append(f"bounded_contexts: entity '{ent}' is not assigned to any context")
         elif len(ctxs) > 1:
             errs.append(
-                f"bounded_contexts: entity '{ent}' is assigned to multiple "
-                f"contexts: {ctxs}"
+                f"bounded_contexts: entity '{ent}' is assigned to multiple " f"contexts: {ctxs}"
             )
     return errs
 
@@ -904,10 +889,10 @@ def check_bounded_context_partition(root: object) -> List[str]:
 def load_prd_must_have_features(
     prd_path: Path,
 ) -> Dict[Optional[str], List[str]]:
-    """Return PRD must_have_features F-NNN IDs, scoped correctly.
+    """Return PRD must_have_features FR-NNN IDs, scoped correctly.
 
-    Single-product mode: returns ``{None: [F-001, ...]}``.
-    Monorepo mode: returns ``{"<slug>": [F-001, ...], ...}`` — one entry per
+    Single-product mode: returns ``{None: [FR-001, ...]}``.
+    Monorepo mode: returns ``{"<slug>": [FR-001, ...], ...}`` — one entry per
     product. Each product's features stay scoped to that product so the
     feature-coverage cross-check can compare each product's entities against
     only that product's features (rather than the union across all products,
@@ -996,7 +981,7 @@ def collect_traced_features(root: object) -> List[str]:
 
 
 def check_feature_coverage(prd_features: List[str], traced: List[str]) -> List[str]:
-    """Return list of PRD F-NNN IDs that no entity traces."""
+    """Return list of PRD FR-NNN IDs that no entity traces."""
     traced_set = {f.upper() for f in traced}
     return [f for f in prd_features if f.upper() not in traced_set]
 
@@ -1016,7 +1001,9 @@ def check_volume_scale_gate(volume: Optional[str], root: object) -> Optional[str
     has_any = any(
         getattr(sar, name, None) is not None
         for name in (
-            "partitioning_key", "partitioning_strategy", "sharding_key",
+            "partitioning_key",
+            "partitioning_strategy",
+            "sharding_key",
             "retention_policies",
         )
     )
@@ -1122,8 +1109,7 @@ def validate_file(path: Path) -> int:
     # Soft errors (force draft): feature coverage gaps, volume-vs-scale gate.
 
     hard_problems = bool(
-        missing or relationship_errs or field_ref_errs
-        or classification_errs or bounded_ctx_errs
+        missing or relationship_errs or field_ref_errs or classification_errs or bounded_ctx_errs
     )
     soft_problems = bool(uncovered_features or volume_errs)
 
@@ -1157,7 +1143,7 @@ def validate_file(path: Path) -> int:
                 print()
             if uncovered_features:
                 print(
-                    f"{len(uncovered_features)} PRD F-NNN feature(s) with no entity trace "
+                    f"{len(uncovered_features)} PRD FR-NNN feature(s) with no entity trace "
                     f"(feature-coverage check):"
                 )
                 for f in uncovered_features:
@@ -1171,13 +1157,14 @@ def validate_file(path: Path) -> int:
 
         n_entities = sum(
             (len(p.entities or {}) for p in (dm.products or {}).values())
-            if (dm.metadata.monorepo and dm.products) else [len(dm.entities or {})]
+            if (dm.metadata.monorepo and dm.products)
+            else [len(dm.entities or {})]
         )
         total_features = sum(len(v) for v in prd_features_by_scope.values())
         print(
             f"[OK] DATA-MODEL.yaml is valid and complete ({path}); "
             f"{n_entities} entit(y/ies); "
-            f"{total_features} PRD F-NNN feature(s) all covered."
+            f"{total_features} PRD FR-NNN feature(s) all covered."
         )
         return 0
 
@@ -1191,7 +1178,7 @@ def validate_file(path: Path) -> int:
     print(
         f"[DRAFT] DATA-MODEL.yaml is a draft ({path}); "
         f"{n_entities_msg} entit(y/ies) defined; "
-        f"{total_features} PRD F-NNN feature(s) discovered upstream."
+        f"{total_features} PRD FR-NNN feature(s) discovered upstream."
     )
     if missing:
         print(f"\n{len(missing)} required field(s) missing:")
@@ -1214,17 +1201,26 @@ def validate_file(path: Path) -> int:
         for e_ in bounded_ctx_errs:
             print(f"  - {e_}")
     if uncovered_features:
-        print(f"\n{len(uncovered_features)} PRD F-NNN feature(s) with no entity trace:")
+        print(f"\n{len(uncovered_features)} PRD FR-NNN feature(s) with no entity trace:")
         for f in uncovered_features:
             print(f"  - {f}")
     if volume_errs:
         print(f"\n{len(volume_errs)} volume-vs-scale gate error(s):")
         for e_ in volume_errs:
             print(f"  - {e_}")
-    if not (missing or relationship_errs or field_ref_errs or classification_errs
-            or bounded_ctx_errs or uncovered_features or volume_errs):
-        print("\nAll required fields filled, all cross-checks pass. "
-              "Set metadata.status: complete when done.")
+    if not (
+        missing
+        or relationship_errs
+        or field_ref_errs
+        or classification_errs
+        or bounded_ctx_errs
+        or uncovered_features
+        or volume_errs
+    ):
+        print(
+            "\nAll required fields filled, all cross-checks pass. "
+            "Set metadata.status: complete when done."
+        )
     return 0
 
 

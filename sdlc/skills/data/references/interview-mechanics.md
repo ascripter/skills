@@ -110,7 +110,7 @@ list), iterate through the following states:
    │                                                                     │
    │   (a) PROPOSE       Show pre-drafted entity card                    │
    │        │            (description + candidate fields drafted from    │
-   │        │            UX forms, schema files, and PRD F-NNN traces)   │
+   │        │            UX forms, schema files, and PRD FR-NNN traces)   │
    │        ▼                                                            │
    │   (b) CHALLENGE     Ask one clarifying question if anything looks   │
    │        │            ambiguous (e.g. "I see `Order` and `Invoice`    │
@@ -127,7 +127,7 @@ list), iterate through the following states:
    │   (e) PRIMARY KEY   Confirm primary_key (single field or composite).│
    │        │                                                            │
    │        ▼                                                            │
-   │   (f) TRACES        Confirm traces_prd_features (F-NNN list) and    │
+   │   (f) TRACES        Confirm traces_prd_features (FR-NNN list) and    │
    │        │            traces_ux_surfaces (surface_id list).           │
    │        ▼                                                            │
    │   (g) FINAL APPROVAL Show the full entity card; user confirms or    │

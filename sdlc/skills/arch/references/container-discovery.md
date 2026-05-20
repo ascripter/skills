@@ -88,18 +88,34 @@ keywords that imply non-API operational work:
 | "webhook receiver"                       | `gateway` or merge into backend |
 | "static landing page"                    | `static-site`                |
 
-These are `⚠ inferred` candidates — surface them with the F-NNN
-evidence inline ("F-014 mentions 'nightly cleanup' → `scheduler`
+These are `⚠ inferred` candidates — surface them with the FR-NNN
+evidence inline ("FR-014 mentions 'nightly cleanup' → `scheduler`
 container?").
 
 ### Pass 5 — Identity provider (from PRD + API)
 
-- If `PRD.security_compliance.auth_model ∈ {oauth2, sso, openid_connect}`
-  AND `API.auth.schemes` contains `oauth2` or `bearer_jwt`:
-  propose `identity-provider` as an *external* container by default.
-  Make it internal only if the user has explicitly stated they're
-  building their own.
-- If `auth_model == none`: no identity container.
+The edge-derivation rules (`edge-derivation.md` Rule S3) emit a `calls`
+edge from every authenticated backend container to the identity
+provider. For those edges to resolve, the IDP MUST exist as a node in
+`containers[]`. Therefore:
+
+- If `PRD.security_compliance.auth_model ∈ {oauth2, sso, openid_connect,
+  oidc, saml, jwt, passkeys}` OR `API.auth.schemes` contains anything
+  other than `[none]`: **always auto-propose an `identity-provider`
+  container.**
+  - Default `external: true` (most projects use Auth0 / Cognito / Okta /
+    Clerk / etc.).
+  - Set `external: false` only if the user has explicitly stated they're
+    building their own IDP.
+  - Empty `owns_api_resources`, empty `owns_ux_surfaces`, empty
+    `persistence`.
+- If `auth_model == none` AND every entry in `API.auth.schemes` is
+  `none`: no identity container.
+
+This is `⚠ inferred` but the user has to actively *remove* it to abort
+auto-add — the default is to keep it. Otherwise downstream edge
+derivation will drop the `calls → identity-provider` edges (Rule S3)
+and the system loses traceability of token validation.
 
 ### Pass 6 — Gateway / BFF (from pattern + container count)
 
@@ -134,7 +150,7 @@ Drafted from upstream artifacts:
   ✓ backend-api      (backend-api)     owns: users, projects, files
   ✓ primary-postgres (primary-database) — DATA primary_store
   ✓ redis-cache      (cache)           — DATA secondary_store
-  ⚠ scheduler        (scheduler)       — inferred from F-014 "nightly cleanup"
+  ⚠ scheduler        (scheduler)       — inferred from FR-014 "nightly cleanup"
   ⚠ identity-provider (external)       — inferred from PRD oauth2
 
 Add, remove, or rename anything before we go deep on each one?

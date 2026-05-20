@@ -1,0 +1,12 @@
+# Minimal ARCH__external-idp.yaml that shouldn't exist (parent is external: true).
+# Required-field check is relaxed for external containers — only `overview` is checked.
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "10101010-1010-1010-1010-101010101010"
+  status: "complete"
+
+container_id: external-idp
+archetype: identity-provider
+overview: "External OIDC IDP — should not have been authored as a container deep-dive."

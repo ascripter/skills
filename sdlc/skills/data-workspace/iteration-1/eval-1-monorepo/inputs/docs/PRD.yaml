@@ -21,9 +21,9 @@ products:
       core_workflows: ["Sign in", "Sign out", "Refresh token"]
     functional_requirements:
       must_have_features:
-        - "F-001: OIDC — OpenID Connect login for tenant users."
-        - "F-002: Refresh tokens — rotating refresh tokens with revocation."
-        - "F-003: Admin console — operator UI for tenant/user management."
+        - "FR-001: OIDC — OpenID Connect login for tenant users."
+        - "FR-002: Refresh tokens — rotating refresh tokens with revocation."
+        - "FR-003: Admin console — operator UI for tenant/user management."
     technical_constraints:
       primary_language: go
       runtime_platform: server
@@ -40,8 +40,8 @@ products:
       core_workflows: ["View invoice", "Pay invoice"]
     functional_requirements:
       must_have_features:
-        - "F-001: Invoice generation — monthly invoices with line items."
-        - "F-002: Stripe integration — webhook-driven payment status sync."
+        - "FR-001: Invoice generation — monthly invoices with line items."
+        - "FR-002: Stripe integration — webhook-driven payment status sync."
     technical_constraints:
       primary_language: typescript
       runtime_platform: server

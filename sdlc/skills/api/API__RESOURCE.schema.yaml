@@ -53,10 +53,10 @@ primary_entity: null            # DATA-MODEL entity name this resource fronts
 # -----------------------------------------------------------------------------
 # traces — REQUIRED for coverage checks
 # -----------------------------------------------------------------------------
-traces_prd_features: null       # REQUIRED — list[string] of PRD F-NNN feature
+traces_prd_features: null       # REQUIRED — list[string] of PRD FR-NNN feature
                                 # IDs this resource implements, e.g.
-                                #   - "F-001"
-                                #   - "F-003"
+                                #   - "FR-001"
+                                #   - "FR-003"
 traces_ux_surfaces: null        # REQUIRED — list[string] of UX surface_ids
                                 # this resource serves, e.g.
                                 #   - "user-list"

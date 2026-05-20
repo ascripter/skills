@@ -31,8 +31,8 @@ use_cases:
 
 functional_requirements:
   must_have_features:
-    - "F-001: Quick add — add a task in under 3 seconds via a global shortcut."
-    - "F-002: Keyboard navigation — every primary action reachable without a mouse."
+    - "FR-001: Quick add — add a task in under 3 seconds via a global shortcut."
+    - "FR-002: Keyboard navigation — every primary action reachable without a mouse."
 
 technical_constraints:
   primary_language: typescript

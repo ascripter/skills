@@ -1,0 +1,33 @@
+# 04 — Component archetype is a free-form string not in the enum.
+# Expectation: validator exits 1 (pydantic ValidationError on component.archetype).
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "44444444-4444-4444-4444-444444444444"
+  status: "draft"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Test fixture for component archetype enforcement."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: backend
+    archetype: backend-api
+    purpose: "Backend."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: "ARCH__backend.yaml"
+
+edges: []

@@ -139,7 +139,7 @@ user can correct course early. Sources of candidates, in priority order:
 1. **`PRD.data_model.key_entities`** — direct names (PascalCase'd if not
    already). Tag `✓ found`.
 2. **`PRD.functional_requirements.must_have_features`** — extract the
-   nouns from each F-NNN feature using lightweight heuristics (see
+   nouns from each FR-NNN feature using lightweight heuristics (see
    `references/entity-discovery.md`). Tag `⚠ inferred`.
 3. **`UX__<surface>.yaml.layout` + `validation_rules` + `components.content_slots`** —
    forms imply entities; list items imply entities; filters imply entities.
@@ -153,7 +153,7 @@ Present the draft to the user:
 >
 >   ✓ User           (from PRD.data_model.key_entities)
 >   ✓ Project        (from PRD.data_model.key_entities)
->   ⚠ Task           (inferred from F-001 'Add a task in under 3 seconds')
+>   ⚠ Task           (inferred from FR-001 'Add a task in under 3 seconds')
 >   ⚠ Tag            (inferred from UX__dashboard form field 'tags')
 >
 > Add, remove, or rename anything before we go deep on each one?"

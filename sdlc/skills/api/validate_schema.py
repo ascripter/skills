@@ -11,7 +11,7 @@ Validates:
     1. docs/API.yaml (or --path) — global API contract.
     2. Every docs/API__*.yaml sibling — one per resource.
     3. Coverage checks (all skipped when api_kind: none):
-       - Feature coverage: every PRD must_have_features F-NNN appears in
+       - Feature coverage: every PRD must_have_features FR-NNN appears in
          some resource's traces_prd_features OR in API.yaml.non_api_features.
        - Surface coverage: every data-bearing UX surface (by surface_type)
          appears in some resource's traces_ux_surfaces.
@@ -348,9 +348,7 @@ class API(BaseModel):
 
         if self.metadata.monorepo:
             if not self.products:
-                raise ValueError(
-                    "metadata.monorepo is true but `products` is missing or empty"
-                )
+                raise ValueError("metadata.monorepo is true but `products` is missing or empty")
             if any_single:
                 raise ValueError(
                     "monorepo mode set but top-level theme blocks are present; "
@@ -528,14 +526,14 @@ def check_resource_required(resource: APIResource, file_label: str) -> List[str]
 # =============================================================================
 
 
-_FEATURE_ID_RE = re.compile(r"^F-\d+", re.IGNORECASE)
+_FEATURE_ID_RE = re.compile(r"^FR-\d+", re.IGNORECASE)
 
 
 def load_prd_must_have_features(prd_path: Path) -> List[str]:
-    """Return list of F-NNN strings from PRD.functional_requirements.must_have_features.
+    """Return list of FR-NNN strings from PRD.functional_requirements.must_have_features.
 
-    Each must_have_features entry typically starts with "F-NNN: <description>".
-    We extract just the F-NNN prefix for matching.
+    Each must_have_features entry typically starts with "FR-NNN: <description>".
+    We extract just the FR-NNN prefix for matching.
     """
     if not prd_path.exists():
         return []
@@ -674,10 +672,12 @@ def check_feature_coverage(
     traced_features: List[str],
     non_api_features: Optional[List[str]],
 ) -> List[str]:
-    """Return list of F-NNN IDs that are neither traced nor opted out."""
-    traced_norm = {_FEATURE_ID_RE.match(str(f).strip()).group(0).upper()
-                   for f in traced_features
-                   if _FEATURE_ID_RE.match(str(f).strip())}
+    """Return list of FR-NNN IDs that are neither traced nor opted out."""
+    traced_norm = {
+        _FEATURE_ID_RE.match(str(f).strip()).group(0).upper()
+        for f in traced_features
+        if _FEATURE_ID_RE.match(str(f).strip())
+    }
     opt_out: set = set()
     if non_api_features:
         for f in non_api_features:
@@ -790,13 +790,10 @@ def validate_all(api_path: Path) -> int:
     prd_path = docs_dir / "PRD.yaml"
     data_path = docs_dir / "DATA-MODEL.yaml"
 
-    is_none_kind = (
-        api.api_kind == ApiKind.none
-        or (
-            api.metadata.monorepo
-            and api.products
-            and all((p.api_kind == ApiKind.none) for p in api.products.values())
-        )
+    is_none_kind = api.api_kind == ApiKind.none or (
+        api.metadata.monorepo
+        and api.products
+        and all((p.api_kind == ApiKind.none) for p in api.products.values())
     )
 
     if is_none_kind:
@@ -827,8 +824,13 @@ def validate_all(api_path: Path) -> int:
 
     # 5) Reporting
     if status == "complete":
-        problems = bool(missing_api or missing_resource or uncovered_features
-                        or uncovered_surfaces or bad_entities)
+        problems = bool(
+            missing_api
+            or missing_resource
+            or uncovered_features
+            or uncovered_surfaces
+            or bad_entities
+        )
         if problems:
             print(f"[FAIL] API.yaml claims status 'complete' but has errors ({api_path})\n")
             if missing_api:
@@ -842,8 +844,10 @@ def validate_all(api_path: Path) -> int:
                     print(f"  - {m}")
                 print()
             if uncovered_features:
-                print(f"{len(uncovered_features)} PRD F-NNN feature(s) with no resource trace "
-                      f"(and not in non_api_features):")
+                print(
+                    f"{len(uncovered_features)} PRD FR-NNN feature(s) with no resource trace "
+                    f"(and not in non_api_features):"
+                )
                 for f in uncovered_features:
                     print(f"  - {f}")
                 print()
@@ -858,17 +862,20 @@ def validate_all(api_path: Path) -> int:
                     print(f"  - {e_}")
             return 1
         if is_none_kind:
-            print(f"[OK] API.yaml is valid and complete (api_kind: none) ({api_path}); "
-                  f"coverage checks skipped.")
+            print(
+                f"[OK] API.yaml is valid and complete (api_kind: none) ({api_path}); "
+                f"coverage checks skipped."
+            )
         else:
             data_note = (
-                f"{len(data_entities)} DATA entit(y/ies)" if data_entities is not None
+                f"{len(data_entities)} DATA entit(y/ies)"
+                if data_entities is not None
                 else "DATA-MODEL.yaml missing — entity-link check skipped"
             )
             print(
                 f"[OK] API.yaml is valid and complete ({api_path}); "
                 f"{n_resources} resource file(s); "
-                f"{len(prd_features)} PRD F-NNN feature(s) all covered; "
+                f"{len(prd_features)} PRD FR-NNN feature(s) all covered; "
                 f"{len(ux_surfaces)} data-bearing UX surface(s) all served; "
                 f"{data_note}."
             )
@@ -876,17 +883,20 @@ def validate_all(api_path: Path) -> int:
 
     # status == "draft"
     if is_none_kind:
-        print(f"[DRAFT] API.yaml is a draft (api_kind: none) ({api_path}); "
-              f"coverage checks skipped.")
+        print(
+            f"[DRAFT] API.yaml is a draft (api_kind: none) ({api_path}); "
+            f"coverage checks skipped."
+        )
     else:
         data_note = (
-            f"{len(data_entities)} DATA entit(y/ies) found" if data_entities is not None
+            f"{len(data_entities)} DATA entit(y/ies) found"
+            if data_entities is not None
             else "DATA-MODEL.yaml missing"
         )
         print(
             f"[DRAFT] API.yaml is a draft ({api_path}); "
             f"{n_resources} resource file(s); "
-            f"{len(prd_features)} PRD F-NNN feature(s) discovered; "
+            f"{len(prd_features)} PRD FR-NNN feature(s) discovered; "
             f"{len(ux_surfaces)} data-bearing UX surface(s) discovered; "
             f"{data_note}."
         )
@@ -899,7 +909,7 @@ def validate_all(api_path: Path) -> int:
         for m in missing_resource:
             print(f"  - {m}")
     if uncovered_features:
-        print(f"\n{len(uncovered_features)} PRD F-NNN feature(s) with no resource trace:")
+        print(f"\n{len(uncovered_features)} PRD FR-NNN feature(s) with no resource trace:")
         for f in uncovered_features:
             print(f"  - {f}")
     if uncovered_surfaces:
@@ -910,10 +920,17 @@ def validate_all(api_path: Path) -> int:
         print(f"\n{len(bad_entities)} primary_entity reference(s) not in DATA-MODEL:")
         for e_ in bad_entities:
             print(f"  - {e_}")
-    if not (missing_api or missing_resource or uncovered_features
-            or uncovered_surfaces or bad_entities):
-        print("\nAll required fields filled, coverage complete, entity links resolved. "
-              "Set metadata.status: complete when done.")
+    if not (
+        missing_api
+        or missing_resource
+        or uncovered_features
+        or uncovered_surfaces
+        or bad_entities
+    ):
+        print(
+            "\nAll required fields filled, coverage complete, entity links resolved. "
+            "Set metadata.status: complete when done."
+        )
     return 0
 
 

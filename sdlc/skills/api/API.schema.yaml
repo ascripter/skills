@@ -40,7 +40,7 @@ metadata:
                                            #   1) all required fields are filled,
                                            #   2) the validator passes,
                                            #   3) feature coverage passes
-                                           #      (every PRD F-NNN is either
+                                           #      (every PRD FR-NNN is either
                                            #      traced or in non_api_features),
                                            #   4) surface coverage passes
                                            #      (every UX surface with data
@@ -52,7 +52,7 @@ metadata:
                                            # skipped when api_kind: none.
 
 # api_warnings — informational notes. Used for:
-#   * uncovered PRD F-NNN features ("feature F-007 has no resource trace")
+#   * uncovered PRD FR-NNN features ("feature FR-007 has no resource trace")
 #   * uncovered UX surfaces with data I/O ("surface 'foo' has no endpoint")
 #   * unresolved DATA entity refs ("primary_entity 'Bar' not in DATA-MODEL")
 #   * low-confidence answers
@@ -218,19 +218,19 @@ resource_inventory:             # list[ResourceInventoryItem]
     primary_entity: null        # DATA-MODEL entity name this resource fronts
                                 # (string|null). Null only for resources that
                                 # span entities (e.g. /search).
-    traces_prd_features: null   # list[string] — PRD F-NNN feature IDs this
+    traces_prd_features: null   # list[string] — PRD FR-NNN feature IDs this
                                 # resource implements
     traces_ux_surfaces: null    # list[string] — UX surface_ids this resource
                                 # serves (used by the surface-coverage check)
 
 # -----------------------------------------------------------------------------
-# non_api_features — PRD F-NNN feature IDs explicitly NOT exposed via API.
+# non_api_features — PRD FR-NNN feature IDs explicitly NOT exposed via API.
 # Examples: pure-UI features (theming), backend batch jobs, internal-only
 # utilities. Required so the feature-coverage check can pass.
 # -----------------------------------------------------------------------------
-non_api_features: null          # list[string] of F-NNN IDs, e.g.
-                                #   - F-007  # theme switcher — UI only
-                                #   - F-012  # nightly cleanup job
+non_api_features: null          # list[string] of FR-NNN IDs, e.g.
+                                #   - FR-007  # theme switcher — UI only
+                                #   - FR-012  # nightly cleanup job
 
 # =============================================================================
 # MULTI-PRODUCT MODE (monorepo) — uncomment and use *instead of* the top-level
@@ -261,7 +261,7 @@ non_api_features: null          # list[string] of F-NNN IDs, e.g.
 #         status: confirmed
 #         file_path: docs/API__billing__invoices.yaml
 #         primary_entity: Invoice
-#         traces_prd_features: [F-001, F-002]
+#         traces_prd_features: [FR-001, FR-002]
 #         traces_ux_surfaces: [invoice-list, invoice-detail]
 #   notifications:
 #     # ...

@@ -302,7 +302,7 @@ questions:
   - theme: entities
     id: entity-traces-features
     schema_path: entity.traces_prd_features
-    question: "Which PRD F-NNN features does this entity realize? (e.g. F-001, F-003)"
+    question: "Which PRD FR-NNN features does this entity realize? (e.g. FR-001, FR-003)"
     hint: "Drives the feature-coverage cross-check at validation time. Every PRD must-have feature must be traced by ≥1 entity."
     suggested_answers: []
     free_text_allowed: true

@@ -20,19 +20,19 @@ problem_opportunity:
 
 users_personas:
   primary_users:
-    - "Engineering team leads"
-    - "Indie developers"
+    - "PER-001: Engineering team leads"
+    - "PER-002: Indie developers"
   primary_users_confidence: confirmed
 
 use_cases:
   core_workflows:
-    - "Add a task in under 3 seconds"
-    - "Mark tasks done from the keyboard"
+    - "WKFR-001: Add a task in under 3 seconds"
+    - "WKFR-002: Mark tasks done from the keyboard"
 
 functional_requirements:
   must_have_features:
-    - "F-001: Quick add — add a task in under 3 seconds via a global shortcut."
-    - "F-002: Keyboard navigation — every primary action reachable without a mouse."
+    - "FR-001: Quick add — add a task in under 3 seconds via a global shortcut."
+    - "FR-002: Keyboard navigation — every primary action reachable without a mouse."
 
 technical_constraints:
   primary_language: typescript

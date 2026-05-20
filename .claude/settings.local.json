@@ -14,7 +14,8 @@
       "WebSearch",
       "WebFetch(domain:www.asyncapi.com)",
       "WebFetch(domain:learn.openapis.org)",
-      "Bash(ls *)"
+      "Bash(ls *)",
+      "Bash(.venv/Scripts/python.exe -m pip install 'ruamel.yaml>=0.18')"
     ]
   },
   "enableAllProjectMcpServers": true,

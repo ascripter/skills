@@ -23,6 +23,41 @@
 #   - Enum values are lowercase snake_case strings. See `validate_schema.py`
 #     for the authoritative enum definitions.
 #   - Theme order matches the interview order in `prd-questions.yaml`.
+#
+# ID conventions:
+#   Several list[string] fields prefix each item with a stable ID so that
+#   downstream SDLC artifacts (UX.yaml, DATA-MODEL.yaml, API.yaml, ARCH.yaml,
+#   TEST-STRATEGY.yaml, TASKS.json) can reference specific items without
+#   ambiguity. Format is always "<PREFIX>-NNN: <content>" with zero-padded
+#   3-digit numbers (NNN ≥ 001). IDs are assigned in collection order and
+#   are stable — they never change once written. Promoting an item between
+#   sibling lists (e.g. nice-to-have → must-have) moves the string verbatim
+#   without renumbering.
+#
+#   Family map (prefix → field(s); sibling lists in the same row share one
+#   continuous counter):
+#     FR  — functional_requirements.must_have_features, .nice_to_have_features
+#     OOS — functional_requirements.out_of_scope
+#     INT — functional_requirements.integrations_required
+#     AIF — functional_requirements.ai_features
+#     NFR — non_functional_requirements.performance_targets, .other
+#     WRN — prd_warnings (top level)
+#     PER — users_personas.primary_users, .secondary_users
+#     GOL — users_personas.user_goals
+#     PAN — users_personas.user_frustrations
+#     WKF — use_cases.core_workflows
+#     JTB — use_cases.primary_jobs_to_be_done, .secondary_jobs
+#     EDG — use_cases.edge_cases
+#     ENT — data_model.key_entities
+#
+#   In multi-product mode, each product under `products.<slug>` carries its
+#   own independent ID space — counters reset per product. Two products may
+#   each have a FR-001; references are always disambiguated by the product
+#   slug in the dotted path.
+#
+#   `validate_schema.py` enforces the prefix format on every item in these
+#   fields. Items missing the prefix are warnings in `status: draft` and
+#   errors in `status: complete`.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -44,6 +79,8 @@ metadata:
 # Use for low-confidence answers, merge conflicts, or other notable context.
 # NOT used for required-field acknowledgement — see metadata.status for
 # completeness signalling.
+# Each item starts with a stable ID: "WRN-NNN: <message>".
+# IDs are assigned in collection order (WRN-001, WRN-002, …).
 prd_warnings: []
 
 # =============================================================================
@@ -63,35 +100,63 @@ problem_opportunity:
 # -----------------------------------------------------------------------------
 # users_personas — who we are building for
 # -----------------------------------------------------------------------------
+# ID conventions for list fields below (downstream agents cross-reference these):
+#   primary_users + secondary_users — share the PER-NNN sequence; secondary_users
+#     IDs continue from where primary_users left off.
+#   user_goals       — GOL-NNN sequence.
+#   user_frustrations — PAN-NNN sequence (pain points).
 users_personas:
-  primary_users: null         # list of primary persona descriptors (list[string])
-  secondary_users: null       # nice-to-have but not core (list[string])
-  user_goals: null            # what success looks like for them (list[string])
-  user_frustrations: null     # what frustrates them today (list[string])
+  primary_users: null         # list of primary persona descriptors (list[string]);
+                              # each item: "PER-NNN: <descriptor>" (e.g. "PER-001: …")
+  secondary_users: null       # nice-to-have but not core (list[string]); continues the
+                              # PER-NNN sequence from primary_users — e.g. if
+                              # primary_users ends at PER-003, secondary_users starts at PER-004
+  user_goals: null            # what success looks like for them (list[string]);
+                              # each item: "GOL-NNN: <goal>"
+  user_frustrations: null     # what frustrates them today (list[string]);
+                              # each item: "PAN-NNN: <frustration>"
   expertise_level: null       # one of: novice | intermediate | expert | mixed (enum)
 
 # -----------------------------------------------------------------------------
 # use_cases — the jobs this product is hired to do
 # -----------------------------------------------------------------------------
+# ID conventions for list fields below:
+#   core_workflows           — WKF-NNN sequence.
+#   primary_jobs_to_be_done + secondary_jobs — share the JTB-NNN sequence;
+#     secondary_jobs continues from where primary_jobs_to_be_done left off.
+#   edge_cases               — EDG-NNN sequence.
 use_cases:
-  core_workflows: null        # 3–7 happy-path workflows (list[string])
-  primary_jobs_to_be_done: null  # JTBD statements (list[string])
-  secondary_jobs: null        # supporting JTBD (list[string])
-  edge_cases: null            # explicit edge cases worth handling (list[string])
+  core_workflows: null        # 3–7 happy-path workflows (list[string]);
+                              # each item: "WKF-NNN: <workflow>"
+  primary_jobs_to_be_done: null  # JTBD statements (list[string]);
+                              # each item: "JTB-NNN: <JTBD statement>"
+  secondary_jobs: null        # supporting JTBD (list[string]); continues the JTB-NNN
+                              # sequence from primary_jobs_to_be_done
+  edge_cases: null            # explicit edge cases worth handling (list[string]);
+                              # each item: "EDG-NNN: <edge case>"
 
 # -----------------------------------------------------------------------------
 # functional_requirements — what the product must, should, won't do
 # -----------------------------------------------------------------------------
+# ID conventions for list fields below:
+#   must_have_features + nice_to_have_features — share the FR-NNN sequence;
+#     nice_to_have_features continues from where must_have_features left off.
+#   out_of_scope             — OOS-NNN sequence.
+#   integrations_required    — INT-NNN sequence.
+#   ai_features              — AIF-NNN sequence.
 functional_requirements:
   must_have_features: null    # MVP features (list[string]); each item starts with a stable ID:
-                              #   "F-001: <title and detail description>"
-                              # IDs are assigned in collection order (F-001, F-002, …).
-  nice_to_have_features: null # post-MVP backlog (list[string]); IDs continue the F-NNN
+                              #   "FR-001: <title and detail description>"
+                              # IDs are assigned in collection order (FR-001, FR-002, …).
+  nice_to_have_features: null # post-MVP backlog (list[string]); IDs continue the FR-NNN
                               # sequence from must_have_features — e.g. if must-haves end
-                              # at F-005, nice-to-haves start at F-006. Same format.
-  out_of_scope: null          # explicit non-goals (list[string])
-  integrations_required: null # external systems we must talk to (list[string])
-  ai_features: null           # AI-driven capabilities, if any (list[string])
+                              # at FR-005, nice-to-haves start at FR-006. Same format.
+  out_of_scope: null          # explicit non-goals (list[string]);
+                              # each item: "OOS-NNN: <non-goal>"
+  integrations_required: null # external systems we must talk to (list[string]);
+                              # each item: "INT-NNN: <integration target>"
+  ai_features: null           # AI-driven capabilities, if any (list[string]);
+                              # each item: "AIF-NNN: <AI capability>"
 
 # -----------------------------------------------------------------------------
 # technical_constraints — the tech we are committed to (or not)
@@ -131,24 +196,36 @@ product_identity:
 # -----------------------------------------------------------------------------
 # non_functional_requirements — qualities, not features
 # -----------------------------------------------------------------------------
+# ID conventions for list fields below:
+#   performance_targets + other — share the NFR-NNN sequence; `other` continues
+#     from where performance_targets left off.
+# Scalar/enum fields (scalability, reliability, availability_sla, accessibility)
+# carry no ID — they're singletons referenced by field name.
 non_functional_requirements:
-  performance_targets: null   # e.g. "p95 < 200ms", "10k rps" (list[string])
+  performance_targets: null   # e.g. "NFR-001: p95 < 200ms" (list[string]);
+                              # each item: "NFR-NNN: <target>"
   scalability: null           # one of: small | medium | large | hyperscale (enum)
   reliability: null           # one of: best_effort | high | mission_critical (enum)
   availability_sla: null      # e.g. "99.9%", "business hours" (string|null)
   accessibility: null         # one of: none_yet | wcag_aa | wcag_aaa (enum)
-  other: null                 # any other NFRs worth calling out (list[string])
+  other: null                 # any other NFRs worth calling out (list[string]);
+                              # continues the NFR-NNN sequence from performance_targets
 
 # -----------------------------------------------------------------------------
 # data_model — what data lives here, who owns it, how much
 # -----------------------------------------------------------------------------
+# ID conventions for list fields below:
+#   key_entities             — ENT-NNN sequence.
+# (storage_preferences carries no ID — it's a soft-preference list, not a
+# referenced artifact.)
 data_model:
-  key_entities: null          # primary domain entities (list[string])
+  key_entities: null          # primary domain entities (list[string]);
+                              # each item: "ENT-NNN: <entity>" (e.g. "ENT-001: User")
   data_ownership: null        # one of: user_owned | org_owned | platform_owned |
                               #         third_party | mixed (enum)
   data_volume_estimate: null  # one of: kilobytes | megabytes | gigabytes |
                               #         terabytes | petabytes | unknown (enum)
-  storage_preferences: null   # e.g. ["postgres", "s3"] (list[string]|null)
+  storage_preferences: null   # e.g. ["postgres", "s3"] (list[string]|null) — no ID
   storage_preferences_rationale: null  # (string|null)
 
 # -----------------------------------------------------------------------------

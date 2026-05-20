@@ -155,6 +155,13 @@ If any validator exits non-zero, or any artifact has `metadata.status !=
 complete`, **stop**. Print a clear message naming the offending file and
 the upstream skill the user should run.
 
+**Monorepo handling (v1.0):** if `PRD.metadata.monorepo: true` AND
+`PRD.products` is non-empty, the skill stops and warns that
+multi-product mode is deferred to a future version. The user may
+proceed against one product at a time in single-product mode (a warning
+is appended to `arch_warnings`). See `references/edge-cases.md` →
+"Monorepo mode — DEFERRED to a future major version".
+
 **System mode** additionally reads:
 - existing `docs/ARCH.yaml` (merge baseline).
 - existing `docs/ARCH__*.yaml` files (read-only — to seed the container set
@@ -192,7 +199,7 @@ Source candidates, in priority order:
    browser_extension | mixed` → frontend container(s). Tag `✓ found`.
 3. **DATA-MODEL.yaml.persistence.*_stores** — every store ≈ a candidate
    container (database, cache, blob store, search index). Tag `✓ found`.
-4. **PRD.functional_requirements** — F-NNN features mentioning scheduled
+4. **PRD.functional_requirements** — FR-NNN features mentioning scheduled
    work, batch ingestion, ETL, notifications, AI agents, third-party
    integrations → worker / scheduler / integration containers. Tag
    `⚠ inferred`.
@@ -345,20 +352,55 @@ python "${CLAUDE_SKILL_DIR}/validate_schema.py" --path docs/ARCH.yaml
 ```
 
 The validator validates `docs/ARCH.yaml` plus every sibling
-`docs/ARCH__*.yaml` and runs four cross-checks (all enabled in both modes):
+`docs/ARCH__*.yaml` and runs the cross-check suite below (all enabled
+in both modes). Coverage and trace failures force `metadata.status:
+draft`; the upstream-status and external-container checks emit warnings
+only.
+
+**Coverage** (block complete):
 
 1. **API-resource coverage** — every API resource appears in some
-   container's `owns_api_resources`. Uncovered resources force `status:
-   draft` and are logged to `arch_warnings`.
+   container's `owns_api_resources`.
 2. **UX-surface coverage** — every data-bearing UX surface appears in
-   some container's `owns_ux_surfaces`. Uncovered → `arch_warnings`.
+   some container's `owns_ux_surfaces`.
 3. **DATA-store coverage** — every primary/secondary store in
    `DATA-MODEL.yaml.persistence.*` appears in some container's
-   `persistence`. Uncovered → `arch_warnings`.
+   `persistence`.
+
+**Edge integrity** (block complete):
+
 4. **Edge endpoint integrity** — every edge `to` resolves to an existing
    container (system-level edges) or `<container_id>/<component_id>`
    (container-level external edges) or `<component_id>` (container-level
-   internal edges). Unresolved endpoints force `status: draft`.
+   internal edges).
+5. **Edge via_\* resolution** — every `via_resource_id` /
+   `via_operation_id` / `via_channel_id` / `via_entity` (when set)
+   resolves to an upstream artifact. Typos in `via_*` are blocking errors.
+
+**Container/component consistency** (block complete):
+
+6. **Container ↔ system consistency** — `api_surface`, `ux_surface`,
+   `persistence_bindings` ⊆ parent container's `owns_*` / `persistence`.
+7. **Deployment compatibility** — `deployment.shape` is in the allowed
+   set for the parent's `deployment_unit` (see `ARCH__CONTAINER.schema.yaml`).
+8. **Component trace integrity** — every `traces_api_resources`,
+   `traces_api_operations`, `traces_ux_surfaces`, `traces_data_entities`
+   entry on a component resolves to its upstream artifact AND
+   (for api/ux) is contained in the parent container's `owns_*`.
+9. **`file_path` integrity** — every `containers[].file_path` resolves
+   to a file on disk, and every sibling `docs/ARCH__*.yaml` is
+   referenced by some `containers[].file_path`.
+
+**Non-blocking warnings**:
+
+10. **External-container files** — if an `ARCH__<id>.yaml` exists for a
+    container with `external: true`, the validator warns (file should
+    not exist).
+11. **Upstream status awareness** — if any of `PRD.yaml` / `UX.yaml` /
+    `DATA-MODEL.yaml` / `API.yaml` has `metadata.status != "complete"`,
+    the validator emits a warning. (The skill itself refuses to run in
+    that case, but a downstream agent re-running the validator alone
+    will see the warning.)
 
 For merge logic, the recovery flow on `[FAIL]`, and the CLAUDE.md pointer
 rules → see `references/merge-validate.md`.

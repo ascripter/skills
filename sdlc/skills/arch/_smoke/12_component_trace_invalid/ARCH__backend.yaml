@@ -1,0 +1,40 @@
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "12121212-1212-1212-1212-121212121212"
+  status: "complete"
+
+container_id: backend
+archetype: backend-api
+overview: "Backend whose component traces a non-existent resource."
+
+tech_stack:
+  language: Python
+  language_confidence: confirmed
+
+deployment:
+  shape: container
+  shape_confidence: confirmed
+
+observability: {}
+
+failure_modes:
+  - id: db-down
+    description: "DB unavailable."
+    likelihood: low
+    impact: high
+    mitigation: "Health check + retry."
+
+components:
+  - component_id: users-service
+    archetype: service
+    purpose: "Implements users business logic."
+    responsibilities:
+      - "Validate user input"
+      - "Apply business rules"
+    traces_api_resources:
+      - ghosts            # does NOT exist in API__*.yaml
+    traces_api_operations:
+      - phantom-op        # does NOT exist
+    status: confirmed

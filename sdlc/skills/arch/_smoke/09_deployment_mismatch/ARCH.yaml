@@ -1,0 +1,33 @@
+# 09 — Parent deployment_unit incompatible with child deployment.shape.
+# Expectation: validator exits 1 (deployment compatibility check fails).
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "99999999-9999-9999-9999-999999999999"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Deployment-compat test."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: nightly-job
+    archetype: scheduler
+    purpose: "Nightly batch."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: scheduled_job
+    external: false
+    status: confirmed
+    file_path: "ARCH__nightly-job.yaml"
+
+edges: []

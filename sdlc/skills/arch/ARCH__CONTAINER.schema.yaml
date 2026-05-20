@@ -9,6 +9,13 @@
 # This file is the source of truth for AI agents that need to implement,
 # test, or deploy the container. Downstream skills (test, task, deploy)
 # read it directly.
+#
+# External-container exemption: this file is NEVER authored for containers
+# with `external: true` in ARCH.yaml.containers[]. Container mode aborts on
+# external archetypes (identity-provider used externally, all data-store
+# archetypes, `external-service`). If a hand-written ARCH__<external>.yaml
+# exists, the validator skips the "REQUIRED for non-external" checks but
+# warns that the file should not exist.
 # =============================================================================
 
 metadata:                                  # REQUIRED
@@ -73,6 +80,25 @@ ux_surface:                                # OPTIONAL — list (empty for non-fr
 
 # ---------------------------------------------------------------------------
 # deployment — how this container is shipped and run.
+#
+# `deployment.shape` is a SPECIALIZATION of the parent container's
+# `deployment_unit` (in ARCH.yaml). The validator enforces the following
+# compatibility map:
+#
+#   ARCH.yaml deployment_unit  | acceptable deployment.shape values
+#   ---------------------------|--------------------------------------------
+#   long_running_service       | long_running_service | container
+#   scheduled_job              | scheduled_job
+#   batch_job                  | batch_job
+#   static_asset               | static_asset
+#   serverless_function        | serverless_function
+#   container                  | container | long_running_service
+#   external_managed           | managed_service
+#
+# Additionally, archetype-specific shapes are allowed regardless of parent:
+#   - desktop-frontend archetype → desktop_app
+#   - mobile-frontend archetype  → mobile_app
+#   - cli archetype              → cli_binary
 # ---------------------------------------------------------------------------
 deployment:                                # REQUIRED for non-external
   shape:                                   # REQUIRED — one of:
@@ -120,21 +146,41 @@ failure_modes:                             # REQUIRED — non-empty unless trivi
     mitigation: <one or two sentences>
 
 # ---------------------------------------------------------------------------
-# security_concerns — short bulleted list of risks specific to this
-# container. Pre-filled from DATA classification + PRD security_compliance.
+# security_concerns — structured list of risks specific to this container.
+# Pre-filled from DATA classification + PRD security_compliance.
+#
+# Each entry has a stable id so downstream `task` and `test` agents can
+# reference it without ambiguity. The `mitigation` field is optional but
+# strongly encouraged — it's what the `test` agent uses to scaffold the
+# corresponding negative / abuse-case test.
+#
+# Backwards-compatible: a string-only entry (the v1.0 shape) is still
+# accepted by the validator and treated as `{ id: auto, threat: <string> }`.
 # ---------------------------------------------------------------------------
-security_concerns:                         # OPTIONAL — list of short strings
-  - "Handles PII (email, name); DTOs must omit ssn"
-  - "Issues JWTs; private key in vault"
+security_concerns:                         # OPTIONAL — list[SecurityConcern]
+  - id: <kebab-case>                       # REQUIRED when entry is structured
+    threat: <short string>                 # REQUIRED — the risk/threat
+    mitigation: <short string>             # OPTIONAL — how we mitigate it
+    related_data_classification:           # OPTIONAL — list of "Entity.field"
+      - "User.email"                       #            references from
+                                           #            DATA-MODEL.data_classification
 
 # ---------------------------------------------------------------------------
 # components — internal decomposition. `critical` per item drill-down.
 # Component edges are kept here on each component (`edges:` list),
 # mirroring how ARCH.yaml stores container edges.
+#
+# `archetype` is an enum drawn from references/component-taxonomy.yaml.
+# `traces_*` fields ground each component in upstream artifacts; the
+# validator cross-checks them (cross-checks 11/12/13 below).
 # ---------------------------------------------------------------------------
 components:                                # REQUIRED — non-empty
   - component_id: <kebab-case>             # REQUIRED — unique within this container
-    archetype: <enum>                      # REQUIRED — see component-taxonomy.yaml
+    archetype:                             # REQUIRED — one of (see component-taxonomy.yaml):
+      # controller | service | repository | middleware | use_case | view |
+      # state_store | api_client | event_handler | scheduler | validator |
+      # serializer | cache_client | blob_client | background_worker |
+      # config_loader | observability_bootstrap | error_handler | other
     purpose: <one sentence>                # REQUIRED
     responsibilities:                      # REQUIRED — non-empty
       - <one short sentence>
@@ -143,24 +189,59 @@ components:                                # REQUIRED — non-empty
     outputs:                               # OPTIONAL
       - <string>
     traces_api_resources:                  # OPTIONAL — list of API resource_ids
-      - users                              #            this component implements
+      - users                              #            this component implements.
+                                           #            Validated against API__*.yaml
+                                           #            resource_ids.
+    traces_api_operations:                 # OPTIONAL — list of OpenAPI operation_id
+      - get-user                           #            strings (from API__*.yaml
+      - create-user                        #            endpoints[].operation_id).
+                                           #            Lets the `test` agent scaffold
+                                           #            endpoint-level test cases.
+                                           #            Validated against API__*.yaml.
     traces_ux_surfaces:                    # OPTIONAL — list of UX surface_ids
-      - dashboard                          #            this component renders
+      - dashboard                          #            this component renders.
+                                           #            Validated against UX__*.yaml.
     traces_data_entities:                  # OPTIONAL — list of DATA entity names
-      - User                               #            this component reads/writes
-    failure_modes:                         # OPTIONAL — component-level (most live at
-      - <string>                           #            container scope above)
+      - User                               #            (PascalCase) this component
+                                           #            reads/writes. Validated against
+                                           #            DATA-MODEL.yaml.entities.
+    failure_modes:                         # OPTIONAL — structured per item, same shape
+                                           #            as container-level failure_modes.
+                                           #            Backwards-compatible: a bare
+                                           #            string entry is accepted as
+                                           #            { id: auto, description: <str> }.
+      - id: <kebab-case>
+        description: <one sentence>
+        likelihood: low | medium | high
+        impact: low | medium | high
+        mitigation: <one or two sentences>
+    acceptance_criteria:                   # OPTIONAL — list of short strings telling
+      - <string>                           #            the downstream `task` / `test`
+                                           #            agents what "done" looks like
+                                           #            for this component (e.g. "all
+                                           #            owned endpoints return 2xx for
+                                           #            happy-path fixtures").
     status: defined | draft | confirmed    # REQUIRED — interview progress
 
 # ---------------------------------------------------------------------------
 # internal_edges — edges between two components inside this container.
 # Auto-derived in Phase 6 of container mode; users confirm or edit.
+#
+# `via_*` fields are OPTIONAL but strongly recommended — they ground the
+# edge in an upstream artifact. Pre-fill during derivation whenever the
+# evidence is unambiguous.
 # ---------------------------------------------------------------------------
 internal_edges:                            # OPTIONAL — empty for very small containers
   - from: <component_id>                   # REQUIRED — must exist in components[]
     to: <component_id>                     # REQUIRED — must exist in components[]
     type:                                  # REQUIRED — one of:
       # depends_on | calls | reads | writes | publishes | subscribes_to | implements
+    via_resource_id: <api_resource_id>     # OPTIONAL — for `calls` edges into a
+                                           #            controller component
+    via_operation_id: <operation_id>       # OPTIONAL — for `calls` edges that target
+                                           #            a specific endpoint operation
+    via_entity: <PascalCaseEntityName>     # OPTIONAL — for `reads`/`writes` against a
+                                           #            repository component
     note: <short string>                   # OPTIONAL
 
 # ---------------------------------------------------------------------------
@@ -173,6 +254,16 @@ external_edges:                            # OPTIONAL
     to: <container_id>                     # REQUIRED — either "<container_id>" or
                                            #            "<container_id>/<component_id>"
     type: <enum>                           # REQUIRED — same enum as edges
+    via_resource_id: <api_resource_id>     # OPTIONAL — for `calls` edges, the API
+                                           #            resource being called. Validated
+                                           #            against API__*.yaml.
+    via_operation_id: <operation_id>       # OPTIONAL — for `calls` edges, the specific
+                                           #            endpoint operation. Validated
+                                           #            against API__*.yaml endpoints.
+    via_channel_id: <event_channel_id>     # OPTIONAL — for `publishes`/`subscribes_to`,
+                                           #            the API.events channel_id.
+    via_entity: <PascalCaseEntityName>     # OPTIONAL — for `reads`/`writes` against an
+                                           #            external store container.
     note: <string>                         # OPTIONAL
 
 # ---------------------------------------------------------------------------
@@ -184,15 +275,35 @@ arch_warnings:                             # OPTIONAL — list of short strings
 # =============================================================================
 # Required cross-checks (run by validate_schema.py on every write)
 # =============================================================================
-# In addition to the four checks in ARCH.schema.yaml:
+# In addition to the checks in ARCH.schema.yaml:
 #
-# 5. owns_api_resources match — every resource_id in `api_surface` must
-#    appear in the parent ARCH.yaml.containers[id].owns_api_resources.
-# 6. owns_ux_surfaces match — every surface_id in `ux_surface` must
-#    appear in the parent ARCH.yaml.containers[id].owns_ux_surfaces.
-# 7. persistence match — every store_id in `persistence_bindings` must
-#    appear in the parent ARCH.yaml.containers[id].persistence.
-# 8. external_edges resolve — every external_edges[].to that references
-#    "<container_id>" or "<container_id>/<component_id>" must resolve
-#    against the on-disk ARCH.yaml / ARCH__<container>.yaml graph.
+# 10. owns_api_resources match — every resource_id in `api_surface` must
+#     appear in the parent ARCH.yaml.containers[id].owns_api_resources.
+# 11. owns_ux_surfaces match — every surface_id in `ux_surface` must
+#     appear in the parent ARCH.yaml.containers[id].owns_ux_surfaces.
+# 12. persistence match — every store_id in `persistence_bindings` must
+#     appear in the parent ARCH.yaml.containers[id].persistence.
+# 13. external_edges resolve — every external_edges[].to that references
+#     "<container_id>" or "<container_id>/<component_id>" must resolve
+#     against the on-disk ARCH.yaml / ARCH__<container>.yaml graph.
+# 14. Component trace integrity (NEW) — for every component:
+#       * traces_api_resources   ⊆ resource_ids in docs/API__*.yaml
+#       * traces_api_operations  ⊆ operation_ids in docs/API__*.yaml endpoints
+#       * traces_ux_surfaces     ⊆ surface_ids in docs/UX__*.yaml
+#       * traces_data_entities   ⊆ entity names in docs/DATA-MODEL.yaml
+#     Plus parent containment:
+#       * traces_api_resources   ⊆ parent container's owns_api_resources
+#       * traces_ux_surfaces     ⊆ parent container's owns_ux_surfaces
+#     Cross-check failures force `metadata.status: draft`.
+# 15. Edge via_* resolution (NEW) — for every edge with a via_* field set:
+#       * via_resource_id  → must resolve to a resource_id in API__*.yaml
+#       * via_operation_id → must resolve to an operation_id in API__*.yaml
+#       * via_channel_id   → must resolve to API.events.channels[].channel_id
+#       * via_entity       → must resolve to a DATA-MODEL entity name
+# 16. Deployment shape compatibility (NEW) — `deployment.shape` must be
+#     compatible with the parent container's `deployment_unit` per the map
+#     in the `deployment:` block above.
+# 17. External container has no ARCH__*.yaml (NEW) — if the parent container
+#     has `external: true`, this file should not exist; if it does, the
+#     validator emits a warning (not a fail).
 # =============================================================================

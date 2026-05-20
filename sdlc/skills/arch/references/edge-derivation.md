@@ -28,6 +28,29 @@ This file is read at three points:
 Hierarchical relationships (`contains`, `owns`) are NOT edges — they
 live in the document structure (`containers[].components[]`).
 
+## Edge `via_*` pre-fill (REQUIRED practice)
+
+Every derived edge has OPTIONAL `via_*` fields that ground it in an
+upstream artifact. These are not optional in spirit — the downstream
+`test` and `task` agents lean on them heavily. **Always pre-fill them
+when the evidence is unambiguous.**
+
+| Edge type        | Required `via_*` pre-fills (when evidence exists)                |
+|------------------|------------------------------------------------------------------|
+| `calls`          | `via_resource_id` (the API resource being called)                |
+|                  | `via_operation_id` (the specific endpoint, container-edge only)  |
+| `reads`/`writes` | `via_entity` (the DATA entity primarily accessed)                |
+| `publishes`      | `via_channel_id` (the API.events channel)                        |
+| `subscribes_to`  | `via_channel_id` (the API.events channel)                        |
+| `depends_on`     | None — pure topology.                                            |
+| `implements`     | None — contract is the edge's only payload.                      |
+
+If derivation produces an edge but no upstream evidence exists for the
+`via_*` field, leave it null and add a note in `note:` explaining the
+ambiguity. The validator does NOT require `via_*` to be set, but it
+DOES validate any value that is set — typos in `via_*` are blocking
+errors.
+
 ## System-level derivation rules
 
 Scope: edges between containers in `docs/ARCH.yaml`.
@@ -40,12 +63,13 @@ For every resource `R` in `API.yaml.resource_inventory[]`:
 - For every consumer container `C` such that `C != P` AND
   any of `C`'s `owns_ux_surfaces` calls `R` (per `UX__<surface>.yaml.interactions`
   with `effect: call_api` pointing at `R`):
-  emit `{ from: C, to: P, type: calls, note: "consumes <R>" }`.
+  emit `{ from: C, to: P, type: calls, via_resource_id: <R>, note: "consumes <R>" }`.
 - If `UX` doesn't disambiguate which surface calls which resource (the
   default), fall back to: every frontend container `calls` every backend
   container whose resources its surfaces *could* be calling. Surface this
   as a single edge per (frontend, backend) pair — the agent confirms
-  during the synthesis review.
+  during the synthesis review. In the fallback case, leave `via_resource_id`
+  null (ambiguous) and explain in `note`.
 
 ### Rule S2 — Persistence (`reads` / `writes`)
 
@@ -60,7 +84,10 @@ For every container `C` and every store_id `S` in `C.persistence`:
     feature description implies it).
   - Cache client → `reads` + `writes`.
   - Read-only replica binding → `reads` only.
-- Emit one edge per access mode, both `from: C` `to: T`.
+- Emit one edge per access mode, both `from: C` `to: T`. Set
+  `via_entity: <PascalCaseEntityName>` to the primary entity being accessed
+  when DATA-MODEL.access_patterns lets you identify it; otherwise leave
+  null and note the ambiguity.
 
 ### Rule S3 — Identity (`calls`)
 
@@ -68,6 +95,8 @@ For every backend container `C` with `auth.schemes` mentioning JWT /
 OIDC / SAML AND the system has an `identity-provider` container `IDP`:
 
 - Emit `{ from: C, to: IDP, type: calls, note: "validates tokens" }`.
+  No `via_resource_id` (the IDP isn't modelled as an API resource in the
+  consumer project).
 
 If the IDP is external (e.g. Auth0, Cognito), use
 `type: calls` with `note: "external"` and ensure `IDP.external: true`.
@@ -79,10 +108,12 @@ For every channel `CH` in `API.yaml.events.channels`:
 - Find the bus container `BUS` whose archetype is `message-bus`.
 - If `CH.direction == out` (server publishes): for every container `P`
   with `CH.payload_schema_ref` mentioned in its `purpose` /
-  feature-coverage: emit `{ from: P, to: BUS, type: publishes }`.
+  feature-coverage: emit
+  `{ from: P, to: BUS, type: publishes, via_channel_id: CH.channel_id }`.
 - If `CH.direction == in` (server subscribes): for every container `S`
   whose archetype is `worker` / `stream-processor` AND whose features
-  imply consuming `CH`: emit `{ from: S, to: BUS, type: subscribes_to }`.
+  imply consuming `CH`: emit
+  `{ from: S, to: BUS, type: subscribes_to, via_channel_id: CH.channel_id }`.
 
 When `CH` has no payload_schema_ref, infer the producer/consumer from
 the channel name (e.g. `users.created` → producer is the users-owning

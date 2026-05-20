@@ -1,0 +1,34 @@
+# 05 — Single-container CLI, edges=[], status: complete.
+# Expectation: validator exits 0 [OK]. Tests A5 (edge-less systems allowed).
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "55555555-5555-5555-5555-555555555555"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Pure CLI tool with no persistence or network calls."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: my-cli
+    archetype: cli
+    purpose: "Command-line utility."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+
+edges: []
+
+arch_warnings: []

@@ -1,0 +1,3 @@
+# Stub API__users.yaml — the validator only reads resource_id from this file.
+resource_id: users
+base_path: "/v1/users"

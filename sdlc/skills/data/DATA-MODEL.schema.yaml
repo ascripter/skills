@@ -42,7 +42,7 @@ metadata:
                                            #      mode-mismatch, volume-vs-scale).
 
 # data_warnings — informational notes. Used for:
-#   * uncovered PRD F-NNN features ("F-007 has no entity trace")
+#   * uncovered PRD FR-NNN features ("FR-007 has no entity trace")
 #   * surface-coverage gaps ("surface 'foo' has no entity trace")
 #   * classification orphans ("data_classification.pii_fields[2] = User.foo not in User")
 #   * low-confidence answers
@@ -128,7 +128,7 @@ entities:                          # REQUIRED — dict[<PascalCaseEntityName>, E
         type: timestamptz
         nullable: false
         default: "now()"
-    traces_prd_features: ["F-001"] # REQUIRED list[string] — F-NNN feature IDs this
+    traces_prd_features: ["FR-001"] # REQUIRED list[string] — FR-NNN feature IDs this
                                    # entity realizes. Empty list `[]` is valid for
                                    # purely-backend entities (e.g. AuditLog); `null`
                                    # is rejected by the validator.
@@ -371,7 +371,7 @@ external_data_sources:             # optional — list[ExternalDataSource]
 #           id: { type: uuid, primary_key: true, nullable: false }
 #           amount_cents: { type: bigint, nullable: false }
 #           customer_id: { type: uuid, nullable: false, references: Customer.id }
-#         traces_prd_features: [F-001, F-002]
+#         traces_prd_features: [FR-001, FR-002]
 #     relationships:
 #       - from_entity: Invoice
 #         from_field: customer_id

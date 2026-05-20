@@ -1,8 +1,8 @@
 # Smoke fixture: api_kind: rest, status: complete, with a PRD in the
-# same dir that lists F-001 and F-002. The API.yaml only traces F-001
-# (F-002 has no resource trace and is not in non_api_features).
+# same dir that lists FR-001 and FR-002. The API.yaml only traces FR-001
+# (FR-002 has no resource trace and is not in non_api_features).
 # Expected validator behaviour: exit 1, "[FAIL]" with feature-coverage
-# failure naming F-002.
+# failure naming FR-002.
 
 metadata:
   api_version: "1.0"
@@ -48,5 +48,5 @@ resource_inventory:
     status: confirmed
     file_path: docs/API__users.yaml
     primary_entity: User
-    traces_prd_features: ["F-001"]   # F-002 deliberately omitted
+    traces_prd_features: ["FR-001"]   # FR-002 deliberately omitted
     traces_ux_surfaces: []

@@ -10,4 +10,5 @@ dependencies = [
     "pyyaml",
     "pydantic>=2",
     "jsonschema",
+    "ruamel.yaml>=0.18",
 ]

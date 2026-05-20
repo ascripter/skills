@@ -40,7 +40,7 @@ import argparse
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union
 
 try:
     import yaml
@@ -166,6 +166,32 @@ class EdgeType(str, Enum):
     implements = "implements"
 
 
+class ComponentArchetype(str, Enum):
+    """Component archetypes — kept in lockstep with component-taxonomy.yaml
+    and arch-questions.yaml component_inventory.archetype suggested_answers.
+    """
+
+    controller = "controller"
+    service = "service"
+    repository = "repository"
+    middleware = "middleware"
+    use_case = "use_case"
+    view = "view"
+    state_store = "state_store"
+    api_client = "api_client"
+    event_handler = "event_handler"
+    scheduler = "scheduler"
+    validator = "validator"
+    serializer = "serializer"
+    cache_client = "cache_client"
+    blob_client = "blob_client"
+    background_worker = "background_worker"
+    config_loader = "config_loader"
+    observability_bootstrap = "observability_bootstrap"
+    error_handler = "error_handler"
+    other = "other"
+
+
 class PersistenceAccess(str, Enum):
     read = "read"
     write = "write"
@@ -243,6 +269,7 @@ class Container(_Base):
     external: bool = False
     status: Optional[ContainerStatus] = None
     file_path: Optional[str] = None
+    acceptance_criteria: Optional[List[str]] = None
     notes: Optional[str] = None
 
 
@@ -250,6 +277,9 @@ class Edge(_Base):
     from_: Optional[str] = Field(default=None, alias="from")
     to: Optional[str] = None
     type: Optional[EdgeType] = None
+    via_resource_id: Optional[str] = None
+    via_channel_id: Optional[str] = None
+    via_entity: Optional[str] = None
     note: Optional[str] = None
 
 
@@ -366,17 +396,40 @@ class FailureMode(_Base):
     mitigation: Optional[str] = None
 
 
+# Component-level failure modes accept either a structured FailureMode dict
+# or a bare string (backwards-compat with v1.0 free-text form).
+ComponentFailureMode = Union[FailureMode, str]
+
+
+class SecurityConcern(_Base):
+    """Container-level security concern — structured form.
+
+    Backwards-compat: a bare string is also accepted (the v1.0 shape).
+    """
+
+    id: Optional[str] = None
+    threat: Optional[str] = None
+    mitigation: Optional[str] = None
+    related_data_classification: Optional[List[str]] = None
+
+
+# Backwards-compat: security_concerns may be list of structured dicts OR strings.
+ContainerSecurityConcern = Union[SecurityConcern, str]
+
+
 class Component(_Base):
     component_id: str
-    archetype: Optional[str] = None
+    archetype: Optional[ComponentArchetype] = None
     purpose: Optional[str] = None
     responsibilities: Optional[List[str]] = None
     inputs: Optional[List[str]] = None
     outputs: Optional[List[str]] = None
     traces_api_resources: Optional[List[str]] = None
+    traces_api_operations: Optional[List[str]] = None
     traces_ux_surfaces: Optional[List[str]] = None
     traces_data_entities: Optional[List[str]] = None
-    failure_modes: Optional[List[str]] = None
+    failure_modes: Optional[List[ComponentFailureMode]] = None
+    acceptance_criteria: Optional[List[str]] = None
     status: Optional[ContainerStatus] = None
 
 
@@ -384,6 +437,9 @@ class InternalEdge(_Base):
     from_: Optional[str] = Field(default=None, alias="from")
     to: Optional[str] = None
     type: Optional[EdgeType] = None
+    via_resource_id: Optional[str] = None
+    via_operation_id: Optional[str] = None
+    via_entity: Optional[str] = None
     note: Optional[str] = None
 
 
@@ -391,6 +447,10 @@ class ExternalEdge(_Base):
     from_: Optional[str] = Field(default=None, alias="from")
     to: Optional[str] = None  # "<container_id>" or "<container_id>/<component_id>"
     type: Optional[EdgeType] = None
+    via_resource_id: Optional[str] = None
+    via_operation_id: Optional[str] = None
+    via_channel_id: Optional[str] = None
+    via_entity: Optional[str] = None
     note: Optional[str] = None
 
 
@@ -412,7 +472,7 @@ class ArchContainer(BaseModel):
     observability: Optional[Observability] = None
     ownership: Optional[Ownership] = None
     failure_modes: Optional[List[FailureMode]] = None
-    security_concerns: Optional[List[str]] = None
+    security_concerns: Optional[List[ContainerSecurityConcern]] = None
     components: Optional[List[Component]] = None
     internal_edges: Optional[List[InternalEdge]] = None
     external_edges: Optional[List[ExternalEdge]] = None
@@ -434,13 +494,16 @@ class ArchContainer(BaseModel):
 # Required-field checks
 # =============================================================================
 
+# Top-level required scalars + composite blocks. Note `edges` is intentionally
+# absent — an empty `edges: []` is legitimate for trivial single-container
+# systems with no persistence. We instead require the *key* to be present
+# (None means "not authored yet" and forces draft).
 ARCH_REQUIRED_PATHS: List[str] = [
     "architecture_pattern.pattern",
     "architecture_pattern.rationale",
     "identity_and_auth.identity_provider",
     "identity_and_auth.token_strategy",
     "containers",
-    "edges",
 ]
 
 
@@ -466,6 +529,9 @@ def check_arch_required(arch: Arch) -> List[str]:
     for p in ARCH_REQUIRED_PATHS:
         if _is_empty(_get_dotted(arch, p)):
             missing.append(p)
+    # `edges` is required as a key (must not be None) but may be `[]`.
+    if arch.edges is None:
+        missing.append("edges (key must be present, [] is allowed)")
     if arch.containers:
         for i, c in enumerate(arch.containers):
             for field in ("archetype", "purpose", "owns_api_resources",
@@ -479,8 +545,35 @@ def check_arch_required(arch: Arch) -> List[str]:
     return missing
 
 
-def check_container_required(c: ArchContainer, file_label: str) -> List[str]:
+def check_container_required(
+    c: ArchContainer,
+    file_label: str,
+    arch: Optional["Arch"] = None,
+) -> List[str]:
+    """Required-field check for one ARCH__<container>.yaml.
+
+    External-container exemption: if the parent ARCH.yaml has the matching
+    container with `external: true`, we skip tech_stack/deployment/
+    observability/failure_modes/components requirements. The validator
+    surfaces a separate warning that this file should not exist.
+    """
     missing: List[str] = []
+    parent_external = False
+    if arch and arch.containers:
+        parent = next(
+            (p for p in arch.containers if p.container_id == c.container_id),
+            None,
+        )
+        if parent is not None and parent.external:
+            parent_external = True
+
+    if parent_external:
+        # Only check identity fields for external containers.
+        for field in ("overview",):
+            if _is_empty(getattr(c, field, None)):
+                missing.append(f"{file_label}: {field}")
+        return missing
+
     for field in ("overview", "tech_stack", "deployment",
                   "observability", "failure_modes", "components"):
         value = getattr(c, field, None)
@@ -516,6 +609,102 @@ def load_api_resource_ids(docs_dir: Path) -> List[str]:
             if rid:
                 ids.append(str(rid))
     return ids
+
+
+def load_api_operation_ids(docs_dir: Path) -> Set[str]:
+    """Return the union of every operation_id across all docs/API__*.yaml.
+
+    Operation IDs come from API__<resource>.yaml endpoints[].operation_id.
+    Used to validate Component.traces_api_operations and Edge.via_operation_id.
+    """
+    op_ids: Set[str] = set()
+    for path in sorted(docs_dir.glob("API__*.yaml")):
+        try:
+            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            continue
+        if not isinstance(raw, dict):
+            continue
+        endpoints = raw.get("endpoints") or []
+        if not isinstance(endpoints, list):
+            continue
+        for ep in endpoints:
+            if isinstance(ep, dict):
+                oid = ep.get("operation_id")
+                if oid:
+                    op_ids.add(str(oid))
+    return op_ids
+
+
+def load_api_channel_ids(docs_dir: Path) -> Set[str]:
+    """Return API.events.channels[].channel_id from docs/API.yaml."""
+    api_path = docs_dir / "API.yaml"
+    if not api_path.exists():
+        return set()
+    try:
+        raw = yaml.safe_load(api_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return set()
+    if not isinstance(raw, dict):
+        return set()
+    events = raw.get("events") or {}
+    if not isinstance(events, dict):
+        return set()
+    channels = events.get("channels") or []
+    if not isinstance(channels, list):
+        return set()
+    ids: Set[str] = set()
+    for ch in channels:
+        if isinstance(ch, dict):
+            cid = ch.get("channel_id")
+            if cid:
+                ids.add(str(cid))
+    return ids
+
+
+def load_data_entity_names(data_path: Path) -> Set[str]:
+    """Return entity names from DATA-MODEL.yaml.entities (top-level keys)."""
+    if not data_path.exists():
+        return set()
+    try:
+        raw = yaml.safe_load(data_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return set()
+    if not isinstance(raw, dict):
+        return set()
+    entities = raw.get("entities") or {}
+    if not isinstance(entities, dict):
+        return set()
+    return {str(k) for k in entities.keys()}
+
+
+def load_upstream_statuses(docs_dir: Path) -> Dict[str, Optional[str]]:
+    """Return metadata.status from each upstream artifact.
+
+    Returns a dict {artifact_name: status_or_None}. None means the file
+    was missing or unreadable. Used for the upstream-awareness warning
+    cross-check.
+    """
+    out: Dict[str, Optional[str]] = {}
+    for name in ("PRD.yaml", "UX.yaml", "DATA-MODEL.yaml", "API.yaml"):
+        p = docs_dir / name
+        if not p.exists():
+            out[name] = None
+            continue
+        try:
+            raw = yaml.safe_load(p.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            out[name] = None
+            continue
+        if not isinstance(raw, dict):
+            out[name] = None
+            continue
+        meta = raw.get("metadata") or {}
+        if not isinstance(meta, dict):
+            out[name] = None
+            continue
+        out[name] = meta.get("status")
+    return out
 
 
 def load_ux_data_bearing_surface_ids(docs_dir: Path) -> List[str]:
@@ -671,6 +860,291 @@ def check_container_edges(
     return errs
 
 
+_DEPLOYMENT_COMPAT: Dict[str, Set[str]] = {
+    "long_running_service": {"long_running_service", "container"},
+    "scheduled_job": {"scheduled_job"},
+    "batch_job": {"batch_job"},
+    "static_asset": {"static_asset"},
+    "serverless_function": {"serverless_function"},
+    "container": {"container", "long_running_service"},
+    "external_managed": {"managed_service"},
+}
+
+# Archetype-specific shapes that override the parent compatibility map.
+_ARCHETYPE_SHAPE_OVERRIDES: Dict[str, Set[str]] = {
+    "desktop-frontend": {"desktop_app"},
+    "mobile-frontend": {"mobile_app"},
+    "cli": {"cli_binary"},
+}
+
+
+def check_deployment_compatibility(
+    container: ArchContainer,
+    arch: Optional[Arch],
+    file_label: str,
+) -> List[str]:
+    """Check that container.deployment.shape is compatible with parent
+    container.deployment_unit (per ARCH__CONTAINER schema cross-check #16).
+    """
+    errs: List[str] = []
+    if arch is None or not arch.containers:
+        return errs
+    if container.deployment is None or container.deployment.shape is None:
+        return errs
+    parent = next(
+        (c for c in arch.containers if c.container_id == container.container_id),
+        None,
+    )
+    if parent is None or parent.deployment_unit is None:
+        return errs
+    shape_str = container.deployment.shape.value
+    unit_str = parent.deployment_unit.value
+    parent_arch_str = parent.archetype.value if parent.archetype else None
+    allowed = set(_DEPLOYMENT_COMPAT.get(unit_str, set()))
+    if parent_arch_str:
+        allowed |= _ARCHETYPE_SHAPE_OVERRIDES.get(parent_arch_str, set())
+    if shape_str not in allowed:
+        errs.append(
+            f"{file_label}: deployment.shape='{shape_str}' is not compatible "
+            f"with parent deployment_unit='{unit_str}' "
+            f"(archetype='{parent_arch_str}'). Allowed: {sorted(allowed)}"
+        )
+    return errs
+
+
+def check_component_traces(
+    container: ArchContainer,
+    arch: Optional[Arch],
+    file_label: str,
+    api_resource_ids: Set[str],
+    api_operation_ids: Set[str],
+    ux_surface_ids: Set[str],
+    data_entity_names: Set[str],
+) -> List[str]:
+    """Cross-check #14 — every Component.traces_* entry resolves to an
+    upstream artifact AND, for api/ux traces, sits within the parent
+    container's owns_*.
+    """
+    errs: List[str] = []
+    if not container.components:
+        return errs
+
+    parent_owns_api: Set[str] = set()
+    parent_owns_ux: Set[str] = set()
+    if arch and arch.containers:
+        parent = next(
+            (c for c in arch.containers if c.container_id == container.container_id),
+            None,
+        )
+        if parent is not None:
+            parent_owns_api = set(parent.owns_api_resources or [])
+            parent_owns_ux = set(parent.owns_ux_surfaces or [])
+
+    for i, comp in enumerate(container.components):
+        cid = comp.component_id
+        # traces_api_resources
+        for r in comp.traces_api_resources or []:
+            if api_resource_ids and r not in api_resource_ids:
+                errs.append(
+                    f"{file_label}: components[{i}]='{cid}'.traces_api_resources "
+                    f"contains '{r}' which is not a resource_id in any API__*.yaml"
+                )
+            elif parent_owns_api and r not in parent_owns_api:
+                errs.append(
+                    f"{file_label}: components[{i}]='{cid}'.traces_api_resources "
+                    f"contains '{r}' which is not in the parent container's "
+                    f"owns_api_resources"
+                )
+        # traces_api_operations
+        for op in comp.traces_api_operations or []:
+            if api_operation_ids and op not in api_operation_ids:
+                errs.append(
+                    f"{file_label}: components[{i}]='{cid}'.traces_api_operations "
+                    f"contains '{op}' which is not an operation_id in any API__*.yaml"
+                )
+        # traces_ux_surfaces
+        for s in comp.traces_ux_surfaces or []:
+            if ux_surface_ids and s not in ux_surface_ids:
+                errs.append(
+                    f"{file_label}: components[{i}]='{cid}'.traces_ux_surfaces "
+                    f"contains '{s}' which is not a surface_id in any UX__*.yaml"
+                )
+            elif parent_owns_ux and s not in parent_owns_ux:
+                errs.append(
+                    f"{file_label}: components[{i}]='{cid}'.traces_ux_surfaces "
+                    f"contains '{s}' which is not in the parent container's "
+                    f"owns_ux_surfaces"
+                )
+        # traces_data_entities
+        for e in comp.traces_data_entities or []:
+            if data_entity_names and e not in data_entity_names:
+                errs.append(
+                    f"{file_label}: components[{i}]='{cid}'.traces_data_entities "
+                    f"contains '{e}' which is not an entity in DATA-MODEL.yaml"
+                )
+    return errs
+
+
+def check_edge_via_fields_arch(
+    arch: Arch,
+    api_resource_ids: Set[str],
+    api_channel_ids: Set[str],
+    data_entity_names: Set[str],
+) -> List[str]:
+    """Cross-check #5/6/7 + #15 — every Edge.via_* (when set) resolves."""
+    errs: List[str] = []
+    for i, e in enumerate(arch.edges or []):
+        if e.via_resource_id and api_resource_ids and e.via_resource_id not in api_resource_ids:
+            errs.append(
+                f"edges[{i}].via_resource_id='{e.via_resource_id}' "
+                f"is not a resource_id in any API__*.yaml"
+            )
+        if e.via_channel_id and api_channel_ids and e.via_channel_id not in api_channel_ids:
+            errs.append(
+                f"edges[{i}].via_channel_id='{e.via_channel_id}' "
+                f"is not a channel_id in API.yaml.events.channels[]"
+            )
+        if e.via_entity and data_entity_names and e.via_entity not in data_entity_names:
+            errs.append(
+                f"edges[{i}].via_entity='{e.via_entity}' "
+                f"is not an entity in DATA-MODEL.yaml"
+            )
+    return errs
+
+
+def check_edge_via_fields_container(
+    container: ArchContainer,
+    file_label: str,
+    api_resource_ids: Set[str],
+    api_operation_ids: Set[str],
+    api_channel_ids: Set[str],
+    data_entity_names: Set[str],
+) -> List[str]:
+    """Cross-check #15 (container scope) — every InternalEdge/ExternalEdge
+    via_* (when set) resolves to upstream artifact.
+    """
+    errs: List[str] = []
+
+    def _check(label: str, e: Any) -> None:
+        rid = getattr(e, "via_resource_id", None)
+        oid = getattr(e, "via_operation_id", None)
+        cid = getattr(e, "via_channel_id", None)
+        ent = getattr(e, "via_entity", None)
+        if rid and api_resource_ids and rid not in api_resource_ids:
+            errs.append(
+                f"{file_label}: {label}.via_resource_id='{rid}' "
+                f"is not a resource_id in any API__*.yaml"
+            )
+        if oid and api_operation_ids and oid not in api_operation_ids:
+            errs.append(
+                f"{file_label}: {label}.via_operation_id='{oid}' "
+                f"is not an operation_id in any API__*.yaml"
+            )
+        if cid and api_channel_ids and cid not in api_channel_ids:
+            errs.append(
+                f"{file_label}: {label}.via_channel_id='{cid}' "
+                f"is not a channel_id in API.yaml.events.channels[]"
+            )
+        if ent and data_entity_names and ent not in data_entity_names:
+            errs.append(
+                f"{file_label}: {label}.via_entity='{ent}' "
+                f"is not an entity in DATA-MODEL.yaml"
+            )
+
+    for i, e in enumerate(container.internal_edges or []):
+        _check(f"internal_edges[{i}]", e)
+    for i, e in enumerate(container.external_edges or []):
+        _check(f"external_edges[{i}]", e)
+    return errs
+
+
+def check_file_path_integrity(arch: Arch, docs_dir: Path) -> List[str]:
+    """Cross-check #8 — file_path ↔ on-disk integrity.
+
+    For every containers[].file_path that is set: the file must exist.
+    For every sibling docs/ARCH__*.yaml: it must be referenced by some
+    container's file_path.
+
+    Resolution order for a relative file_path (e.g. "docs/ARCH__x.yaml"
+    in production, or "ARCH__x.yaml" in a fixture subdir):
+      1. `docs_dir.parent / file_path`  (canonical production layout)
+      2. `docs_dir / Path(file_path).name`  (fixture / flat layout)
+    The first one that exists wins.
+    """
+    errs: List[str] = []
+    referenced: Set[Path] = set()
+    if arch.containers:
+        for c in arch.containers:
+            if c.file_path:
+                fp = Path(c.file_path)
+                resolved: Optional[Path] = None
+                if fp.is_absolute():
+                    if fp.exists():
+                        resolved = fp
+                else:
+                    cand1 = (docs_dir.parent / fp).resolve()
+                    if cand1.exists():
+                        resolved = cand1
+                    else:
+                        cand2 = (docs_dir / fp.name).resolve()
+                        if cand2.exists():
+                            resolved = cand2
+                if resolved is None:
+                    errs.append(
+                        f"containers[id='{c.container_id}'].file_path='{c.file_path}' "
+                        f"does not exist on disk"
+                    )
+                else:
+                    referenced.add(resolved.resolve())
+
+    on_disk = {p.resolve() for p in docs_dir.glob("ARCH__*.yaml")}
+    unreferenced = on_disk - referenced
+    for p in sorted(unreferenced):
+        errs.append(
+            f"{p.name} exists on disk but is not referenced by any "
+            f"containers[].file_path"
+        )
+    return errs
+
+
+def check_external_container_files(
+    arch: Arch,
+    containers_on_disk: Dict[str, "ArchContainer"],
+) -> List[str]:
+    """Cross-check #17 — emit a warning for any ARCH__<id>.yaml whose
+    parent container has external: true.
+    """
+    warnings: List[str] = []
+    if not arch.containers:
+        return warnings
+    external_ids = {c.container_id for c in arch.containers if c.external}
+    for fname, container in containers_on_disk.items():
+        if container.container_id in external_ids:
+            warnings.append(
+                f"{fname}: parent container '{container.container_id}' is "
+                f"external: true — this file should not exist (external "
+                f"containers don't get a deep-dive)"
+            )
+    return warnings
+
+
+def check_upstream_status_warnings(docs_dir: Path) -> List[str]:
+    """Cross-check #9 — warn if any upstream metadata.status != 'complete'."""
+    warnings: List[str] = []
+    statuses = load_upstream_statuses(docs_dir)
+    for name, status in statuses.items():
+        if status is None:
+            # Missing upstreams aren't this validator's problem; the skill
+            # itself refuses to run. Skip the warning here.
+            continue
+        if status != "complete":
+            warnings.append(
+                f"upstream {name}: metadata.status='{status}' "
+                f"(arch should only be authored from complete upstreams)"
+            )
+    return warnings
+
+
 def check_container_self_consistency(
     container: ArchContainer,
     arch: Optional[Arch],
@@ -784,30 +1258,62 @@ def validate_all(arch_path: Path) -> int:
             return 1
         containers[cp.name] = container
 
-    # 3) Required fields
+    # 3) Cross-check loaders (run once, reused below)
+    api_ids = load_api_resource_ids(docs_dir)
+    api_ids_set: Set[str] = set(api_ids)
+    api_operation_ids = load_api_operation_ids(docs_dir)
+    api_channel_ids = load_api_channel_ids(docs_dir)
+    ux_ids = load_ux_data_bearing_surface_ids(docs_dir)
+    ux_ids_set: Set[str] = set(ux_ids)
+    store_ids = load_data_store_ids(docs_dir / "DATA-MODEL.yaml")
+    data_entity_names = load_data_entity_names(docs_dir / "DATA-MODEL.yaml")
+
+    # 4) Required fields (with new external-container exemption)
     missing_arch = check_arch_required(arch)
     missing_containers: List[str] = []
     edge_errs_containers: List[str] = []
     consistency_errs: List[str] = []
+    component_trace_errs: List[str] = []
+    container_via_errs: List[str] = []
+    deployment_compat_errs: List[str] = []
     for name, c in containers.items():
-        missing_containers.extend(check_container_required(c, name))
+        missing_containers.extend(check_container_required(c, name, arch))
         edge_errs_containers.extend(check_container_edges(c, name, arch))
         consistency_errs.extend(check_container_self_consistency(c, arch, name))
+        component_trace_errs.extend(
+            check_component_traces(
+                c, arch, name,
+                api_ids_set, api_operation_ids,
+                ux_ids_set, data_entity_names,
+            )
+        )
+        container_via_errs.extend(
+            check_edge_via_fields_container(
+                c, name,
+                api_ids_set, api_operation_ids,
+                api_channel_ids, data_entity_names,
+            )
+        )
+        deployment_compat_errs.extend(check_deployment_compatibility(c, arch, name))
 
-    # 4) Cross-checks
-    api_ids = load_api_resource_ids(docs_dir)
-    ux_ids = load_ux_data_bearing_surface_ids(docs_dir)
-    store_ids = load_data_store_ids(docs_dir / "DATA-MODEL.yaml")
-
+    # 5) Cross-checks (system level)
     uncovered_api = check_api_coverage(arch, api_ids)
     uncovered_ux = check_ux_coverage(arch, ux_ids)
     uncovered_stores = check_store_coverage(arch, store_ids)
     bad_arch_edges = check_arch_edges(arch)
+    arch_via_errs = check_edge_via_fields_arch(
+        arch, api_ids_set, api_channel_ids, data_entity_names
+    )
+    file_path_errs = check_file_path_integrity(arch, docs_dir)
+    external_warnings = check_external_container_files(arch, containers)
+    upstream_warnings = check_upstream_status_warnings(docs_dir)
 
     status = arch.metadata.status
     n_containers = len(containers)
 
-    # 5) Reporting
+    # 6) Reporting — hard problems force draft / block complete.
+    # Warnings (external_warnings, upstream_warnings) are surfaced but do
+    # NOT block complete on their own.
     problems = bool(
         missing_arch
         or missing_containers
@@ -817,6 +1323,11 @@ def validate_all(arch_path: Path) -> int:
         or bad_arch_edges
         or edge_errs_containers
         or consistency_errs
+        or component_trace_errs
+        or container_via_errs
+        or arch_via_errs
+        or deployment_compat_errs
+        or file_path_errs
     )
 
     if status == "complete" and problems:
@@ -830,8 +1341,14 @@ def validate_all(arch_path: Path) -> int:
             bad_arch_edges,
             edge_errs_containers,
             consistency_errs,
+            component_trace_errs,
+            arch_via_errs,
+            container_via_errs,
+            deployment_compat_errs,
+            file_path_errs,
             store_ids,
         )
+        _print_warnings(external_warnings, upstream_warnings)
         return 1
 
     if status == "complete":
@@ -846,6 +1363,7 @@ def validate_all(arch_path: Path) -> int:
             f"{len(ux_ids)} data-bearing UX surface(s) all owned; "
             f"{store_note}; edges resolve."
         )
+        _print_warnings(external_warnings, upstream_warnings)
         return 0
 
     # status == "draft"
@@ -870,6 +1388,11 @@ def validate_all(arch_path: Path) -> int:
             bad_arch_edges,
             edge_errs_containers,
             consistency_errs,
+            component_trace_errs,
+            arch_via_errs,
+            container_via_errs,
+            deployment_compat_errs,
+            file_path_errs,
             store_ids,
         )
     else:
@@ -877,6 +1400,7 @@ def validate_all(arch_path: Path) -> int:
             "\nAll required fields filled, coverage complete, edges resolve. "
             "Set metadata.status: complete when done."
         )
+    _print_warnings(external_warnings, upstream_warnings)
     return 0
 
 
@@ -889,6 +1413,11 @@ def _print_problems(
     bad_arch_edges: List[str],
     edge_errs_containers: List[str],
     consistency_errs: List[str],
+    component_trace_errs: List[str],
+    arch_via_errs: List[str],
+    container_via_errs: List[str],
+    deployment_compat_errs: List[str],
+    file_path_errs: List[str],
     store_ids: Optional[List[str]],
 ) -> None:
     if missing_arch:
@@ -930,6 +1459,44 @@ def _print_problems(
         print(f"{len(consistency_errs)} container/system consistency error(s):")
         for b in consistency_errs:
             print(f"  - {b}")
+        print()
+    if component_trace_errs:
+        print(f"{len(component_trace_errs)} component trace integrity error(s):")
+        for b in component_trace_errs:
+            print(f"  - {b}")
+        print()
+    if arch_via_errs:
+        print(f"{len(arch_via_errs)} ARCH.yaml edge via_* resolution error(s):")
+        for b in arch_via_errs:
+            print(f"  - {b}")
+        print()
+    if container_via_errs:
+        print(f"{len(container_via_errs)} container-edge via_* resolution error(s):")
+        for b in container_via_errs:
+            print(f"  - {b}")
+        print()
+    if deployment_compat_errs:
+        print(f"{len(deployment_compat_errs)} deployment compatibility error(s):")
+        for b in deployment_compat_errs:
+            print(f"  - {b}")
+        print()
+    if file_path_errs:
+        print(f"{len(file_path_errs)} container file_path integrity error(s):")
+        for b in file_path_errs:
+            print(f"  - {b}")
+
+
+def _print_warnings(external_warnings: List[str], upstream_warnings: List[str]) -> None:
+    if external_warnings:
+        print()
+        print(f"WARNINGS ({len(external_warnings)} external-container file(s)):")
+        for w in external_warnings:
+            print(f"  - {w}")
+    if upstream_warnings:
+        print()
+        print(f"WARNINGS ({len(upstream_warnings)} upstream-status issue(s)):")
+        for w in upstream_warnings:
+            print(f"  - {w}")
 
 
 def main(argv: Optional[List[str]] = None) -> int:

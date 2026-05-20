@@ -7,7 +7,7 @@ metadata:
   status: "draft"   # ← draft with missing required field → exit 0 (DRAFT)
 
 prd_warnings:
-  - "product_identity.name not yet filled in"   # informational note, not an ack flag
+  - "WRN-001: product_identity.name not yet filled in"   # informational note, not an ack flag
 
 product_identity:
   name: null
@@ -17,13 +17,13 @@ problem_opportunity:
   problem_statement: "Existing trackers are too heavyweight for small teams."
 
 users_personas:
-  primary_users: ["Engineering team leads"]
+  primary_users: ["PER-001: Engineering team leads"]
 
 use_cases:
-  core_workflows: ["Add a task quickly"]
+  core_workflows: ["WKFR-001: Add a task quickly"]
 
 functional_requirements:
-  must_have_features: ["F-001: Quick add — add a task in under 3 seconds."]
+  must_have_features: ["FR-001: Quick add — add a task in under 3 seconds."]
 
 technical_constraints:
   primary_language: python

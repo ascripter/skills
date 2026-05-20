@@ -1,0 +1,10 @@
+resource_id: users
+base_path: "/v1/users"
+endpoints:
+  - operation_id: list-users
+    method: GET
+    path: "/v1/users"
+    summary: "List users."
+    responses:
+      "200":
+        description: ok

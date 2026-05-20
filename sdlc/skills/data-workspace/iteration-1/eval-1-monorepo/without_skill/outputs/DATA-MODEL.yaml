@@ -7,13 +7,13 @@ metadata:
   status: "draft"
 
 data_warnings:
-  - "Per-scope feature-coverage check in validator treats the union of PRD F-NNN IDs as required per product; F-003 (auth admin console) is intentionally not traced in the billing product, so billing surfaces a soft uncovered-feature warning. Acceptable for draft status."
+  - "Per-scope feature-coverage check in validator treats the union of PRD FR-NNN IDs as required per product; FR-003 (auth admin console) is intentionally not traced in the billing product, so billing surfaces a soft uncovered-feature warning. Acceptable for draft status."
 
 products:
 
   # ===========================================================================
   # AUTH — Go server, OIDC-compliant identity service.
-  # PRD must-haves: F-001 OIDC, F-002 Refresh tokens, F-003 Admin console.
+  # PRD must-haves: FR-001 OIDC, FR-002 Refresh tokens, FR-003 Admin console.
   # ===========================================================================
   auth:
 
@@ -81,7 +81,7 @@ products:
             type: timestamptz
             nullable: false
             default: "now()"
-        traces_prd_features: ["F-001", "F-003"]
+        traces_prd_features: ["FR-001", "FR-003"]
         traces_ux_surfaces: null
 
       User:
@@ -126,7 +126,7 @@ products:
             type: timestamptz
             nullable: false
             default: "now()"
-        traces_prd_features: ["F-001", "F-003"]
+        traces_prd_features: ["FR-001", "FR-003"]
         traces_ux_surfaces: null
 
       OidcProvider:
@@ -164,7 +164,7 @@ products:
             type: timestamptz
             nullable: false
             default: "now()"
-        traces_prd_features: ["F-001"]
+        traces_prd_features: ["FR-001"]
         traces_ux_surfaces: null
 
       Session:
@@ -206,7 +206,7 @@ products:
           user_agent:
             type: text
             nullable: true
-        traces_prd_features: ["F-001", "F-002"]
+        traces_prd_features: ["FR-001", "FR-002"]
         traces_ux_surfaces: null
 
       RefreshToken:
@@ -246,7 +246,7 @@ products:
           revoke_reason:
             type: string
             nullable: true
-        traces_prd_features: ["F-002"]
+        traces_prd_features: ["FR-002"]
         traces_ux_surfaces: null
 
       AdminUser:
@@ -280,7 +280,7 @@ products:
             type: timestamptz
             nullable: false
             default: "now()"
-        traces_prd_features: ["F-003"]
+        traces_prd_features: ["FR-003"]
         traces_ux_surfaces: null
 
       AuditLog:
@@ -326,7 +326,7 @@ products:
             type: timestamptz
             nullable: false
             default: "now()"
-        traces_prd_features: ["F-003"]
+        traces_prd_features: ["FR-003"]
         traces_ux_surfaces: null
 
     relationships:
@@ -517,7 +517,7 @@ products:
 
   # ===========================================================================
   # BILLING — TypeScript server, monthly invoicing + Stripe integration.
-  # PRD must-haves: F-001 Invoice generation, F-002 Stripe integration.
+  # PRD must-haves: FR-001 Invoice generation, FR-002 Stripe integration.
   # ===========================================================================
   billing:
 
@@ -592,7 +592,7 @@ products:
             type: timestamptz
             nullable: false
             default: "now()"
-        traces_prd_features: ["F-001", "F-002"]
+        traces_prd_features: ["FR-001", "FR-002"]
         traces_ux_surfaces: null
 
       Invoice:
@@ -666,7 +666,7 @@ products:
             type: timestamptz
             nullable: false
             default: "now()"
-        traces_prd_features: ["F-001", "F-002"]
+        traces_prd_features: ["FR-001", "FR-002"]
         traces_ux_surfaces: null
 
       InvoiceLineItem:
@@ -704,7 +704,7 @@ products:
             type: timestamptz
             nullable: false
             default: "now()"
-        traces_prd_features: ["F-001"]
+        traces_prd_features: ["FR-001"]
         traces_ux_surfaces: null
 
       Payment:
@@ -759,7 +759,7 @@ products:
             type: timestamptz
             nullable: false
             default: "now()"
-        traces_prd_features: ["F-002"]
+        traces_prd_features: ["FR-002"]
         traces_ux_surfaces: null
 
       StripeWebhookEvent:
@@ -800,7 +800,7 @@ products:
           processing_error:
             type: text
             nullable: true
-        traces_prd_features: ["F-002"]
+        traces_prd_features: ["FR-002"]
         traces_ux_surfaces: null
 
     relationships:

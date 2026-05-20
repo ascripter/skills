@@ -96,10 +96,26 @@ containers:                                # REQUIRED — non-empty
       change_cadence: <string>             # OPTIONAL — e.g. "weekly", "monthly"
     external: false                        # OPTIONAL — true means this container is a
                                            #            third-party service we depend on,
-                                           #            not something we build.
+                                           #            not something we build. When true,
+                                           #            this container MUST NOT have an
+                                           #            ARCH__<id>.yaml sibling (container
+                                           #            mode aborts on external containers).
     status: defined | draft | confirmed    # REQUIRED — interview progress per container
     file_path:                             # OPTIONAL — set by container mode on completion;
-                                           #            e.g. "docs/ARCH__backend-api.yaml"
+                                           #            e.g. "docs/ARCH__backend-api.yaml".
+                                           #            Validator cross-checks that the
+                                           #            referenced file exists on disk
+                                           #            AND that every sibling
+                                           #            ARCH__*.yaml is referenced by some
+                                           #            container's file_path.
+    acceptance_criteria:                   # OPTIONAL — list of short strings telling the
+      - <string>                           #            downstream `task` and `test` agents
+                                           #            what "done" looks like for this
+                                           #            container (e.g. "passes the
+                                           #            integration test suite for all
+                                           #            owned API resources"). Container
+                                           #            mode's `per_container_deepdive`
+                                           #            can populate this.
     notes: <string>                        # OPTIONAL
 
 # ---------------------------------------------------------------------------
@@ -108,12 +124,34 @@ containers:                                # REQUIRED — non-empty
 #
 # Auto-derived from API + DATA + UX in Phase 6 and via -d mode; users
 # confirm or edit, they do not enumerate from scratch.
+#
+# An EMPTY list `[]` is valid (single-container CLIs with no persistence
+# and no external integrations legitimately have no edges). The validator
+# only requires the `edges:` key to be PRESENT (not null); an empty list
+# does not block `status: complete`.
+#
+# The `via_*` fields are OPTIONAL but strongly recommended — they let the
+# downstream `test` and `task` agents ground each edge in a specific
+# upstream artifact rather than re-deriving from scratch. Pre-fill them
+# during edge derivation whenever the evidence is unambiguous.
 # ---------------------------------------------------------------------------
-edges:                                     # REQUIRED — non-empty in any non-trivial system
+edges:                                     # REQUIRED key (may be `[]`)
   - from: <container_id>                   # REQUIRED — must exist in containers[]
     to: <container_id>                     # REQUIRED — must exist in containers[]
     type:                                  # REQUIRED — one of:
       # depends_on | calls | reads | writes | publishes | subscribes_to | implements
+    via_resource_id: <api_resource_id>     # OPTIONAL — for `calls` edges, the
+                                           #            API resource being called.
+                                           #            Validated against API__*.yaml
+                                           #            resource_ids when set.
+    via_channel_id: <event_channel_id>     # OPTIONAL — for `publishes` / `subscribes_to`
+                                           #            edges, the API.events channel_id.
+                                           #            Validated against API.yaml
+                                           #            events.channels[].channel_id when set.
+    via_entity: <PascalCaseEntityName>     # OPTIONAL — for `reads` / `writes` edges, the
+                                           #            primary DATA entity being accessed.
+                                           #            Validated against DATA-MODEL.yaml
+                                           #            entities when set.
     note: <short string>                   # OPTIONAL — evidence or rationale
                                            #            (e.g. "API users → backend-api;
                                            #            backend-api writes primary-postgres")
@@ -134,8 +172,24 @@ arch_warnings:                             # OPTIONAL — list of short strings
 #    container's owns_api_resources.
 # 2. UX-surface coverage — every data-bearing surface in UX__*.yaml appears
 #    in some container's owns_ux_surfaces.
+#    "Data-bearing" surfaces (downstream agents must own the data flow): one
+#    of {screen, page, tab, modal, dialog, drawer, panel, cli_command,
+#    flow_step, other}. Excluded as non-data-bearing: {empty_state, toast,
+#    overlay}.
 # 3. DATA-store coverage — every store in DATA-MODEL.persistence appears
 #    in some container's persistence.
 # 4. Edge endpoint integrity — every edges[].from and edges[].to is a valid
 #    container_id.
+# 5. Edge via_resource_id (when set) resolves to an API__*.yaml resource_id.
+# 6. Edge via_channel_id (when set) resolves to API.yaml events.channels[].channel_id.
+# 7. Edge via_entity (when set) resolves to a DATA-MODEL.yaml entity name.
+# 8. file_path integrity — every containers[].file_path that is set points
+#    to a file that exists on disk; every sibling docs/ARCH__*.yaml is
+#    referenced by some container's file_path.
+# 9. Upstream metadata.status warning — if any of PRD/UX/DATA/API has
+#    metadata.status != "complete", emit a warning (not a fail); a downstream
+#    agent reading ARCH should know it was built on a partial chain.
+#
+# Container-vs-system consistency (see ARCH__CONTAINER.schema.yaml for
+# checks 10–13 — owns/api/ux/persistence containment plus component traces).
 # =============================================================================

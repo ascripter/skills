@@ -54,7 +54,7 @@ Examples:
 - `PRD.data_model.key_entities: [User, Project]` but `models/` has
   `User`, `Project`, `Workspace` → pre-fill all three from the repo,
   tag `Workspace` as `⚠ inferred — not in PRD; appears in repo`.
-- `PRD.functional_requirements.must_have_features` includes F-007 about
+- `PRD.functional_requirements.must_have_features` includes FR-007 about
   notifications but no UX surface references notifications → pre-fill a
   `Notification` entity as `⚠ inferred`, flag uncovered surface trace.
 
@@ -125,7 +125,7 @@ exhausting. Offer a fast-path:
 On accept: import all entities with confirmed status, then iterate only
 through:
 
-1. Entities missing `traces_prd_features` (need user to assign F-NNN).
+1. Entities missing `traces_prd_features` (need user to assign FR-NNN).
 2. Entities missing `description`.
 3. Entities involved in N:M relationships (need join-table confirmation).
 
@@ -170,7 +170,7 @@ For projects with hundreds of files in `models/` or `migrations/`:
 The user updates PRD (new features), then re-runs `/sdlc:data`. The
 existing DATA-MODEL is now stale:
 
-1. The validator's feature-coverage check will flag the new F-NNNs as
+1. The validator's feature-coverage check will flag the new FR-NNNs as
    uncovered.
 2. The interview pre-fill will surface them as ⚠ inferred entity
    candidates.
@@ -179,7 +179,7 @@ existing DATA-MODEL is now stale:
 
 If `PRD.metadata.session_id` doesn't match what was recorded last time,
 flag *"PRD was updated since the last data-model session. Reviewing
-deltas:"* and list the new F-NNN features.
+deltas:"* and list the new FR-NNN features.
 
 ## Empty entities dict at status:complete
 

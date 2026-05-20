@@ -1,0 +1,35 @@
+# 01 — Minimal valid ARCH.yaml with no upstream artifacts.
+# Expectation: status='complete', validator exits 0 with [OK].
+# (No API/UX/DATA siblings ⇒ coverage checks find 0 to cover ⇒ pass.)
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "11111111-1111-1111-1111-111111111111"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Solo project, simple CRUD, time-to-MVP outweighs modularity."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "Main application monolith."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+
+edges: []
+
+arch_warnings: []

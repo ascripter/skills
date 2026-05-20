@@ -19,7 +19,7 @@ Phase 5 (when presenting pre-fills for confirmation).
 | `PRD.data_model.storage_preferences_rationale`                         | `persistence.primary_store_rationale`              | ✓ found        |
 | `PRD.data_model.data_ownership`                                        | `data_warnings` note (downstream visibility)       | ✓ found        |
 | `PRD.data_model.data_volume_estimate`                                  | gates `scale_and_retention` promotion              | ✓ found        |
-| `PRD.functional_requirements.must_have_features[*].id` (F-NNN)         | candidate `entities.*.traces_prd_features`         | ⚠ inferred     |
+| `PRD.functional_requirements.must_have_features[*].id` (FR-NNN)         | candidate `entities.*.traces_prd_features`         | ⚠ inferred     |
 | `PRD.functional_requirements.integrations_required`                    | `external_data_sources[*].name`                    | ✓ found        |
 | `PRD.security_compliance.data_sensitivity`                             | `data_classification.regulated_fields` heuristic   | ⚠ inferred     |
 | `PRD.security_compliance.regulatory_requirements: [gdpr, ccpa]`        | `data_classification.pii_fields` default scope     | ⚠ inferred     |

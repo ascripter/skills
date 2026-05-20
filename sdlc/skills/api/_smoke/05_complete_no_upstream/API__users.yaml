@@ -9,8 +9,8 @@ resource_id: users
 base_path: /v1/users
 primary_entity: User
 traces_prd_features:
-  - "F-001"
-  - "F-002"
+  - "FR-001"
+  - "FR-002"
 traces_ux_surfaces:
   - "user-list"
   - "user-detail"

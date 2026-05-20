@@ -121,8 +121,8 @@ entities:
 
   Task:
     description: >
-      The core domain object. Quick-add (F-001) writes one of these; the
-      dashboard task-list feed and keyboard-driven actions (F-002) read/
+      The core domain object. Quick-add (FR-001) writes one of these; the
+      dashboard task-list feed and keyboard-driven actions (FR-002) read/
       update it.
     primary_key: id
     fields:
@@ -137,7 +137,7 @@ entities:
         references: "Project.id"
         on_delete: set_null
         comment: >
-          Quick-add (F-001) can create a task without picking a project; the
+          Quick-add (FR-001) can create a task without picking a project; the
           inbox view shows project_id IS NULL.
       creator_id:
         type: uuid
@@ -153,7 +153,7 @@ entities:
       title:
         type: string
         nullable: false
-        comment: "Short text — the only required field for F-001 quick add."
+        comment: "Short text — the only required field for FR-001 quick add."
       description:
         type: text
         nullable: true
@@ -173,13 +173,13 @@ entities:
       completed_at:
         type: timestamptz
         nullable: true
-        comment: "Set when F-002 keyboard shortcut marks the task done."
+        comment: "Set when FR-002 keyboard shortcut marks the task done."
       sort_order:
         type: float
         nullable: false
         default: "0"
         comment: >
-          Fractional ranking so reorder via keyboard (F-002) is O(1) without
+          Fractional ranking so reorder via keyboard (FR-002) is O(1) without
           renumbering all rows.
       created_at:
         type: timestamptz
@@ -189,12 +189,12 @@ entities:
         type: timestamptz
         nullable: false
         default: "now()"
-    traces_prd_features: ["F-001", "F-002"]
+    traces_prd_features: ["FR-001", "FR-002"]
     traces_ux_surfaces: ["dashboard"]
 
   UserKeybinding:
     description: >
-      Per-user override of the default keyboard shortcuts. Backs F-002
+      Per-user override of the default keyboard shortcuts. Backs FR-002
       (every primary action reachable without a mouse) and the future
       /settings surface.
     primary_key: id
@@ -221,7 +221,7 @@ entities:
         type: timestamptz
         nullable: false
         default: "now()"
-    traces_prd_features: ["F-002"]
+    traces_prd_features: ["FR-002"]
     traces_ux_surfaces: ["dashboard"]
 
   Session:
@@ -338,7 +338,7 @@ indexes_and_queries:
   access_patterns:
     - description: >
         Dashboard task-list feed: list a user's open tasks, newest first
-        (backs the /dashboard task-list region and F-002 keyboard scrolling).
+        (backs the /dashboard task-list region and FR-002 keyboard scrolling).
       entity: Task
       fields: [creator_id, status, sort_order, created_at]
       expected_qps: 5.0
@@ -346,7 +346,7 @@ indexes_and_queries:
       read_or_write: read
 
     - description: >
-        Quick-add insert (F-001): write a new Task row in under 3 seconds
+        Quick-add insert (FR-001): write a new Task row in under 3 seconds
         end-to-end including network — DB write itself must be <20ms.
       entity: Task
       fields: [id, creator_id, title, created_at]
@@ -354,7 +354,7 @@ indexes_and_queries:
       latency_budget_ms: 20
       read_or_write: write
 
-    - description: "Toggle a task done from the keyboard (F-002)."
+    - description: "Toggle a task done from the keyboard (FR-002)."
       entity: Task
       fields: [id, status, completed_at, updated_at]
       expected_qps: 2.0
@@ -375,7 +375,7 @@ indexes_and_queries:
       latency_budget_ms: 10
       read_or_write: read
 
-    - description: "Resolve a user's keybinding for an action (F-002)."
+    - description: "Resolve a user's keybinding for an action (FR-002)."
       entity: UserKeybinding
       fields: [user_id, action]
       expected_qps: 1.0

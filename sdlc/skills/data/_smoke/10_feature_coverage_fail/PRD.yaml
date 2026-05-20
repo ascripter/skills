@@ -1,5 +1,5 @@
-# Sibling PRD with 3 must-have features. Only F-001 is traced by DATA-MODEL.yaml,
-# so the feature-coverage cross-check should flag F-002 and F-003.
+# Sibling PRD with 3 must-have features. Only FR-001 is traced by DATA-MODEL.yaml,
+# so the feature-coverage cross-check should flag FR-002 and FR-003.
 
 metadata:
   prd_version: "1.0"
@@ -24,9 +24,9 @@ use_cases:
 
 functional_requirements:
   must_have_features:
-    - "F-001: Add a task"
-    - "F-002: Mark task done"
-    - "F-003: Comment on a task"
+    - "FR-001: Add a task"
+    - "FR-002: Mark task done"
+    - "FR-003: Comment on a task"
 
 technical_constraints:
   primary_language: python

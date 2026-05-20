@@ -168,23 +168,46 @@ Defined as ≥ 12 containers or ≥ 25 components in any single container.
   user to split the container before proceeding. Suggest splitting
   along bounded contexts.
 
-## Monorepo mode
+## Monorepo mode — DEFERRED to a future major version
 
-If `PRD.metadata.monorepo: true` AND `PRD.products` is non-empty, the
-architecture artifact MAY be authored per product:
+The upstream `prd`/`ux`/`data`/`api` skills support multi-product
+(monorepo) mode via `metadata.monorepo: true` + a `products:` shape.
+`sdlc-arch` does NOT yet implement that shape — the schemas, validator,
+and interview all assume single-product.
 
-- `docs/ARCH.yaml` then becomes a roll-up with one `products:`
-  sub-mapping per slug, each holding its own `containers` /
-  `architecture_pattern` / etc.
-- The agent asks the user up-front (Phase 4 of system mode) whether
-  to author one shared ARCH.yaml or one per product. Default for
-  monorepo: per-product.
-- Per-product authoring writes
-  `docs/ARCH__<product>.yaml` instead of `docs/ARCH.yaml`. Per-container
-  files become `docs/ARCH__<product>__<container>.yaml`. The pointer
-  bullet in CLAUDE.md is appended once per product.
+**On invocation against a monorepo PRD** (`PRD.metadata.monorepo: true`),
+the skill:
 
-If unclear, ask the user.
+1. Stops at Phase 2 (input scan).
+2. Prints a warning:
+
+   > "sdlc-arch v1.0 does not support multi-product (monorepo) mode.
+   > Author one `docs/ARCH.yaml` (and one set of
+   > `docs/ARCH__<container>.yaml`) per product manually, or wait for
+   > sdlc-arch v2.0. See sdlc/skills/arch/references/edge-cases.md."
+
+3. Asks the user whether they want to proceed *anyway* against the
+   monorepo PRD (treating one product as "the" product) or abort.
+
+If the user proceeds, document in `arch_warnings`:
+
+```yaml
+arch_warnings:
+  - "Authored against monorepo PRD (PRD.metadata.monorepo: true) in
+     single-product mode — multi-product support arrives in v2.0."
+```
+
+**Planned v2.0 shape (informational, not implemented):**
+
+- `docs/ARCH.yaml` would carry a top-level `products:` sub-mapping
+  mirroring upstream skills, with each product holding its own
+  `containers` / `architecture_pattern` / `edges`.
+- Per-container files would be named
+  `docs/ARCH__<product>__<container>.yaml`.
+- Validator would gain a multi-product path.
+
+Do not author content against that shape until the schemas and
+validator are updated — current validation will reject it.
 
 ## Validator missing dependencies
 

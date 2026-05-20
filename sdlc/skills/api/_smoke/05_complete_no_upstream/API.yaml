@@ -69,5 +69,5 @@ resource_inventory:
     status: confirmed
     file_path: docs/API__users.yaml
     primary_entity: User
-    traces_prd_features: ["F-001", "F-002"]
+    traces_prd_features: ["FR-001", "FR-002"]
     traces_ux_surfaces: ["user-list", "user-detail"]

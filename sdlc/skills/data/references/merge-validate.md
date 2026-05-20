@@ -129,7 +129,7 @@ recovery path:
 | Field references                  | FAIL                              | Show entity.field.references, ask user to correct |
 | Classification integrity          | FAIL                              | Show offending Entity.field in pii_fields/regulated_fields/encrypted_at_rest |
 | Bounded-context partition         | FAIL                              | Show unassigned/duplicate entities, ask to reassign |
-| Feature coverage                  | Soft — force draft, warn          | Walk uncovered F-NNN list, ask to assign each to ≥1 entity OR mark out-of-scope-for-data |
+| Feature coverage                  | Soft — force draft, warn          | Walk uncovered FR-NNN list, ask to assign each to ≥1 entity OR mark out-of-scope-for-data |
 | Volume-vs-scale gate              | Soft — force draft, warn          | Prompt user to fill scale_and_retention partitioning/sharding/retention |
 | Mode mismatch                     | FAIL (pydantic)                   | Refuse to write; ask user to fix the structural state in Phase 4 |
 

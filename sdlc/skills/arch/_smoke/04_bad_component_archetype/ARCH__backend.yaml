@@ -1,0 +1,35 @@
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "44444444-4444-4444-4444-444444444444"
+  status: "draft"
+
+container_id: backend
+archetype: backend-api
+overview: "Backend deep-dive with one component that has a bogus archetype."
+
+tech_stack:
+  language: Python
+  language_confidence: confirmed
+
+deployment:
+  shape: container
+  shape_confidence: confirmed
+
+observability: {}
+
+failure_modes:
+  - id: db-timeout
+    description: "DB call times out."
+    likelihood: medium
+    impact: medium
+    mitigation: "Retry with exponential backoff."
+
+components:
+  - component_id: users-handler
+    archetype: wrangler         # invalid: not in ComponentArchetype enum
+    purpose: "Handles users requests."
+    responsibilities:
+      - "Receive HTTP requests"
+    status: defined

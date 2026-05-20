@@ -1,0 +1,35 @@
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "99999999-9999-9999-9999-999999999999"
+  status: "complete"
+
+container_id: nightly-job
+archetype: scheduler
+overview: "Nightly batch job deep-dive."
+
+tech_stack:
+  language: Python
+  language_confidence: confirmed
+
+deployment:
+  shape: long_running_service   # incompatible with parent's scheduled_job
+  shape_confidence: confirmed
+
+observability: {}
+
+failure_modes:
+  - id: missed-run
+    description: "Schedule misses a tick."
+    likelihood: low
+    impact: medium
+    mitigation: "Alert if last_run > expected_interval * 2."
+
+components:
+  - component_id: trigger
+    archetype: scheduler
+    purpose: "Triggers jobs at intervals."
+    responsibilities:
+      - "Dispatch on schedule"
+    status: confirmed

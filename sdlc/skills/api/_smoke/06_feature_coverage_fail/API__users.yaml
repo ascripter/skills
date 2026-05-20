@@ -8,7 +8,7 @@ metadata:
 resource_id: users
 base_path: /v1/users
 primary_entity: User
-traces_prd_features: ["F-001"]
+traces_prd_features: ["FR-001"]
 traces_ux_surfaces: []
 
 endpoints:

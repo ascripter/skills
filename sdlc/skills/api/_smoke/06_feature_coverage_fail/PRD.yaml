@@ -8,5 +8,5 @@ metadata:
 
 functional_requirements:
   must_have_features:
-    - "F-001: Create user accounts via email + password."
-    - "F-002: Export user audit log as CSV."
+    - "FR-001: Create user accounts via email + password."
+    - "FR-002: Export user audit log as CSV."

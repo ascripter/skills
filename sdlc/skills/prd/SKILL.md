@@ -42,6 +42,7 @@ at any time without losing progress.
 | `PRD.schema.yaml` | Human-readable canonical schema for `docs/PRD.yaml`. |
 | `validate_schema.py` | Pydantic v2 validator, called after every write. |
 | `set_claude_md_pointer.py` | Deterministic CLAUDE.md pointer injector, called in Phase 8. |
+| `migrate_ids.py` | One-shot migration helper: renames legacy `F-NNN` to `FR-NNN` and applies the v1.1 ID-prefix convention (PER, WKF, JTB, etc.) to any unprefixed list items. Round-trips through `ruamel.yaml`, so comments, key order, and original quoting are preserved; new/renamed items are written as double-quoted scalars. Idempotent; not called by the skill itself — run manually when upgrading an existing PRD.yaml. |
 | `references/interview-mechanics.md` | AskUserQuestion batch format, inferred-option pattern, conditional promotions. Read on entering Phase 6. |
 | `references/importance-flows.md` | The `med` / `high` / `critical` interview flows, including the per-item state machine for critical lists and the `product_identity` synthesis batch. Read alongside `interview-mechanics.md` on entering Phase 6 — required whenever a question with `importance: high` or `critical` is up next. |
 | `references/merge-validate.md` | Merge logic for existing PRD.yaml, validator exit-code recovery, CLAUDE.md pointer rules. Read on entering Phase 7. |
@@ -331,7 +332,17 @@ skipped_themes: []
 todo_themes: []      # themes the user marked `todo` in Phase 6
 pending_themes: []
 current_theme: null
-last_feature_id: 0   # counter for F-NNN IDs; incremented at each critical-item approval in Phase 6
+
+# Per-family ID counters (single-product mode). Each entry is the last-assigned
+# integer for that family — increment, format as <PREFIX>-{:03d}, then persist.
+# See references/importance-flows.md → "ID conventions across families" for the
+# family map (FR, OOS, INT, AIF, NFR, WRN, PER, GOL, PAN, WKF, JTB, EDG, ENT).
+last_ids: {}        # e.g. {FR: 5, PER: 2, WKF: 4, ...}
+
+# Per-product ID counters (monorepo mode only). Same shape as last_ids, keyed
+# by product slug. Each product carries an independent ID space per family.
+last_ids_by_product: {}  # e.g. {auth: {FR: 3, PER: 2}, billing: {FR: 2}}
+
 partial_answers: {}  # mirrors PRD.yaml structure incrementally
 ```
 

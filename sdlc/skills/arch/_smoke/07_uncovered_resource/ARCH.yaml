@@ -1,0 +1,32 @@
+# 07 — API__users.yaml exists but no container owns `users`.
+# Expectation: validator exits 1 (claims complete but coverage fails).
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "77777777-7777-7777-7777-777777777777"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Coverage failure test."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: backend
+    archetype: backend-api
+    purpose: "Backend, but forgets to own anything."
+    owns_api_resources: []        # `users` resource is NOT owned
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+
+edges: []

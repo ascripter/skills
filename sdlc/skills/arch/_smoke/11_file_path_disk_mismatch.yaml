@@ -1,0 +1,33 @@
+# 11 — Container's file_path points to a non-existent file on disk.
+# Expectation: validator exits 1 (claims complete but file_path integrity fails).
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "11aaaaaa-1111-1111-1111-111111111111"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "file_path integrity test."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: backend
+    archetype: backend-api
+    purpose: "Backend."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: "docs/ARCH__nonexistent.yaml"   # not on disk
+
+edges: []

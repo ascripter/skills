@@ -21,7 +21,7 @@ import re
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, Tuple
 
 try:
     import yaml
@@ -445,40 +445,87 @@ class PRD(BaseModel):
 
 
 # =============================================================================
-# Feature ID check — every item in must_have_features / nice_to_have_features
-# must start with "F-NNN: " (3+ zero-padded digits, colon, space).
-# Violations are warnings for drafts; errors for status=complete.
+# ID-family check — every item in the registered list fields must start with
+# "<PREFIX>-NNN: " (3+ zero-padded digits, colon, space). Violations are
+# warnings for drafts; errors for status=complete.
+#
+# Sibling fields that should share one counter (e.g. must_have_features +
+# nice_to_have_features sharing FR-NNN) appear as separate entries with the
+# same prefix below. The validator only checks per-item format, not gapless
+# numbering — the writing agent is responsible for sequential assignment.
+#
+# `scope` distinguishes two cases:
+#   - "top"     — field lives at the PRD root in both single- and multi-product
+#                 mode (currently only `prd_warnings`).
+#   - "product" — field lives inside a product-scoped theme; in monorepo mode
+#                 it sits under `products.<slug>.<theme>.<field>`.
 # =============================================================================
 
-_FEATURE_ID_RE = re.compile(r"^F-\d{3,}: .+")
+# (prefix, dotted-path-from-scope-root, scope)
+ID_FAMILIES: List[Tuple[str, str, str]] = [
+    ("WRN", "prd_warnings", "top"),
+    ("PER", "users_personas.primary_users", "product"),
+    ("PER", "users_personas.secondary_users", "product"),
+    ("GOL", "users_personas.user_goals", "product"),
+    ("PAN", "users_personas.user_frustrations", "product"),
+    ("WKF", "use_cases.core_workflows", "product"),
+    ("JTB", "use_cases.primary_jobs_to_be_done", "product"),
+    ("JTB", "use_cases.secondary_jobs", "product"),
+    ("EDG", "use_cases.edge_cases", "product"),
+    ("FR", "functional_requirements.must_have_features", "product"),
+    ("FR", "functional_requirements.nice_to_have_features", "product"),
+    ("OOS", "functional_requirements.out_of_scope", "product"),
+    ("INT", "functional_requirements.integrations_required", "product"),
+    ("AIF", "functional_requirements.ai_features", "product"),
+    ("NFR", "non_functional_requirements.performance_targets", "product"),
+    ("NFR", "non_functional_requirements.other", "product"),
+    ("ENT", "data_model.key_entities", "product"),
+]
+
+_ID_PREFIX_RE_CACHE: Dict[str, re.Pattern] = {}
 
 
-def check_feature_ids(prd: "PRD") -> List[str]:
-    """Return violation messages for feature items missing the F-NNN prefix."""
+def _id_prefix_re(prefix: str) -> re.Pattern:
+    rx = _ID_PREFIX_RE_CACHE.get(prefix)
+    if rx is None:
+        rx = re.compile(rf"^{re.escape(prefix)}-\d{{3,}}: .+")
+        _ID_PREFIX_RE_CACHE[prefix] = rx
+    return rx
+
+
+def check_ids(prd: "PRD") -> List[str]:
+    """Return violation messages for items missing their family's ID prefix."""
     violations: List[str] = []
 
-    def _check(items: Optional[List[str]], path: str) -> None:
-        for i, item in enumerate(items or []):
-            if not _FEATURE_ID_RE.match(item):
-                violations.append(f"{path}[{i}]: expected 'F-NNN: …' prefix, got {item!r}")
+    def _check_list(items: object, path: str, prefix: str) -> None:
+        if not isinstance(items, list):
+            return
+        rx = _id_prefix_re(prefix)
+        for i, item in enumerate(items):
+            if not isinstance(item, str) or not rx.match(item):
+                violations.append(
+                    f"{path}[{i}]: expected '{prefix}-NNN: …' prefix, got {item!r}"
+                )
 
+    # top-level fields (currently just prd_warnings → WRN)
+    for prefix, dotted_path, scope in ID_FAMILIES:
+        if scope == "top":
+            _check_list(_get_dotted(prd, dotted_path), dotted_path, prefix)
+
+    # product-scoped fields
     if prd.metadata.monorepo and prd.products:
         for slug, product in prd.products.items():
-            if product.functional_requirements:
-                fr = product.functional_requirements
-                _check(
-                    fr.must_have_features,
-                    f"products.{slug}.functional_requirements.must_have_features",
-                )
-                _check(
-                    fr.nice_to_have_features,
-                    f"products.{slug}.functional_requirements.nice_to_have_features",
-                )
+            for prefix, dotted_path, scope in ID_FAMILIES:
+                if scope == "product":
+                    _check_list(
+                        _get_dotted(product, dotted_path),
+                        f"products.{slug}.{dotted_path}",
+                        prefix,
+                    )
     else:
-        if prd.functional_requirements:
-            fr = prd.functional_requirements
-            _check(fr.must_have_features, "functional_requirements.must_have_features")
-            _check(fr.nice_to_have_features, "functional_requirements.nice_to_have_features")
+        for prefix, dotted_path, scope in ID_FAMILIES:
+            if scope == "product":
+                _check_list(_get_dotted(prd, dotted_path), dotted_path, prefix)
 
     return violations
 
@@ -585,7 +632,7 @@ def validate_file(path: Path) -> int:
         return 1
 
     missing = check_required(prd)
-    id_violations = check_feature_ids(prd)
+    id_violations = check_ids(prd)
     status = prd.metadata.status
 
     if status == "complete":
@@ -596,7 +643,7 @@ def validate_file(path: Path) -> int:
                 for m in missing:
                     print(f"  - {m}")
             if id_violations:
-                print(f"\n{len(id_violations)} feature item(s) missing F-NNN prefix:")
+                print(f"\n{len(id_violations)} list item(s) missing required ID prefix:")
                 for v in id_violations:
                     print(f"  - {v}")
             return 1
@@ -618,7 +665,7 @@ def validate_file(path: Path) -> int:
         )
     if id_violations:
         print(
-            f"\nWarning: {len(id_violations)} feature item(s) missing F-NNN prefix (required before setting status: complete):"
+            f"\nWarning: {len(id_violations)} list item(s) missing required ID prefix (required before setting status: complete):"
         )
         for v in id_violations:
             print(f"  - {v}")

@@ -1,7 +1,7 @@
 {
   "eval_id": 1,
   "eval_name": "monorepo-two-products",
-  "prompt": "Produce a docs/DATA-MODEL.yaml in monorepo mode (two products: 'auth' and 'billing'). The PRD declares auth (Go server) with features F-001 OIDC / F-002 Refresh tokens / F-003 Admin console, and billing (TypeScript server) with F-001 Invoice generation / F-002 Stripe integration. No UX inputs are present. Produce a valid monorepo-shaped DATA-MODEL.yaml with entities and feature traces under each product.",
+  "prompt": "Produce a docs/DATA-MODEL.yaml in monorepo mode (two products: 'auth' and 'billing'). The PRD declares auth (Go server) with features FR-001 OIDC / FR-002 Refresh tokens / FR-003 Admin console, and billing (TypeScript server) with FR-001 Invoice generation / FR-002 Stripe integration. No UX inputs are present. Produce a valid monorepo-shaped DATA-MODEL.yaml with entities and feature traces under each product.",
   "assertions": [
     {"text": "Output file docs/DATA-MODEL.yaml exists"},
     {"text": "metadata.monorepo is true"},

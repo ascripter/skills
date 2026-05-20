@@ -350,6 +350,24 @@ questions:
     required: false
     importance: med
 
+  - theme: container_inventory
+    id: acceptance_criteria
+    schema_path: container.acceptance_criteria
+    question: "What does 'done' look like for this container? (2–5 short criteria)"
+    hint: >
+      Used by downstream `task` to size and gate the work, and by `test`
+      to seed integration-test acceptance. Skip for trivial containers
+      (data stores, external services). Each item one short sentence.
+    suggested_answers:
+      - "All owned API resources return 2xx for happy-path fixtures"
+      - "Health/readiness probes green; container starts in <10s"
+      - "All persistence_bindings round-trip a sample write/read"
+      - "Token validation works against the configured IDP"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
   # =========================================================================
   # SYSTEM MODE — cross_container_edges (critical synthesis)
   # =========================================================================
@@ -364,17 +382,20 @@ questions:
     question: "Confirm the derived cross-container edges (or edit per row)?"
     hint: >
       Derivation rules:
-       * API consumer → producer       ⇒ calls
-       * Container with persistence    ⇒ reads / writes / read_write
-       * Event channel sender          ⇒ publishes
-       * Event channel receiver        ⇒ subscribes_to
+       * API consumer → producer       ⇒ calls   (pre-fill via_resource_id)
+       * Container with persistence    ⇒ reads / writes (pre-fill via_entity)
+       * Event channel sender          ⇒ publishes     (pre-fill via_channel_id)
+       * Event channel receiver        ⇒ subscribes_to (pre-fill via_channel_id)
        * Identity client → IDP         ⇒ calls
-      See references/edge-derivation.md for the full vocabulary.
+      The via_* fields ground each edge in an upstream artifact and let
+      downstream test/task agents scaffold from concrete resources/entities/
+      channels. See references/edge-derivation.md for the full vocabulary.
     suggested_answers:
       - "confirm all"
       - "remove specific edges"
       - "add specific edges"
       - "retype specific edges"
+      - "edit via_* fields"
     free_text_allowed: true
     required: true
     importance: critical
@@ -732,7 +753,10 @@ questions:
     id: archetype
     schema_path: component.archetype     # rewritten per item to components[<id>].archetype
     question: "Which archetype does this component fit?"
-    hint: "See references/component-taxonomy.yaml."
+    hint: >
+      Enum value drawn from references/component-taxonomy.yaml. The
+      validator enforces the enum — `other` is the escape hatch for
+      genuinely novel shapes (use sparingly).
     suggested_answers:
       - controller
       - service
@@ -749,8 +773,11 @@ questions:
       - cache_client
       - blob_client
       - background_worker
+      - config_loader
+      - observability_bootstrap
+      - error_handler
       - other
-    free_text_allowed: true
+    free_text_allowed: false
     required: true
     importance: critical
 
@@ -806,7 +833,24 @@ questions:
     id: traces_api_resources
     schema_path: component.traces_api_resources
     question: "Which API resources does this component implement or call?"
-    hint: "Validated against API__*.yaml resource_ids."
+    hint: >
+      Validated against API__*.yaml resource_ids AND against the parent
+      container's owns_api_resources.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: per_component_deepdive
+    id: traces_api_operations
+    schema_path: component.traces_api_operations
+    question: "Which specific API endpoint operation_ids does this component implement or call?"
+    hint: >
+      Operation-level traceability (operation_id from API__*.yaml endpoints).
+      Lets the `test` agent scaffold endpoint-level tests. Skip for
+      non-controller / non-api_client components. Validated against
+      API__*.yaml endpoints[].operation_id.
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -817,7 +861,9 @@ questions:
     id: traces_ux_surfaces
     schema_path: component.traces_ux_surfaces
     question: "Which UX surfaces does this component render?"
-    hint: "Validated against UX__*.yaml surface_ids. Empty for non-view components."
+    hint: >
+      Validated against UX__*.yaml surface_ids AND against the parent
+      container's owns_ux_surfaces. Empty for non-view components.
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -835,6 +881,35 @@ questions:
     confidence_field: false
     importance: high
 
+  - theme: per_component_deepdive
+    id: failure_modes
+    schema_path: component.failure_modes
+    question: "Up to 3 component-level failure modes (id, description, likelihood, impact, mitigation)?"
+    hint: >
+      Component-level structured failures, mirroring the container-level
+      shape (id, description, likelihood, impact, mitigation). Drives
+      unit-test negative cases. A bare string is also accepted (backwards
+      compat) and treated as { id: auto, description: <string> }.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: per_component_deepdive
+    id: acceptance_criteria
+    schema_path: component.acceptance_criteria
+    question: "What does 'done' look like for this component? (1–4 short criteria)"
+    hint: >
+      Used by downstream `task` to size the unit of work and by `test`
+      to scaffold component-level test cases. Skip for trivial plumbing
+      components (config-loader, serializer, etc.).
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
   # =========================================================================
   # CONTAINER MODE — internal_and_external_edges (critical synthesis)
   # =========================================================================
@@ -844,14 +919,19 @@ questions:
     schema_path: internal_edges
     question: "Confirm the derived internal edges between components (or edit per row)?"
     hint: >
-      Derivation rules: controller → service (calls), service → repository
-      (calls), repository → cache_client (reads/writes), service →
-      event_handler (publishes). See references/edge-derivation.md.
+      Derivation rules:
+       * controller → service (calls)  ⇒ pre-fill via_resource_id +
+         via_operation_id when the controller component traces them.
+       * service → repository (calls)  ⇒ pre-fill via_entity.
+       * repository → cache_client     ⇒ reads/writes (pre-fill via_entity).
+       * service → event_handler       ⇒ publishes (pre-fill via_channel_id).
+      See references/edge-derivation.md.
     suggested_answers:
       - "confirm all"
       - "remove specific edges"
       - "add specific edges"
       - "retype specific edges"
+      - "edit via_* fields"
     free_text_allowed: true
     required: true
     importance: critical
@@ -861,14 +941,20 @@ questions:
     schema_path: external_edges
     question: "Confirm the derived external edges (component → other-container)?"
     hint: >
-      Derivation: api_client component → backend container that owns
-      the resource it calls. event_handler subscribing to a channel →
-      the bus container. Pre-fill from API + DATA bindings.
+      Derivation:
+       * api_client → backend container that owns the called resource
+         (pre-fill via_resource_id and via_operation_id when known).
+       * event_handler subscribing to a channel → the bus container
+         (pre-fill via_channel_id).
+       * repository → primary-database (pre-fill via_entity).
+      Pre-fill via_* from API + DATA bindings whenever evidence is
+      unambiguous.
     suggested_answers:
       - "confirm all"
       - "remove specific edges"
       - "add specific edges"
       - "retype specific edges"
+      - "edit via_* fields"
     free_text_allowed: true
     required: true
     importance: critical

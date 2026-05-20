@@ -100,7 +100,7 @@ The validator does five things in one pass:
 1. Schema-validates `docs/API.yaml`.
 2. Schema-validates every `docs/API__*.yaml` sibling.
 3. **Feature coverage**: every entry in
-   `PRD.functional_requirements.must_have_features` (parsed as `F-NNN`)
+   `PRD.functional_requirements.must_have_features` (parsed as `FR-NNN`)
    appears in at least one resource's `traces_prd_features`, OR is
    listed in `API.yaml.non_api_features`.
 4. **Surface coverage**: every data-bearing UX surface appears in at
@@ -137,21 +137,21 @@ asks.
 
 The validator reads `docs/PRD.yaml`, extracts every
 `functional_requirements.must_have_features` entry, and parses out
-the `F-NNN` prefix (case-insensitive). A feature is **covered** when
-at least one resource lists the `F-NNN` (verbatim, ignoring
+the `FR-NNN` prefix (case-insensitive). A feature is **covered** when
+at least one resource lists the `FR-NNN` (verbatim, ignoring
 description text) in its `traces_prd_features` list OR when the
-F-NNN is listed in `API.yaml.non_api_features`.
+FR-NNN is listed in `API.yaml.non_api_features`.
 
 If `docs/PRD.yaml` is missing, the validator continues without the
 feature coverage check (prints a warning).
 
 Uncovered features:
 
-1. Appear in the validator's output ("PRD F-NNN feature(s) with no
+1. Appear in the validator's output ("PRD FR-NNN feature(s) with no
    resource trace").
 2. Should be written to `API.yaml.api_warnings` by the agent during
    Phase 7 *before* validation runs
-   (`"coverage: feature '<F-NNN>' has no resource trace"`).
+   (`"coverage: feature '<FR-NNN>' has no resource trace"`).
 3. Force `API.yaml.metadata.status: draft`.
 
 ### Surface coverage

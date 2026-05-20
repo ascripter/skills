@@ -54,28 +54,70 @@ This validates:
 1. `docs/ARCH.yaml` against the Arch model.
 2. Every sibling `docs/ARCH__*.yaml` against the ArchContainer model.
 3. Required-field gates (status: complete cannot land if anything's
-   missing).
-4. Four cross-checks (always enabled in both modes):
+   missing). `edges` is REQUIRED as a key but an empty list `[]` is
+   valid for single-container CLIs / pure libraries with no persistence.
+4. External-container exemption: ARCH__*.yaml files whose parent
+   container has `external: true` get a much-reduced required-field
+   check (only `overview`) AND emit a warning recommending deletion.
+5. Coverage cross-checks (always enabled in both modes; failure forces
+   `metadata.status: draft`):
 
    - **API-resource coverage** — every resource in `docs/API__*.yaml`
-     appears in some container's `owns_api_resources`. Uncovered →
-     `arch_warnings` and forces `status: draft`.
+     appears in some container's `owns_api_resources`.
    - **UX-surface coverage** — every data-bearing surface in
      `docs/UX__*.yaml` appears in some container's `owns_ux_surfaces`.
-     Uncovered → forces draft.
+     ("Data-bearing" surface_types: screen, page, tab, modal, dialog,
+     drawer, panel, cli_command, flow_step, other. Excluded:
+     empty_state, toast, overlay.)
    - **DATA-store coverage** — every store in
      `DATA-MODEL.yaml.persistence.*` appears in some container's
-     `persistence`. Uncovered → forces draft.
+     `persistence`.
    - **Edge endpoint integrity** — every `edges[].from / to` (system)
      and `internal_edges[].from / to` / `external_edges[].from / to`
-     (container) resolves to an existing node. Unresolved → forces
-     draft.
+     (container) resolves to an existing node.
 
-5. Three container-vs-system consistency checks:
+6. Edge `via_*` resolution (always enabled; failure forces draft):
 
-   - `api_surface` resource_ids ⊆ parent `owns_api_resources`.
-   - `ux_surface` surface_ids ⊆ parent `owns_ux_surfaces`.
-   - `persistence_bindings` store_ids ⊆ parent `persistence`.
+   - `via_resource_id` (when set) resolves to a resource_id in some
+     `API__*.yaml`.
+   - `via_operation_id` (when set) resolves to an `operation_id` under
+     `API__*.yaml.endpoints[].operation_id`.
+   - `via_channel_id` (when set) resolves to a `channel_id` in
+     `API.yaml.events.channels[]`.
+   - `via_entity` (when set) resolves to an entity name in
+     `DATA-MODEL.yaml.entities`.
+
+7. Deployment compatibility — `deployment.shape` in each container
+   artifact is compatible with the parent container's
+   `deployment_unit` (per the map in `ARCH__CONTAINER.schema.yaml`).
+
+8. Container `file_path` integrity:
+
+   - Every `containers[].file_path` that is set points to a file that
+     exists on disk.
+   - Every sibling `docs/ARCH__*.yaml` is referenced by some
+     `containers[].file_path`.
+
+9. Component trace integrity (REQUIRED per component when traces are set):
+
+   - `traces_api_resources`   ⊆ resource_ids in `API__*.yaml`
+   - `traces_api_resources`   ⊆ parent container's `owns_api_resources`
+   - `traces_api_operations`  ⊆ operation_ids in `API__*.yaml`
+   - `traces_ux_surfaces`     ⊆ surface_ids in `UX__*.yaml`
+   - `traces_ux_surfaces`     ⊆ parent container's `owns_ux_surfaces`
+   - `traces_data_entities`   ⊆ entity names in `DATA-MODEL.yaml`
+
+10. Three container-vs-system consistency checks (unchanged):
+
+    - `api_surface` resource_ids ⊆ parent `owns_api_resources`.
+    - `ux_surface` surface_ids ⊆ parent `owns_ux_surfaces`.
+    - `persistence_bindings` store_ids ⊆ parent `persistence`.
+
+11. Upstream-status awareness (warning only, never blocks): the
+    validator peeks at `metadata.status` of each upstream artifact
+    (PRD, UX, DATA-MODEL, API) and prints a warning if any is not
+    `complete`. This catches the case where someone hand-edits
+    ARCH.yaml against a half-finished upstream chain.
 
 ### Exit-code recovery
 

@@ -26,6 +26,77 @@ A question's `importance` does NOT change its `required` semantics —
 required `med` fields are still required; optional `high` fields are
 still skippable via the now/skip/todo gate.
 
+## ID conventions across families
+
+Several list[string] fields in `PRD.yaml` prefix each item with a stable
+`<PREFIX>-NNN` identifier so that downstream SDLC artifacts (UX,
+DATA-MODEL, API, ARCH, TEST-STRATEGY, TASKS) can cross-reference items
+by ID. The agent assigns IDs in the order items are collected — never
+mid-flow placeholders, never gaps.
+
+### Family map
+
+| Prefix | Field(s) — siblings share one continuous counter |
+|---|---|
+| `FR`  | `functional_requirements.must_have_features`, `nice_to_have_features` |
+| `OOS` | `functional_requirements.out_of_scope` |
+| `INT` | `functional_requirements.integrations_required` |
+| `AIF` | `functional_requirements.ai_features` |
+| `NFR` | `non_functional_requirements.performance_targets`, `other` |
+| `WRN` | `prd_warnings` (top level — populated by the writer, not interviewed) |
+| `PER` | `users_personas.primary_users`, `secondary_users` |
+| `GOL` | `users_personas.user_goals` |
+| `PAN` | `users_personas.user_frustrations` |
+| `WKF` | `use_cases.core_workflows` |
+| `JTB` | `use_cases.primary_jobs_to_be_done`, `secondary_jobs` |
+| `EDG` | `use_cases.edge_cases` |
+| `ENT` | `data_model.key_entities` |
+
+### Rules (apply to every family)
+
+- Format: `"<PREFIX>-NNN: <content>"` — three-digit zero-padded integers
+  (`FR-001`, `FR-002`, …, `FR-010`, `FR-011`, …).
+- IDs are unique within a family + scope. Sibling fields that share a
+  counter (the "+" rows above) draw from one sequence: e.g. if
+  `primary_users` ends at `PER-003`, `secondary_users` starts at `PER-004`.
+- IDs are stable. Once written they never change. Promoting an item
+  between sibling lists (nice-to-have → must-have, secondary → primary)
+  means moving the string verbatim, not renumbering.
+- In monorepo mode, each product carries its own independent ID space
+  per family. Two products may each have `FR-001`; references are
+  disambiguated by the `products.<slug>` path.
+
+### State counters
+
+The per-family counters live in `state.last_ids` (single-product) or
+`state.last_ids_by_product` (monorepo). Persist them after each item is
+written so EXIT/resume preserves gapless numbering. See `SKILL.md`'s
+"Session state file" section for the schema.
+
+### When the ID is assigned
+
+The trigger differs by tier:
+
+- **`med` (batched)**: when the agent serializes the user's batch response
+  into the YAML list, it assigns IDs in collection order. The user
+  doesn't see IDs during the question; they appear in the written file.
+- **`high` (per-item draft-approval)**: at step 3 (*Add item*), the agent
+  picks the next ID from the family counter, displays it back to the
+  user as part of the appended item, and persists the counter.
+- **`critical` (full per-item state machine)**: at step c (*Finalize*),
+  the agent assigns the next ID at the moment of approval — see the
+  `critical` section below for the exact moment.
+
+The `validate_schema.py` script enforces format on every list item in
+every registered family. Items without the prefix are warnings in
+`status: draft` and errors in `status: complete`.
+
+### `prd_warnings` (writer-populated, never interviewed)
+
+The writer prepends `WRN-NNN:` to each warning when serializing the
+list. Use a monotonic counter `state.last_ids.WRN`; persist after every
+warning append.
+
 ## How batching changes with tier
 
 `med` questions batch together (2–4 per `AskUserQuestion` call) inside
@@ -78,15 +149,15 @@ These are: `problem_opportunity.problem_statement`, `milestones.mvp_scope`.
 
 ### List[string] `high` fields
 
-These are: `users_personas.primary_users`, `use_cases.core_workflows`,
-`use_cases.primary_jobs_to_be_done`,
-`functional_requirements.out_of_scope`,
-`functional_requirements.integrations_required`,
-`functional_requirements.ai_features`,
-`non_functional_requirements.other`,
-`data_model.key_entities`,
-`milestones.phases`,
-`risks_assumptions.top_risks`.
+These are: `users_personas.primary_users` (PER), `use_cases.core_workflows`
+(WKF), `use_cases.primary_jobs_to_be_done` (JTB),
+`functional_requirements.out_of_scope` (OOS),
+`functional_requirements.integrations_required` (INT),
+`functional_requirements.ai_features` (AIF),
+`non_functional_requirements.other` (NFR),
+`data_model.key_entities` (ENT),
+`milestones.phases` (no ID family),
+`risks_assumptions.top_risks` (no ID family).
 
 Each item gets a lighter version of the per-item flow:
 
@@ -110,7 +181,14 @@ Each item gets a lighter version of the per-item flow:
    clarifying `AskUserQuestion`. If the user picked a suggested option
    as-is, skip this step.
 
-3. **Add item.** Append to the running list. State-write.
+3. **Add item.** Look up the field's ID family in the table above. If the
+   field has one, increment `state.last_ids.<PREFIX>` (or
+   `state.last_ids_by_product[<slug>].<PREFIX>` in monorepo mode), format
+   the new ID as `<PREFIX>-{:03d}`, and prepend it to the item so the
+   stored string is `"<PREFIX>-NNN: <title — description>"`. Append to
+   the running list and state-write (item + counter together). Fields
+   that have no ID family (e.g. `milestones.phases`) are appended as
+   plain strings.
 
 4. **Next item or end.** Either suggest the next likely item (steps 1–3
    again, with item index incremented) or — if you've run out of
@@ -139,30 +217,16 @@ Currently applies to `functional_requirements.must_have_features` and
 `functional_requirements.nice_to_have_features`. This is the full
 per-item state machine. Every item is challenged before it's accepted.
 
-### Feature IDs — F-NNN convention
+### Feature IDs — FR-NNN
 
-Every collected feature — must-have and nice-to-have alike — is stored
-with a stable `F-NNN` identifier:
-
-```
-"F-001: <title and full detail description>"
-"F-002: ..."
-```
-
-Rules:
-- IDs are three-digit zero-padded integers (`F-001`, `F-002`, …,
-  `F-010`, `F-011`, …).
-- Assigned at **step c approval** (not before — the draft shown earlier
-  in the flow doesn't carry an ID yet).
-- The counter is a single unified sequence across both lists. Must-haves
-  run first, so they take the low numbers; nice-to-haves continue from
-  where must-haves left off.
-- The running counter lives in `state.last_feature_id` (integer,
-  initialized to 0). Increment it and persist it after each approved item.
-- If the user EXITs mid-flow, the counter retains its current value in
-  state so numbering stays gapless on resume.
-- IDs never change once assigned — promoting a nice-to-have to a
-  must-have later means moving the string, not renumbering it.
+Both `must_have_features` and `nice_to_have_features` share the FR-NNN
+sequence. Must-haves run first and take the low numbers; nice-to-haves
+continue from where must-haves left off. The counter lives in
+`state.last_ids.FR` (or `state.last_ids_by_product[<slug>].FR` in
+monorepo mode). The assignment moment is **step c (Finalize)**, not
+earlier — the proposal and detail drafts shown in steps a/b don't carry
+an ID yet. See "ID conventions across families" above for the format
+rules and stability guarantees that apply to all families.
 
 ### Per-item state machine
 
@@ -238,29 +302,30 @@ proceed to step c. Do not loop here — at most one b-2 round.
 #### Step c — finalize
 
 Print the drafted feature entry to the chat as a YAML snippet showing
-exactly how it will be stored. **Assign the next F-NNN ID now** (increment
-`state.last_feature_id`, format as `F-{:03d}`). The stored format merges
-title and detail into one string:
+exactly how it will be stored. **Assign the next FR-NNN ID now**
+(increment `state.last_ids.FR` — or
+`state.last_ids_by_product[<slug>].FR` in monorepo mode — and format as
+`FR-{:03d}`). The stored format merges title and detail into one string:
 
 ```yaml
-# Feature about to be added (F-NNN assigned on approval):
-- "F-003: OAuth2 login — users authenticate via Google or GitHub; the app
-   stores a short-lived access token with refresh-token rotation; done when
-   a new user can complete sign-up without setting a password."
+# Feature about to be added (FR-NNN assigned on approval):
+- "FR-003: OAuth2 login — users authenticate via Google or GitHub; the
+   app stores a short-lived access token with refresh-token rotation;
+   done when a new user can complete sign-up without setting a password."
 ```
 
 Then ask:
 
 ```
-header: "Approve F-NNN?"
-question: "Add F-NNN to <must_have/nice_to_have>_features?"
+header: "Approve FR-NNN?"
+question: "Add FR-NNN to <must_have/nice_to_have>_features?"
 options:
-  - { label: "Approve — add it",         description: "Append F-NNN to the list and move on." }
+  - { label: "Approve — add it",         description: "Append FR-NNN to the list and move on." }
   - { label: "Iterate — type changes",   description: "Use the text field to describe what to change. The agent will re-draft." }
 ```
 
-On approve: write `"F-NNN: <merged title + detail>"` to the list and
-persist `state.last_feature_id`.
+On approve: write `"FR-NNN: <merged title + detail>"` to the list and
+persist the counter.
 On iterate: re-enter step b with the user's revision as new context; the
 ID is tentatively held but not written until the next approval.
 **Iteration cap**: after 3 c-iterations on a single item, write the
@@ -282,7 +347,7 @@ Once an item is approved (or capped):
   options:
     - { label: "Add another (I'll suggest)", description: "I'll propose a candidate next." }
     - { label: "Add my own",                  description: "Type the title; we'll work through it from step a-2." }
-    - { label: "Done — wrap up the list",     description: "Move on to nice_to_have_features (IDs will continue from F-NNN)." }
+    - { label: "Done — wrap up the list",     description: "Move on to nice_to_have_features (IDs will continue from FR-NNN)." }
   ```
 
 ### Caps

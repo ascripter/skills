@@ -1,14 +1,14 @@
 {
   "eval_id": 0,
   "eval_name": "web-single-product",
-  "prompt": "Produce a docs/DATA-MODEL.yaml for this product. Use docs/PRD.yaml (web app 'Acme Tasks' with features F-001 Quick add, F-002 Keyboard navigation) and docs/UX.yaml + docs/UX__dashboard.yaml as inputs. The output should validate against the sdlc-data schema and trace each PRD F-NNN to at least one entity.",
+  "prompt": "Produce a docs/DATA-MODEL.yaml for this product. Use docs/PRD.yaml (web app 'Acme Tasks' with features FR-001 Quick add, FR-002 Keyboard navigation) and docs/UX.yaml + docs/UX__dashboard.yaml as inputs. The output should validate against the sdlc-data schema and trace each PRD FR-NNN to at least one entity.",
   "assertions": [
     {"text": "Output file docs/DATA-MODEL.yaml exists"},
     {"text": "metadata.status is 'complete' or 'draft' (not missing)"},
     {"text": "metadata.monorepo is false (matches PRD)"},
     {"text": "entities dict is non-empty"},
-    {"text": "Task entity is defined (derivable from PRD features F-001/F-002 and UX dashboard)"},
-    {"text": "Every must_have_feature F-001, F-002 is traced by at least one entity's traces_prd_features"},
+    {"text": "Task entity is defined (derivable from PRD features FR-001/FR-002 and UX dashboard)"},
+    {"text": "Every must_have_feature FR-001, FR-002 is traced by at least one entity's traces_prd_features"},
     {"text": "persistence.primary_store is set and is a valid enum value"},
     {"text": "id_strategy.scheme is set and is a valid enum value"},
     {"text": "relationships is a list (possibly empty for a simple model)"},

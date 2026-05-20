@@ -208,7 +208,7 @@ questions:
     id: primary_users
     schema_path: users_personas.primary_users
     question: "Who are the primary users? (Pick all that apply, or describe.)"
-    hint: "Primary users define the default UX bias."
+    hint: "Primary users define the default UX bias. Each item is stored as 'PER-NNN: <descriptor>' (e.g. 'PER-001: …') — IDs are assigned in collection order and let downstream artifacts (UX flows, API auth scopes, test users) cross-reference specific personas."
     suggested_answers:
       - "Software engineers / developers"
       - "Data analysts or scientists"
@@ -225,7 +225,7 @@ questions:
     id: secondary_users
     schema_path: users_personas.secondary_users
     question: "Any secondary users we should keep in mind? (Optional — pick or describe.)"
-    hint: "Secondary users get acknowledged but not optimized for in v1."
+    hint: "Secondary users get acknowledged but not optimized for in v1. Same 'PER-NNN: <descriptor>' format; IDs continue the PER-NNN sequence from primary_users (if primary ends at PER-002, secondary starts at PER-003)."
     suggested_answers:
       - "Admins / IT operators"
       - "External auditors or compliance reviewers"
@@ -242,7 +242,7 @@ questions:
     id: user_goals
     schema_path: users_personas.user_goals
     question: "What does success look like for a user after using this? (Pick all that apply.)"
-    hint: "Drives the framing of error states, success states, and CTAs."
+    hint: "Drives the framing of error states, success states, and CTAs. Each item is stored as 'GOL-NNN: <goal>' so UX/success-metrics agents can map flows and KPIs back to a specific goal."
     suggested_answers:
       - "Save significant time on a recurring task"
       - "Get an answer they couldn't easily get before"
@@ -259,7 +259,7 @@ questions:
     id: user_frustrations
     schema_path: users_personas.user_frustrations
     question: "What frustrates these users about today's options? (Pick all that apply.)"
-    hint: "Pain points are sharp signals for what to over-invest in."
+    hint: "Pain points are sharp signals for what to over-invest in. Each item is stored as 'PAN-NNN: <pain>' so downstream agents can cite which pain a feature addresses."
     suggested_answers:
       - "Existing tools are too complex"
       - "Existing tools are too limited"
@@ -295,7 +295,7 @@ questions:
     id: core_workflows
     schema_path: use_cases.core_workflows
     question: "What are the 3–7 happy-path workflows? (List them as short verb phrases.)"
-    hint: "Each becomes a candidate feature surface and a test scenario."
+    hint: "Each becomes a candidate feature surface and a test scenario. Stored as 'WKF-NNN: <workflow>' — test-strategy and UX agents reference these IDs when scoping coverage."
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -307,7 +307,7 @@ questions:
     id: primary_jobs_to_be_done
     schema_path: use_cases.primary_jobs_to_be_done
     question: "What are the primary 'jobs' the product is hired to do? (JTBD format: 'When ___, I want to ___, so I can ___'.)"
-    hint: "JTBD framing keeps agents from designing features in isolation from intent."
+    hint: "JTBD framing keeps agents from designing features in isolation from intent. Stored as 'JTB-NNN: <statement>' — features can cite which JTB they fulfil."
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -319,7 +319,7 @@ questions:
     id: secondary_jobs
     schema_path: use_cases.secondary_jobs
     question: "Any secondary jobs worth supporting? (Optional.)"
-    hint: "Helps agents avoid accidentally blocking adjacent use cases."
+    hint: "Helps agents avoid accidentally blocking adjacent use cases. Same 'JTB-NNN: <statement>' format; IDs continue the JTB-NNN sequence from primary_jobs_to_be_done."
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -331,7 +331,7 @@ questions:
     id: edge_cases
     schema_path: use_cases.edge_cases
     question: "Any edge cases that must be handled gracefully from day one? (Pick or describe.)"
-    hint: "Calling these out early prevents agents from treating them as afterthoughts."
+    hint: "Calling these out early prevents agents from treating them as afterthoughts. Stored as 'EDG-NNN: <edge case>' so test-strategy can build coverage per ID."
     suggested_answers:
       - "Offline use / poor connectivity"
       - "Very large inputs (>1GB / >100k items)"
@@ -351,7 +351,7 @@ questions:
     id: must_have_features
     schema_path: functional_requirements.must_have_features
     question: "What features are *must-have* for the first usable release? List 3–10. Be verbose."
-    hint: "Defines the MVP. Each item is stored as 'F-NNN: <description>' (e.g. 'F-001: …') — the ID is assigned automatically at approval and used for cross-stage traceability. Anything not on this list is deferrable."
+    hint: "Defines the MVP. Each item is stored as 'FR-NNN: <description>' (e.g. 'FR-001: …') — the ID is assigned automatically at approval and used for cross-stage traceability. Anything not on this list is deferrable."
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -363,7 +363,7 @@ questions:
     id: nice_to_have_features
     schema_path: functional_requirements.nice_to_have_features
     question: "Nice-to-have features for a later release? (Optional.)"
-    hint: "Post-MVP backlog. IDs continue the F-NNN sequence from must_have_features — if must-haves ended at F-005, nice-to-haves start at F-006. Same 'F-NNN: <description>' format. Lets agents propose extension points without scope creep."
+    hint: "Post-MVP backlog. IDs continue the FR-NNN sequence from must_have_features — if must-haves ended at FR-005, nice-to-haves start at FR-006. Same 'FR-NNN: <description>' format. Lets agents propose extension points without scope creep."
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -375,7 +375,7 @@ questions:
     id: out_of_scope
     schema_path: functional_requirements.out_of_scope
     question: "What is *explicitly out of scope*? (List, or skip.)"
-    hint: "Crucial. Agents over-build when scope boundaries are vague."
+    hint: "Crucial. Agents over-build when scope boundaries are vague. Stored as 'OOS-NNN: <non-goal>' so downstream agents can cite which OOS item rules out a proposed feature."
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -387,7 +387,7 @@ questions:
     id: integrations_required
     schema_path: functional_requirements.integrations_required
     question: "Which external systems must this integrate with? (Pick or describe.)"
-    hint: "Integrations drive auth, schema, and reliability requirements."
+    hint: "Integrations drive auth, schema, and reliability requirements. Stored as 'INT-NNN: <integration target>' — arch/api/test agents reference specific integrations by ID."
     suggested_answers:
       - "GitHub / GitLab"
       - "Slack / Teams"
@@ -404,7 +404,7 @@ questions:
     id: ai_features
     schema_path: functional_requirements.ai_features
     question: "Any AI-powered capabilities planned? (Pick or describe.)"
-    hint: "AI features have outsized cost, latency, and eval implications."
+    hint: "AI features have outsized cost, latency, and eval implications. Stored as 'AIF-NNN: <AI capability>' so downstream agents (arch, test) can scope eval suites and cost budgets per ID."
     suggested_answers:
       - "LLM chat / Q&A"
       - "Summarization / extraction"
@@ -641,7 +641,7 @@ questions:
     id: performance_targets
     schema_path: non_functional_requirements.performance_targets
     question: "Any specific performance targets? (Pick or describe.)"
-    hint: "Concrete targets prevent over- or under-engineering."
+    hint: "Concrete targets prevent over- or under-engineering. Stored as 'NFR-NNN: <target>' (e.g. 'NFR-001: p95 < 200ms') — test-strategy turns each into an assertion."
     suggested_answers:
       - "p95 response under 200ms"
       - "p95 response under 1s"
@@ -723,7 +723,7 @@ questions:
     id: other
     schema_path: non_functional_requirements.other
     question: "What else are important non-functional requirements?"
-    hint: "Anything else impacting the project and not yet mentioned."
+    hint: "Anything else impacting the project and not yet mentioned. Same 'NFR-NNN: <requirement>' format; IDs continue the NFR-NNN sequence from performance_targets."
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -738,7 +738,7 @@ questions:
     id: key_entities
     schema_path: data_model.key_entities
     question: "What are the primary domain entities? (e.g. User, Project, Invoice)"
-    hint: "Seeds the schema, API resources, and authorization boundaries."
+    hint: "Seeds the schema, API resources, and authorization boundaries. Stored as 'ENT-NNN: <entity>' (e.g. 'ENT-001: User') — sdlc-data uses these IDs as the seed list and downstream artifacts cross-reference them."
     suggested_answers: []
     free_text_allowed: true
     required: false

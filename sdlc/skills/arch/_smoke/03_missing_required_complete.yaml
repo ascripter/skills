@@ -1,0 +1,31 @@
+# 03 — Claims status: complete but identity_and_auth.token_strategy missing.
+# Expectation: validator exits 1 with "claims status 'complete' but has errors".
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "33333333-3333-3333-3333-333333333333"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Test fixture for required-field gating."
+
+identity_and_auth:
+  identity_provider: external_oidc
+  identity_provider_confidence: confirmed
+  # token_strategy intentionally omitted — required-field check should catch this.
+
+containers:
+  - container_id: backend
+    archetype: backend-api
+    purpose: "Backend."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+
+edges: []

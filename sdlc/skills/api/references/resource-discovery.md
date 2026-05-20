@@ -56,7 +56,7 @@ that:
   consciously opt the entity out as "internal").
 - Covers every UX surface with data I/O (or is in the planned
   `non_api_surfaces` opt-out, if any).
-- Covers every PRD `F-NNN` feature (or is in the planned
+- Covers every PRD `FR-NNN` feature (or is in the planned
   `non_api_features` opt-out).
 
 ## Step 2 — Generate `resource_id`s and `base_path`s
@@ -137,12 +137,12 @@ one for surfaces (both `multiSelect: true`):
 
 ```
 header: "Features?"
-question: "Which PRD F-NNN features does '<resource_id>' implement?"
+question: "Which PRD FR-NNN features does '<resource_id>' implement?"
 options:
-  - { label: "<F-001: description>",          description: "<verbatim PRD must_have_features entry>" }
-  - { label: "<F-003: description>",          description: "<verbatim PRD must_have_features entry>" }
-  - { label: "Other (type)",                  description: "Type the F-NNN id(s) verbatim from PRD.functional_requirements.must_have_features." }
-  - { label: "None — internal-only resource", description: "This resource doesn't implement any PRD F-NNN. (Will be flagged in api_warnings unless an explicit reason is captured.)" }
+  - { label: "<FR-001: description>",          description: "<verbatim PRD must_have_features entry>" }
+  - { label: "<FR-003: description>",          description: "<verbatim PRD must_have_features entry>" }
+  - { label: "Other (type)",                  description: "Type the FR-NNN id(s) verbatim from PRD.functional_requirements.must_have_features." }
+  - { label: "None — internal-only resource", description: "This resource doesn't implement any PRD FR-NNN. (Will be flagged in api_warnings unless an explicit reason is captured.)" }
 multiSelect: true
 ```
 
@@ -179,7 +179,7 @@ politely and suggest splitting the product into multiple products
 Before finishing theme 8, run the three coverage checks softly (no
 validator yet, just heuristics):
 
-- For each PRD `F-NNN` in `must_have_features`: is it traced?
+- For each PRD `FR-NNN` in `must_have_features`: is it traced?
 - For each data-bearing UX surface (see
   `references/merge-validate.md` for the type list): is it traced?
 - For each DATA entity: is it the `primary_entity` of some resource?
@@ -313,9 +313,9 @@ header: "Traces ok?"
 question: "These traces are recorded for `<resource_id>`. Adjust before saving?"
 options:
   - { label: "Looks good",            description: "Keep traces as recorded." }
-  - { label: "Add an F-ID",           description: "Type the F-NNN to add." }
+  - { label: "Add an F-ID",           description: "Type the FR-NNN to add." }
   - { label: "Add a UX surface",      description: "Type the surface_id to add." }
-  - { label: "Remove a trace",        description: "Type the F-NNN or surface_id to remove." }
+  - { label: "Remove a trace",        description: "Type the FR-NNN or surface_id to remove." }
 ```
 
 #### e) Final approval

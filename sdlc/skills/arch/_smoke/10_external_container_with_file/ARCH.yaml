@@ -1,0 +1,46 @@
+# 10 — External container has an ARCH__*.yaml deep-dive (should not exist).
+# Expectation: validator exits 0 [OK] but emits a non-blocking warning.
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-05-20T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "10101010-1010-1010-1010-101010101010"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "External-container warning test."
+
+identity_and_auth:
+  identity_provider: external_oidc
+  identity_provider_confidence: confirmed
+  token_strategy: jwt
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "Backend that calls the external IDP."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+  - container_id: external-idp
+    archetype: identity-provider
+    purpose: "Auth0 / external OIDC."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: external_managed
+    external: true
+    status: confirmed
+    file_path: "ARCH__external-idp.yaml"   # should not exist but does
+
+edges:
+  - from: app
+    to: external-idp
+    type: calls
+    note: "Token validation."

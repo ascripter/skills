@@ -16,14 +16,17 @@ products:
     problem_opportunity:
       problem_statement: "We need a single identity layer across all products."
     users_personas:
-      primary_users: ["Internal services", "End users via SSO"]
+      primary_users: ["PER-001: Internal services", "PER-002: End users via SSO"]
     use_cases:
-      core_workflows: ["Sign in", "Sign out", "Refresh token"]
+      core_workflows:
+        - "WKFR-001: Sign in"
+        - "WKFR-002: Sign out"
+        - "WKFR-003: Refresh token"
     functional_requirements:
       must_have_features:
-        - "F-001: OIDC — OpenID Connect login for tenant users."
-        - "F-002: Refresh tokens — rotating refresh tokens with revocation."
-        - "F-003: Admin console — operator UI for tenant/user management."
+        - "FR-001: OIDC — OpenID Connect login for tenant users."
+        - "FR-002: Refresh tokens — rotating refresh tokens with revocation."
+        - "FR-003: Admin console — operator UI for tenant/user management."
     technical_constraints:
       primary_language: go
       runtime_platform: server
@@ -35,13 +38,15 @@ products:
     problem_opportunity:
       problem_statement: "We currently bill manually; doesn't scale."
     users_personas:
-      primary_users: ["Tenant admins", "Finance team"]
+      primary_users: ["PER-001: Tenant admins", "PER-002: Finance team"]
     use_cases:
-      core_workflows: ["View invoice", "Pay invoice"]
+      core_workflows:
+        - "WKFR-001: View invoice"
+        - "WKFR-002: Pay invoice"
     functional_requirements:
       must_have_features:
-        - "F-001: Invoice generation — monthly invoices with line items."
-        - "F-002: Stripe integration — webhook-driven payment status sync."
+        - "FR-001: Invoice generation — monthly invoices with line items."
+        - "FR-002: Stripe integration — webhook-driven payment status sync."
     technical_constraints:
       primary_language: typescript
       runtime_platform: server

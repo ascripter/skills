@@ -12,7 +12,7 @@ description. Read this before Phase 3.
 2. **Schema files on disk** (`schema.prisma`, `*.sql`, `models/`,
    `entities/`, Django `models.py`, SQLAlchemy `declarative_base`
    subclasses) — authoritative if present. Tag `✓ found`.
-3. **`PRD.functional_requirements.must_have_features`** (F-NNN list) —
+3. **`PRD.functional_requirements.must_have_features`** (FR-NNN list) —
    extract candidate entity nouns. Tag `⚠ inferred`.
 4. **`UX__<surface>.yaml.layout` + `validation_rules` +
    `components.content_slots`** — forms imply entities; list items imply
@@ -22,9 +22,9 @@ Higher-priority sources override lower ones. If PRD names `User` and a
 UX form has a field labelled "Account", treat them as the same entity
 (prefer the PRD name) unless the user disambiguates.
 
-## Heuristics for extracting entities from F-NNN features
+## Heuristics for extracting entities from FR-NNN features
 
-A typical PRD feature reads like: *"F-001: Quick add a task with a
+A typical PRD feature reads like: *"FR-001: Quick add a task with a
 keyboard shortcut."* The candidate entity is the **direct object of the
 main verb**, capitalized and singularized:
 
@@ -41,7 +41,7 @@ main verb**, capitalized and singularized:
 | `audit <X>` / `track <X>` | `<X>` plus an `AuditLog` entity |
 
 Treat these as **candidates only**. Each must surface in Phase 3 with the
-source F-NNN ID quoted, so the user can correct.
+source FR-NNN ID quoted, so the user can correct.
 
 ## Heuristics for extracting entities from UX surfaces
 
@@ -68,7 +68,7 @@ loading screen). Such surfaces do not contribute entity candidates.
 While drafting candidates, also draft **probable relationships**. The
 following imply edges:
 
-- Two entities named together in one F-NNN feature → likely related.
+- Two entities named together in one FR-NNN feature → likely related.
 - A UX surface that displays one entity but filters/sorts/links by
   another → many-to-one foreign key.
 - A "list of X within Y" pattern (e.g. "list tasks within a project") →
@@ -108,8 +108,8 @@ I found these entity candidates:
   ✓ Project               (from PRD.data_model.key_entities)
   ✓ Task                  (from schema.prisma model Task)
   ⚠ Tag                   (inferred from UX__dashboard form 'tags')
-  ⚠ Comment               (inferred from F-003 "Add a comment to a task")
-  ⚠ Notification          (inferred from F-007 "Notify users when …")
+  ⚠ Comment               (inferred from FR-003 "Add a comment to a task")
+  ⚠ Notification          (inferred from FR-007 "Notify users when …")
 
 Add, remove, rename, or skip any of these before we go deep. Each ⚠
 needs your explicit confirmation — type 'confirm Tag', 'rename Tag→Label',
