@@ -25,24 +25,46 @@
 #                        "In one sentence — why?". Stored at <schema_path>_rationale.
 #   confidence_field   — if true, a sibling <schema_path>_confidence is written
 #                        (most fields use this; set false to opt out)
-#   importance         — one of `med | high | critical`. Controls how the agent
-#                        runs the interview for this question. Defaults to `med`
-#                        if omitted. See `references/importance-flows.md`:
-#                          * med      — single AskUserQuestion batch entry,
-#                                       inferred suggestion at position 1.
-#                          * high     — own mini-section: agent drafts a full
-#                                       answer, shows it, user approves or
-#                                       iterates (max 3 rounds). For list[string]
-#                                       fields the loop runs once per item with
-#                                       a single clarifying challenge round.
-#                          * critical — same as high but the agent challenges
-#                                       every list item against risks/gaps it
-#                                       sees, with the full a→a-2→b→b-2→c→d
-#                                       per-item state machine.
+#   importance         — one of `med | high | critical | nested_freeform`.
+#                        Controls how the agent runs the interview for this
+#                        question. Defaults to `med` if omitted.
+#                        See `references/importance-flows.md`:
+#                          * med             — single AskUserQuestion batch
+#                                              entry, inferred suggestion at
+#                                              position 1.
+#                          * high            — own mini-section: agent drafts a
+#                                              full answer, shows it, user
+#                                              approves or iterates (max 3
+#                                              rounds). For list[string] fields
+#                                              the loop runs once per item with
+#                                              a single clarifying challenge
+#                                              round.
+#                          * critical        — same as high but the agent
+#                                              challenges every list item
+#                                              against risks/gaps it sees, drafts
+#                                              detail with explicit slots
+#                                              (input/output/dependencies/edge
+#                                              cases/why), and runs a dynamic
+#                                              project-specific scope-completeness
+#                                              sweep against the draft + upstream
+#                                              answers before closing the list.
+#                                              Full a→a-2→b→b-2→c→d→sweep
+#                                              per-item state machine.
+#                          * nested_freeform — for a Dict[str, Any] field whose
+#                                              shape is project-defined. Agent
+#                                              proposes named buckets it
+#                                              inferred from prior answers, then
+#                                              for each accepted bucket drafts a
+#                                              free-form nested YAML body the
+#                                              user approves or iterates on.
+#                                              See "The nested_freeform flow"
+#                                              section in importance-flows.md.
 #                        Most fields stay `med`. Required list[string] fields
 #                        and a few foundational narrative fields are `high`.
-#                        Only `must_have_features` and `nice_to_have_features`
-#                        are `critical` — they define MVP scope.
+#                        `must_have_features`, `nice_to_have_features`, and
+#                        `non_functional_requirements.other` are `critical` —
+#                        they define MVP scope and the cross-cutting NFR set.
+#                        `conventions` is the only `nested_freeform` field.
 #
 # Theme order below is the canonical interview order. Required themes are
 # asked in batches via AskUserQuestion (2–4 questions per call); product_identity
@@ -132,6 +154,17 @@ themes:
     title: "Open Questions"
     required: false
     description: "What is still undecided?"
+
+  - id: conventions
+    title: "Conventions"
+    required: false
+    description: >
+      Cross-cutting project conventions that downstream stages must honor
+      verbatim — naming/ID schemes, schema-versioning policy, propagation
+      rules from PRD fields into later artifacts, code-style invariants,
+      etc. Asked LAST so the agent has the whole picture; the answer is a
+      named-bucket map with project-defined sub-structure (Dict[str, Any]).
+      Skip for simple projects that have no binding cross-cutting rules.
 
 questions:
 
@@ -723,13 +756,13 @@ questions:
     id: other
     schema_path: non_functional_requirements.other
     question: "What else are important non-functional requirements?"
-    hint: "Anything else impacting the project and not yet mentioned. Same 'NFR-NNN: <requirement>' format; IDs continue the NFR-NNN sequence from performance_targets."
+    hint: "Catch-all for NFRs not captured by the enums/scalars above — routing/state determinism, isolation guarantees, error-handling policies, observability hooks, lossless resumability, etc. Same 'NFR-NNN: <requirement>' format; IDs continue the NFR-NNN sequence from performance_targets. Treated `critical` (per-item drill-down + dynamic scope sweep against draft + upstream answers) because deep multi-clause NFRs here drive architecture and test-strategy decisions downstream and tend to be missed when asked as a single batched question."
     suggested_answers: []
     free_text_allowed: true
     required: false
     capture_rationale: false
     confidence_field: false
-    importance: high
+    importance: critical
 
   # ---------------------------------------------------------------------------
   # Data Model
@@ -1207,3 +1240,28 @@ questions:
     capture_rationale: false
     confidence_field: false
     importance: med
+
+  # ---------------------------------------------------------------------------
+  # Conventions (run LAST — after open_questions — so the agent has the full
+  # picture and can spot patterns that downstream stages must honor verbatim)
+  # ---------------------------------------------------------------------------
+  - theme: conventions
+    id: conventions
+    schema_path: conventions
+    question: "Any binding cross-cutting conventions downstream stages must honor — naming/ID rules, schema-versioning policy, NFR-propagation maps, code-style invariants, etc.?"
+    hint: >
+      One question for the whole `conventions` block. Run as
+      `nested_freeform`: agent proposes named buckets it inferred from
+      prior answers (e.g. `artifact_ids` if cross-stage IDs were named,
+      `schema_versioning` if versioning came up, `nfr_propagation` if NFRs
+      reference downstream stages). For each accepted bucket the agent
+      drafts a free-form nested YAML body and the user approves or iterates.
+      Each project defines its own bucket names and sub-structure — the
+      validator only type-checks the top-level mapping. Skip entirely for
+      simple projects with no cross-cutting rules.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+    importance: nested_freeform

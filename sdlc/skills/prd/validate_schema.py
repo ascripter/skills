@@ -21,7 +21,7 @@ import re
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 try:
     import yaml
@@ -338,6 +338,13 @@ class OpenQuestions(_ThemeBase):
     parking_lot: Optional[List[str]] = None
 
 
+# Free-form, project-defined cross-cutting convention map. The validator only
+# enforces that the value is a mapping; sub-keys, value types, and nesting are
+# all up to the writing agent (which records them per project under
+# `conventions.<bucket-name>`). Items here are not addressable by ID family.
+ConventionsType = Optional[Dict[str, Any]]
+
+
 # =============================================================================
 # Top-level models
 # =============================================================================
@@ -372,6 +379,7 @@ class Product(_ThemeBase):
     success_metrics: Optional[SuccessMetrics] = None
     risks_assumptions: Optional[RisksAssumptions] = None
     open_questions: Optional[OpenQuestions] = None
+    conventions: ConventionsType = None
 
 
 class PRD(BaseModel):
@@ -402,6 +410,7 @@ class PRD(BaseModel):
     success_metrics: Optional[SuccessMetrics] = None
     risks_assumptions: Optional[RisksAssumptions] = None
     open_questions: Optional[OpenQuestions] = None
+    conventions: ConventionsType = None
 
     # Multi-product mode
     products: Optional[Dict[str, Product]] = None
@@ -424,6 +433,7 @@ class PRD(BaseModel):
             self.success_metrics,
             self.risks_assumptions,
             self.open_questions,
+            self.conventions,
         ]
         any_single = any(t is not None for t in single_themes)
 

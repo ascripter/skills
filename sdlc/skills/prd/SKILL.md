@@ -236,29 +236,42 @@ After all themes are addressed (answered/skipped/todo'd), set
 #### Within a theme: tiered question flow
 
 Each question in `prd-questions.yaml` carries an `importance` field
-(`med | high | critical`) that controls how the agent runs it:
+(`med | high | critical | nested_freeform`) that controls how the agent
+runs it:
 
 - **`med`** (the default — most questions): batch with up to 3 sibling
   `med` questions from the same theme into one `AskUserQuestion` call.
-  `⚠ inferred` candidate at position 1. Current behavior.
+  `⚠ inferred` candidate at position 1.
 - **`high`** (~12 questions, mostly required list[string] fields and
   foundational narratives): runs as its **own mini-section** — never
   batched with other questions. For scalars: agent drafts a full answer,
   shows it, user approves or iterates (max 3 rounds). For list[string]:
   per-item with one clarifying challenge round each.
-- **`critical`** (currently only `must_have_features` and
-  `nice_to_have_features`): full per-item state machine — propose →
-  optionally challenge → detail → optionally clarify → final approval →
-  next item. Every item is examined before being added.
+- **`critical`** (`must_have_features`, `nice_to_have_features`,
+  `non_functional_requirements.other`): full per-item state machine —
+  propose → optionally challenge → detail (with structured slots:
+  input / output / dependencies / edge cases / why for FRs;
+  scope / threshold / measurement / downstream-impact / why for NFRs)
+  → optionally clarify → final approval. After "Done", a **dynamic
+  scope-completeness sweep** reflects on the draft list + all upstream
+  answers and surfaces concrete candidate items the user (and the
+  agent) may have forgotten — derived per project, not from a canned
+  category list.
+- **`nested_freeform`** (currently only `conventions`): per-bucket flow
+  for a `Dict[str, Any]` field whose shape is project-defined. Agent
+  proposes named buckets inferred from prior answers; for each accepted
+  bucket it drafts a free-form nested YAML body the user approves or
+  iterates on. Validator only type-checks the top-level mapping.
 
 Order within a theme: run all `med` questions first (in 2–4-question
-batches), then each `high`/`critical` question as its own mini-section
-in the order they appear in `prd-questions.yaml`.
+batches), then each `high`/`critical`/`nested_freeform` question as
+its own mini-section in the order they appear in `prd-questions.yaml`.
 
 **Read `references/importance-flows.md` before running any
-`high`/`critical` question.** It contains the exact `AskUserQuestion`
-prompts, iteration caps, EXIT-mid-flow rules, and the
-`product_identity` synthesis batch example.
+`high`/`critical`/`nested_freeform` question.** It contains the exact
+`AskUserQuestion` prompts, slot tables, sweep heuristics, iteration
+caps, EXIT-mid-flow rules, and the `product_identity` synthesis batch
+example.
 
 For batch format details (option layout, free-text-only questions,
 `capture_rationale` follow-ups, `required_if` conditional-promotion

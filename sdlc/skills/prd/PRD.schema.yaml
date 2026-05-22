@@ -58,6 +58,10 @@
 #   `validate_schema.py` enforces the prefix format on every item in these
 #   fields. Items missing the prefix are warnings in `status: draft` and
 #   errors in `status: complete`.
+#
+#   The `conventions` block (see end of file) is intentionally exempt from
+#   ID-family checks — its contents are project-defined nested mappings, not
+#   referenced list items.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -297,6 +301,53 @@ open_questions:
   undecided_decisions: null   # decisions explicitly punted (list[string])
   parking_lot: null           # ideas to revisit later (list[string])
 
+# -----------------------------------------------------------------------------
+# conventions — binding cross-cutting project conventions
+# -----------------------------------------------------------------------------
+# A free-form mapping of named convention buckets, each carrying a
+# project-specific sub-structure. Asked LAST (after open_questions) once the
+# agent has seen the whole picture and can spot patterns that downstream
+# stages must honor verbatim — naming/ID rules, schema-versioning policy,
+# how PRD fields propagate to later artifacts, code-style invariants, etc.
+#
+# Shape:
+#   conventions:
+#     <bucket-name-1>:        # any kebab-case or snake_case key the user chose
+#       <free-form sub-structure: scalars, lists, or nested mappings as needed>
+#     <bucket-name-2>:
+#       ...
+#
+# The validator only enforces that the value is a mapping (Dict[str, Any]).
+# Sub-keys, value types, and nesting are deliberately unconstrained — every
+# project defines its own conventions, and downstream agents read this block
+# verbatim. Examples below are illustrative; real projects will have
+# different keys.
+#
+# Example shapes (do NOT treat as required keys):
+#
+#   conventions:
+#     artifact_ids:
+#       binding: true
+#       description: "Canonical 3-letter cross-stage IDs ..."
+#       scope: ["Stage 02 ...", "Stage 15 ..."]
+#       id_types:
+#         FR: "Functional Requirement — ..."
+#         NFR: "Non-Functional Requirement — ..."
+#     schema_versioning:
+#       policy: "Per-artifact semver ..."
+#       migration: "Forward-migration scripts under tools/migrations/..."
+#     nfr_propagation:
+#       description: "Which NFR fields each downstream stage must read ..."
+#       map:
+#         "security_compliance.data_sensitivity": ["FR-007 (Data Model): ..."]
+#
+# Items inside `conventions` carry no ID prefix family — they are addressed
+# by their bucket name and dotted sub-path.
+conventions: null               # Optional[Dict[str, Any]] — null when no
+                                # cross-cutting conventions apply (most simple
+                                # projects); otherwise a mapping of named
+                                # buckets with project-defined sub-structure.
+
 # =============================================================================
 # MULTI-PRODUCT MODE (monorepo) — uncomment and use *instead of* the top-level
 # theme blocks above. Each entry under `products:` mirrors the single-product
@@ -324,6 +375,7 @@ open_questions:
 #     success_metrics: { ... }
 #     risks_assumptions: { ... }
 #     open_questions: { ... }
+#     conventions: { ... }        # optional per-product convention map
 #   billing:
 #     problem_opportunity: { ... }
 #     product_identity:
