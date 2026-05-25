@@ -1,0 +1,50 @@
+# Invalid: trace lists use the wrong prefix.
+#   traces_ux_surfaces holds a kebab slug (must be SCR-NNN)
+#   traces_prd_features holds an SCR id (must be FR-NNN)
+#   traces_prd_workflows holds an FR id (must be WKF-NNN)
+# Validator must flag all three as hard errors in status: complete.
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-25T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "14141414-1414-1414-1414-141414141414"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  User:
+    description: "Authenticated end-user."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+    traces_prd_features:
+      - "SCR-001"     # wrong family
+    traces_ux_surfaces:
+      - "user-list"   # kebab slug — must be SCR-NNN
+    traces_prd_workflows:
+      - "FR-001"      # wrong family
+
+relationships: []
+enums_and_lookups: { enums: {} }
+indexes_and_queries:
+  access_patterns:
+    - description: "Lookup."
+      entity: User
+      fields: [id]
+      read_or_write: read
+integrity_and_constraints:
+  default_on_delete: restrict
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []

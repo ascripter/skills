@@ -565,8 +565,8 @@ questions:
   - theme: resource_inventory
     id: resources
     schema_path: resource_inventory
-    question: "Confirm or revise the resource inventory drawn from DATA entities + PRD features + UX surfaces."
-    hint: "Each PRD must_have_feature must end up traced (or be in non_api_features); each UX surface with data I/O must be served by ≥1 endpoint (coverage checks at validation)."
+    question: "Confirm or revise the resource inventory drawn from DATA entities + PRD features (FR-NNN) + PRD workflows (WKF-NNN) + UX surfaces (SCR-NNN)."
+    hint: "Each PRD FR-NNN must end up traced (or be in non_api_features); each UX SCR-NNN with data I/O must be served by ≥1 endpoint (coverage checks at validation). Because this theme is `synthesis: true`, after the per-resource confirmation loop closes the agent runs a dynamic scope-completeness sweep against ALL upstream ID families before the inventory can close. See references/resource-discovery.md."
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -649,8 +649,8 @@ questions:
   - theme: per_resource_deepdive
     id: endpoints
     schema_path: resource.endpoints
-    question: "Endpoints for this resource? (Each: method + path + summary + request/response schema refs + auth.)"
-    hint: "Each endpoint becomes one OpenAPI 3.1 operation. Start from canonical CRUD verbs (list/get/create/update/delete) and add custom actions as needed."
+    question: "Endpoints for this resource? (Each: id (OPR-NNN) + operation_id + method + path + summary + request/response schema refs + auth.)"
+    hint: "Each endpoint becomes one OpenAPI 3.1 operation AND carries a stable OPR-NNN id (cross-stage reference contract for downstream test/task/arch). The OPR-NNN id is assigned by the writer in collection order; the user does not type it. `operation_id` is the codegen-naming hook (kebab/snake string). Start from canonical CRUD verbs (list/get/create/update/delete)."
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -685,8 +685,8 @@ questions:
   - theme: per_resource_deepdive
     id: traces_prd_features
     schema_path: resource.traces_prd_features
-    question: "Which PRD must_have_features (FR-NNN) does this resource implement?"
-    hint: "Drives the feature-coverage check. Every PRD FR-NNN must end up traced here OR listed in non_api_features."
+    question: "Which PRD must_have_features (FR-NNN ids) does this resource implement?"
+    hint: "Pure FR-NNN id list — no verbatim PRD text. Drives the feature-coverage check. Every PRD FR-NNN must end up traced here OR listed in non_api_features. The validator enforces FR-NNN format on every entry."
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -697,14 +697,26 @@ questions:
   - theme: per_resource_deepdive
     id: traces_ux_surfaces
     schema_path: resource.traces_ux_surfaces
-    question: "Which UX surfaces does this resource serve?"
-    hint: "Drives the surface-coverage check. Every UX surface whose interactions include data I/O must end up traced by ≥1 resource."
+    question: "Which UX surfaces does this resource serve? (SCR-NNN ids from UX.surface_inventory[].id)"
+    hint: "Pure SCR-NNN id list — never the editable `surface_id` slug. SCR-NNN is the stable contract; slugs may be renamed. Drives the surface-coverage check. The validator enforces SCR-NNN format on every entry."
     suggested_answers: []
     free_text_allowed: true
     required: true
     capture_rationale: false
     confidence_field: false
     importance: critical
+
+  - theme: per_resource_deepdive
+    id: traces_prd_workflows
+    schema_path: resource.traces_prd_workflows
+    question: "Which PRD core workflows does this resource participate in? (WKF-NNN ids from PRD.use_cases.core_workflows; optional)"
+    hint: "Optional. Use when a resource is the API entry point for a workflow even though no single FR-NNN directly names it. The validator enforces WKF-NNN format on every entry."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+    importance: high
 
   # ---------------------------------------------------------------------------
   # external_dependencies — optional

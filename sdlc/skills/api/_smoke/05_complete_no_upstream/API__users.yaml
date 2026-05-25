@@ -1,6 +1,6 @@
 metadata:
-  api_resource_version: "1.0"
-  last_updated: "2026-05-18T12:00:00Z"
+  api_resource_version: "1.1"
+  last_updated: "2026-05-25T12:00:00Z"
   generated_by: sdlc-api
   session_id: "55555555-5555-5555-5555-555555555555"
   status: "complete"
@@ -12,11 +12,12 @@ traces_prd_features:
   - "FR-001"
   - "FR-002"
 traces_ux_surfaces:
-  - "user-list"
-  - "user-detail"
+  - "SCR-001"
+  - "SCR-002"
 
 endpoints:
-  - operation_id: list-users
+  - id: OPR-001
+    operation_id: list-users
     method: GET
     path: /v1/users
     summary: "List users (paginated)"
@@ -35,7 +36,8 @@ endpoints:
       - bearer_jwt: ["read:users"]
     idempotent: true
 
-  - operation_id: get-user
+  - id: OPR-002
+    operation_id: get-user
     method: GET
     path: /v1/users/{id}
     summary: "Get a user by id"

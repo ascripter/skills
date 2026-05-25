@@ -4,8 +4,8 @@
 # Expected validator behaviour: exit 0, "[OK]" message.
 
 metadata:
-  api_version: "1.0"
-  last_updated: "2026-05-18T12:00:00Z"
+  api_version: "1.1"
+  last_updated: "2026-05-25T12:00:00Z"
   generated_by: sdlc-api
   session_id: "55555555-5555-5555-5555-555555555555"
   monorepo: false
@@ -70,4 +70,4 @@ resource_inventory:
     file_path: docs/API__users.yaml
     primary_entity: User
     traces_prd_features: ["FR-001", "FR-002"]
-    traces_ux_surfaces: ["user-list", "user-detail"]
+    traces_ux_surfaces: ["SCR-001", "SCR-002"]

@@ -1,0 +1,60 @@
+# Valid single-product fixture exercising the new v1.1 fields:
+# metadata.changelog, WRN-NNN warnings, SCR-NNN surface traces,
+# WKF-NNN workflow traces. status: complete.
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-25T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "12121212-1212-1212-1212-121212121212"
+  monorepo: false
+  status: "complete"
+  changelog:
+    - "1.1 (2026-05-25): Migrated traces to SCR-NNN; added WKF-NNN workflow traces; added WRN-NNN warnings."
+    - "1.0 (2026-05-18): Initial spec produced by sdlc-data."
+
+data_warnings:
+  - "WRN-001: SessionToken is internal-only — no resource will be created for it."
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  User:
+    description: "Authenticated end-user."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      email: { type: string, nullable: false, unique: true }
+    traces_prd_features:
+      - "FR-001"
+    traces_ux_surfaces:
+      - "SCR-002"
+      - "SCR-003"
+    traces_prd_workflows:
+      - "WKF-001"
+
+relationships: []
+
+enums_and_lookups:
+  enums: {}
+
+indexes_and_queries:
+  access_patterns:
+    - description: "List users."
+      entity: User
+      fields: [email]
+      read_or_write: read
+
+integrity_and_constraints:
+  default_on_delete: restrict
+
+data_classification:
+  pii_fields:
+    - User.email
+  regulated_fields: []
+  encrypted_at_rest: []

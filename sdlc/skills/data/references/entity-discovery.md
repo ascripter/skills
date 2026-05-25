@@ -7,16 +7,33 @@ description. Read this before Phase 3.
 
 ## Source priority
 
-1. **`PRD.data_model.key_entities`** — the user already named these.
-   Treat verbatim. Tag `✓ found`.
+1. **`PRD.data_model.key_entities`** — the user already named these. Each
+   entry is shaped `"ENT-NNN: <Name>"` or `"ENT-NNN: <Name> — <description>"`
+   per the PRD convention. Strip the `ENT-NNN: ` prefix and split on
+   the first ` — ` (em-dash or `--`) to extract the PascalCase
+   `<Name>`. Treat verbatim. Tag `✓ found`. Persist the original
+   `ENT-NNN` id alongside the name in `state.defined_entities[].ent_id`
+   so the sweep (below) can detect missing PRD ENT ids.
 2. **Schema files on disk** (`schema.prisma`, `*.sql`, `models/`,
    `entities/`, Django `models.py`, SQLAlchemy `declarative_base`
    subclasses) — authoritative if present. Tag `✓ found`.
 3. **`PRD.functional_requirements.must_have_features`** (FR-NNN list) —
-   extract candidate entity nouns. Tag `⚠ inferred`.
+   each entry is `"FR-NNN: <title> — <description>"`. Extract candidate
+   entity nouns from BOTH the title and the description (the
+   description often names the entity directly, e.g. "FR-031: End-to-end
+   MVP demo: factory takes a one-paragraph idea (e.g. recipe manager,
+   scheduling app) and produces a runnable repo with passing tests").
+   Tag `⚠ inferred`.
 4. **`UX__<surface>.yaml.layout` + `validation_rules` +
    `components.content_slots`** — forms imply entities; list items imply
-   entities; filters imply entities. Tag `⚠ inferred`.
+   entities; filters imply entities. Tag `⚠ inferred`. Note: the surface
+   reference for a confirmed entity is `SCR-NNN` (from
+   `UX.surface_inventory[].id`), NOT the editable `surface_id` slug.
+5. **`PRD.use_cases.core_workflows`** (WKF-NNN list) — workflows often
+   imply state-bearing entities the FR list overlooks (e.g. a
+   `BranchSession` entity from "switch git branch and continue work").
+   Tag `⚠ inferred`. These are the primary signals the
+   scope-completeness sweep (below) draws on.
 
 Higher-priority sources override lower ones. If PRD names `User` and a
 UX form has a field labelled "Account", treat them as the same entity
@@ -117,5 +134,96 @@ needs your explicit confirmation — type 'confirm Tag', 'rename Tag→Label',
 ```
 
 Persist the confirmed list to `state.defined_entities` as a list of
-`{name, status: confirmed|dropped, source}`. Dropped entries go to
-`state.dropped_entity_candidates` so they don't get re-proposed on resume.
+`{name, ent_id (if any), status: confirmed|dropped, source}`. Dropped
+entries go to `state.dropped_entity_candidates` so they don't get
+re-proposed on resume.
+
+## Scope-completeness sweep (theme `entities`, after the per-entity loop)
+
+The `entities` theme is marked `synthesis: true` in `data-questions.yaml`.
+After the per-entity drill-down loop closes — i.e. after the user picks
+"Done — wrap up the list" in the standard `critical` flow — the agent
+MUST run a dynamic scope-completeness sweep before the theme is allowed
+to close. This is the single most important defence against missing
+entities the upstream artifacts imply but the draft list overlooks.
+
+### What to reflect on (every pass)
+
+1. **The draft entity list itself** — what kinds of entities dominate?
+   What kinds are conspicuously absent given the upstream IDs?
+2. **Every upstream ID family**, not just the most-direct one:
+   - `PRD.data_model.key_entities` (ENT-NNN) — are all PRD ENT ids
+     present in the draft? Any ENT-NNN whose name doesn't appear?
+   - `PRD.functional_requirements.must_have_features` (FR-NNN) — every
+     FR's description text. Does any feature description name a
+     state-bearing noun (registry, log, session, queue, marker) that
+     the draft doesn't have?
+   - `PRD.use_cases.core_workflows` (WKF-NNN) — does any workflow imply
+     a persistent entity (e.g. "switch branch" → `BranchSession`,
+     "resume after exit" → `CheckpointRecord`) that the draft missed?
+   - `PRD.use_cases.primary_jobs_to_be_done` / `secondary_jobs`
+     (JTB-NNN) — similar implications.
+   - `UX.surface_inventory[].references_entities` — every ENT-NNN that
+     UX claims to display must have a matching entity in the draft.
+   - `UX__<surface>.yaml` — every form field, list/table component,
+     and filter implies an entity behind it.
+3. **Project-type heuristics** — a CLI tool, a SaaS app, a library, and
+   a pipeline each have different "things people forget":
+   - SaaS app: tenant boundary, audit log, user session, password reset
+     token, idempotency key.
+   - CLI tool: project registry, branch session, cost record, run log.
+   - Library: typically zero entities (it's not data-bearing).
+   - Pipeline: stage state, checkpoint, retry record, dead-letter queue.
+
+### Format of the sweep question
+
+Format as **one** multi-select `AskUserQuestion` call surfacing the
+agent's top 2–4 candidate entities — concrete names, not category
+labels. "You might be missing `BranchSession` (implied by WKF-004 'switch
+git branch')" beats "have you considered session entities".
+
+```
+header: "Scope sweep"
+question: "Looking at your N entities alongside upstream PRD/UX ids, a
+  few candidates look notable that aren't in the list yet. Add any
+  of these, or wrap up?"
+options:
+  - { label: "⚠ <CandidateEntity1>", description: "⚠ Implied by <upstream ref, e.g. WKF-004 ...>. Pick to draft it through the per-entity state machine." }
+  - { label: "⚠ <CandidateEntity2>", description: "⚠ Implied by <upstream ref>. Pick to draft." }
+  - { label: "⚠ <CandidateEntity3>", description: "⚠ Implied by <upstream ref>. Pick to draft." }
+  - { label: "Wrap up — list is complete", description: "Skip these. The list closes as-is." }
+multiSelect: true
+```
+
+For each picked candidate: enter the per-entity state machine at
+**step a-2** (challenge if free-text); confirm description → fields →
+primary_key → traces → final approval. Then return to the sweep for a
+second pass.
+
+### Caps
+
+- **Sweep-pass cap**: at most 2 passes per session. After two passes,
+  even if you still see candidates, defer them to `data_warnings`:
+  `"WRN-NNN: entities sweep suggested but not added — <Candidate>,
+  <Candidate>"`. Persist the WRN counter to `state.last_ids.WRN`.
+- **Anti-padding rule**: if you don't see *concrete* candidates after
+  honest reflection, surface 0 — close the list without a sweep
+  question. Don't manufacture candidates to look thorough.
+- **Empty list**: if the user added 0 entities in the main loop,
+  surface a single `data_warnings` note (`"WRN-NNN: entities: empty
+  list — no entities collected"`) and don't push.
+
+### State-write timing
+
+Write state after each completed sweep pass (so a partial sweep
+survives EXIT mid-pass). On EXIT mid-sweep, the items collected so far
+stay in `state.partial_answers.entities`; an additional WRN-NNN entry
+records `"entities: list incomplete — EXIT received mid-sweep pass M"`.
+
+### Skip the sweep at your peril
+
+The sweep is the single most important defence against synthesis-stage
+gaps — the kind where an entity implied by a PRD workflow or by a UX
+surface didn't make the draft because the agent only seeded from PRD
+`data_model.key_entities`. Always run it unless the anti-padding rule
+fires.

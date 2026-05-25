@@ -1,5 +1,6 @@
 """Validate API.yaml + every API__*.yaml against the canonical sdlc-api schema,
-and run feature/surface coverage + DATA entity-link checks.
+and run feature/surface coverage + DATA entity-link checks + ID-prefix format
+checks.
 
 Run from the project root:
 
@@ -10,13 +11,21 @@ Run from the project root:
 Validates:
     1. docs/API.yaml (or --path) — global API contract.
     2. Every docs/API__*.yaml sibling — one per resource.
-    3. Coverage checks (all skipped when api_kind: none):
+    3. ID-prefix format checks:
+       - WRN-NNN on every api_warnings entry.
+       - OPR-NNN on every endpoint's `id` field (when present).
+       - FR-NNN on every traces_prd_features entry and every
+         non_api_features entry.
+       - SCR-NNN on every traces_ux_surfaces entry.
+       - WKF-NNN on every traces_prd_workflows entry (when present).
+       Hard error in status:complete.
+    4. Coverage checks (all skipped when api_kind: none):
        - Feature coverage: every PRD must_have_features FR-NNN appears in
          some resource's traces_prd_features OR in API.yaml.non_api_features.
-       - Surface coverage: every data-bearing UX surface (by surface_type)
-         appears in some resource's traces_ux_surfaces.
-       - Entity-link: every resource's primary_entity exists in
-         DATA-MODEL.yaml.entities.
+       - Surface coverage: every data-bearing UX surface (matched by the
+         SCR-NNN id) appears in some resource's traces_ux_surfaces.
+       - Entity-link: every resource's primary_entity (PascalCase entity
+         name) exists in DATA-MODEL.yaml.entities.
 
 OpenAPI 3.1 deep-validation of embedded operations is OUT of scope for v1
 (see references/openapi-embedding.md). The Pydantic models here enforce the
@@ -256,6 +265,7 @@ class ResourceInventoryItem(_ThemeBase):
     primary_entity: Optional[str] = None
     traces_prd_features: Optional[List[str]] = None
     traces_ux_surfaces: Optional[List[str]] = None
+    traces_prd_workflows: Optional[List[str]] = None
 
 
 # -----------------------------------------------------------------------------
@@ -272,6 +282,7 @@ class APIMetadata(BaseModel):
     session_id: str
     monorepo: bool = False
     status: Literal["draft", "complete"] = "draft"
+    changelog: Optional[List[str]] = None
 
 
 class APIProduct(_ThemeBase):
@@ -376,6 +387,7 @@ class ResourceMetadata(BaseModel):
     generated_by: str = "sdlc-api"
     session_id: str
     status: Literal["draft", "complete"] = "draft"
+    changelog: Optional[List[str]] = None
 
 
 class Endpoint(_ThemeBase):
@@ -385,6 +397,7 @@ class Endpoint(_ThemeBase):
     3.1 conformance is out of scope for v1 — see references/openapi-embedding.md.
     """
 
+    id: Optional[str] = None  # OPR-NNN stable id (SDLC sibling; stripped before OpenAPI round-trip)
     operation_id: Optional[str] = None
     method: Optional[str] = None
     path: Optional[str] = None
@@ -413,6 +426,7 @@ class APIResource(BaseModel):
     primary_entity: Optional[str] = None
     traces_prd_features: Optional[List[str]] = None
     traces_ux_surfaces: Optional[List[str]] = None
+    traces_prd_workflows: Optional[List[str]] = None
     endpoints: Optional[List[Endpoint]] = None
     schemas: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
@@ -454,7 +468,7 @@ RESOURCE_REQUIRED_PATHS: List[str] = [
 ]
 
 # Per-endpoint required keys for status=complete:
-ENDPOINT_REQUIRED_KEYS: List[str] = ["operation_id", "method", "path", "summary", "responses"]
+ENDPOINT_REQUIRED_KEYS: List[str] = ["id", "operation_id", "method", "path", "summary", "responses"]
 
 
 def _get_dotted(obj: object, path: str) -> object:
@@ -527,6 +541,88 @@ def check_resource_required(resource: APIResource, file_label: str) -> List[str]
 
 
 _FEATURE_ID_RE = re.compile(r"^FR-\d+", re.IGNORECASE)
+_WRN_RE = re.compile(r"^WRN-\d{3,}:\s+.+")
+_FR_PREFIX_RE = re.compile(r"^FR-\d{3,}$", re.IGNORECASE)
+_SCR_PREFIX_RE = re.compile(r"^SCR-\d{3,}$", re.IGNORECASE)
+_WKF_PREFIX_RE = re.compile(r"^WKF-\d{3,}$", re.IGNORECASE)
+_OPR_PREFIX_RE = re.compile(r"^OPR-\d{3,}$", re.IGNORECASE)
+
+
+def check_warning_ids(warnings: List[str], label: str) -> List[str]:
+    """Every warnings entry must match WRN-NNN: <message>."""
+    errs: List[str] = []
+    for i, w in enumerate(warnings or []):
+        if not isinstance(w, str) or not _WRN_RE.match(w.strip()):
+            errs.append(
+                f"{label}[{i}]: '{w}' must start with 'WRN-NNN: ' "
+                f"(zero-padded 3-digit number)"
+            )
+    return errs
+
+
+def _check_id_prefix(values: object, regex: "re.Pattern[str]", path_label: str) -> List[str]:
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        return [f"{path_label}: expected a list, got {type(values).__name__}"]
+    errs: List[str] = []
+    for i, v in enumerate(values):
+        if not isinstance(v, str) or not regex.match(v.strip()):
+            errs.append(f"{path_label}[{i}]: '{v}' does not match expected ID format")
+    return errs
+
+
+def check_api_id_formats(api: API) -> List[str]:
+    """Enforce <PREFIX>-NNN format on every trace list + non_api_features."""
+    errs: List[str] = []
+
+    def _check_root(scope: str, root: object) -> None:
+        non_api = getattr(root, "non_api_features", None)
+        errs.extend(_check_id_prefix(non_api, _FR_PREFIX_RE,
+                                     f"{scope}non_api_features (expected FR-NNN)"))
+        inv = getattr(root, "resource_inventory", None) or []
+        for i, item in enumerate(inv):
+            errs.extend(_check_id_prefix(
+                getattr(item, "traces_prd_features", None), _FR_PREFIX_RE,
+                f"{scope}resource_inventory[{i}].traces_prd_features (expected FR-NNN)"))
+            errs.extend(_check_id_prefix(
+                getattr(item, "traces_ux_surfaces", None), _SCR_PREFIX_RE,
+                f"{scope}resource_inventory[{i}].traces_ux_surfaces (expected SCR-NNN)"))
+            errs.extend(_check_id_prefix(
+                getattr(item, "traces_prd_workflows", None), _WKF_PREFIX_RE,
+                f"{scope}resource_inventory[{i}].traces_prd_workflows (expected WKF-NNN)"))
+
+    if api.metadata.monorepo and api.products:
+        for slug, product in api.products.items():
+            _check_root(f"products.{slug}.", product)
+    else:
+        _check_root("", api)
+    return errs
+
+
+def check_resource_id_formats(resource: APIResource, label: str) -> List[str]:
+    """Enforce ID prefix format on per-resource yaml lists and endpoint ids."""
+    errs: List[str] = []
+    errs.extend(_check_id_prefix(
+        resource.traces_prd_features, _FR_PREFIX_RE,
+        f"{label}: traces_prd_features (expected FR-NNN)"))
+    errs.extend(_check_id_prefix(
+        resource.traces_ux_surfaces, _SCR_PREFIX_RE,
+        f"{label}: traces_ux_surfaces (expected SCR-NNN)"))
+    errs.extend(_check_id_prefix(
+        resource.traces_prd_workflows, _WKF_PREFIX_RE,
+        f"{label}: traces_prd_workflows (expected WKF-NNN)"))
+    # OPR ids on endpoints. `id` may be unset on draft endpoints; only check
+    # values that are present.
+    for i, ep in enumerate(resource.endpoints or []):
+        ep_id = getattr(ep, "id", None)
+        if ep_id is None:
+            continue
+        if not isinstance(ep_id, str) or not _OPR_PREFIX_RE.match(ep_id.strip()):
+            errs.append(
+                f"{label}: endpoints[{i}].id: '{ep_id}' must match OPR-NNN format"
+            )
+    return errs
 
 
 def load_prd_must_have_features(prd_path: Path) -> List[str]:
@@ -570,11 +666,17 @@ def load_prd_must_have_features(prd_path: Path) -> List[str]:
 
 
 def load_ux_data_bearing_surfaces(docs_dir: Path) -> List[str]:
-    """Return list of UX surface_ids whose surface_type is data-bearing.
+    """Return list of UX surface SCR-NNN ids whose surface_type is data-bearing.
 
-    Reads every docs/UX__*.yaml file. Surfaces without a recognized type
-    are treated as data-bearing (conservative — better a false positive
-    in coverage than a silent miss).
+    Reads every docs/UX__*.yaml file. Returns each surface's stable `id`
+    field (SCR-NNN). Surfaces without a recognized type are treated as
+    data-bearing (conservative — better a false positive in coverage than
+    a silent miss).
+
+    For backward compatibility, falls back to the per-surface
+    `surface_id` slug ONLY when the file pre-dates the SCR-NNN convention
+    (i.e. `id` is missing). When that fallback fires, the agent should
+    propose migrating the surface file.
     """
     surfaces: List[str] = []
     for path in sorted(docs_dir.glob("UX__*.yaml")):
@@ -584,12 +686,15 @@ def load_ux_data_bearing_surfaces(docs_dir: Path) -> List[str]:
             continue
         if not isinstance(raw, dict):
             continue
-        sid = raw.get("surface_id")
+        # Prefer the SCR-NNN stable id; fall back to surface_id slug.
+        scr_id = raw.get("id")
+        slug = raw.get("surface_id")
         stype = raw.get("surface_type")
-        if not sid:
+        chosen = scr_id if isinstance(scr_id, str) and scr_id.strip() else slug
+        if not chosen:
             continue
         if stype is None or stype in DATA_BEARING_SURFACE_TYPES:
-            surfaces.append(str(sid))
+            surfaces.append(str(chosen))
     return surfaces
 
 
@@ -785,6 +890,12 @@ def validate_all(api_path: Path) -> int:
     for name, resource in resources.items():
         missing_resource.extend(check_resource_required(resource, name))
 
+    # 3b) ID-prefix format checks (WRN on warnings, FR/SCR/WKF on traces, OPR on endpoint ids)
+    warning_id_errs = check_warning_ids(api.api_warnings or [], "api_warnings")
+    id_format_errs = check_api_id_formats(api)
+    for name, resource in resources.items():
+        id_format_errs.extend(check_resource_id_formats(resource, name))
+
     # 4) Coverage + entity-link checks — skipped when api_kind: none
     docs_dir = api_path.parent
     prd_path = docs_dir / "PRD.yaml"
@@ -827,6 +938,8 @@ def validate_all(api_path: Path) -> int:
         problems = bool(
             missing_api
             or missing_resource
+            or warning_id_errs
+            or id_format_errs
             or uncovered_features
             or uncovered_surfaces
             or bad_entities
@@ -842,6 +955,16 @@ def validate_all(api_path: Path) -> int:
                 print(f"{len(missing_resource)} required resource field(s) missing:")
                 for m in missing_resource:
                     print(f"  - {m}")
+                print()
+            if warning_id_errs:
+                print(f"{len(warning_id_errs)} api_warnings ID-format error(s):")
+                for e_ in warning_id_errs:
+                    print(f"  - {e_}")
+                print()
+            if id_format_errs:
+                print(f"{len(id_format_errs)} ID-format error(s) (FR/SCR/WKF/OPR):")
+                for e_ in id_format_errs:
+                    print(f"  - {e_}")
                 print()
             if uncovered_features:
                 print(
@@ -908,6 +1031,14 @@ def validate_all(api_path: Path) -> int:
         print(f"\n{len(missing_resource)} required resource field(s) missing:")
         for m in missing_resource:
             print(f"  - {m}")
+    if warning_id_errs:
+        print(f"\n{len(warning_id_errs)} api_warnings ID-format error(s):")
+        for e_ in warning_id_errs:
+            print(f"  - {e_}")
+    if id_format_errs:
+        print(f"\n{len(id_format_errs)} ID-format error(s) (FR/SCR/WKF/OPR):")
+        for e_ in id_format_errs:
+            print(f"  - {e_}")
     if uncovered_features:
         print(f"\n{len(uncovered_features)} PRD FR-NNN feature(s) with no resource trace:")
         for f in uncovered_features:
@@ -923,6 +1054,8 @@ def validate_all(api_path: Path) -> int:
     if not (
         missing_api
         or missing_resource
+        or warning_id_errs
+        or id_format_errs
         or uncovered_features
         or uncovered_surfaces
         or bad_entities

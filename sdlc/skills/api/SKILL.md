@@ -36,12 +36,18 @@ auth scheme, error envelope, and event channel they need to implement.
    confirmed individually.
 5. **Theme interview** → required themes always run; optional themes
    gated now/skip/todo. Theme 8 (`resource_inventory`) and theme 10
-   (`per_resource_deepdive`) run as `critical` per-item drill-downs —
-   every resource is examined, confirmed, and traced back to PRD
-   features + UX surfaces + a DATA entity.
+   (`per_resource_deepdive`) run as `critical` `synthesis: true`
+   per-item drill-downs — every resource is examined, confirmed, and
+   traced back to PRD features (FR-NNN) + UX surfaces (SCR-NNN) +
+   optionally PRD workflows (WKF-NNN) + a DATA entity (by name).
+   After theme 8's per-item loop closes, the agent runs a dynamic
+   **scope-completeness sweep** drawing on every upstream ID family;
+   see `references/resource-discovery.md`.
 6. **Write & validate** → merge into `docs/API.yaml` and write all
-   `docs/API__<resource>.yaml`, then run `validate_schema.py` (which
-   also runs the feature/surface coverage + entity-link checks).
+   `docs/API__<resource>.yaml` (every endpoint carries a stable
+   `id: OPR-NNN` assigned by the writer), then run `validate_schema.py`
+   (Pydantic + ID-prefix format checks (WRN/FR/SCR/WKF/OPR) +
+   feature/surface coverage + entity-link checks).
 7. **CLAUDE.md pointer + close** → call `set_claude_md_pointer.py`,
    mark state `complete`.
 
@@ -403,7 +409,7 @@ Schema (extends the baseline state schema from CLAUDE.md):
 
 ```yaml
 session_id: <uuid4 string>
-skill_version: "1.0"
+skill_version: "1.1"
 started_at: <iso8601>
 last_updated: <iso8601>
 status: in_progress  # in_progress | complete | aborted
@@ -423,17 +429,30 @@ pending_themes: []
 current_theme: null
 current_resource: null      # which resource_id is mid-deepdive (theme 10)
 
+# Per-family ID counters (single-product mode). Each entry is the
+# last-assigned integer for that family — increment, format as
+# <PREFIX>-{:03d}, then persist. This skill emits two families:
+#   WRN — api_warnings entries.
+#   OPR — per-endpoint stable id (lives on each endpoint as `id`).
+last_ids: {}                # e.g. {WRN: 3, OPR: 17}
+
+# Per-product ID counters (monorepo mode only). Same shape as last_ids,
+# keyed by product slug. Each product carries an independent WRN/OPR id space.
+last_ids_by_product: {}     # e.g. {billing: {WRN: 1, OPR: 8}, notifications: {WRN: 0, OPR: 3}}
+
 # Resource registry — one entry per defined resource
 defined_resources:          # extension over the baseline state schema
   - resource_id: <kebab>
     base_path: </v1/...>
     status: defined          # defined | draft | confirmed
     file_path: docs/API__<slug>.yaml
-    primary_entity: null     # set during theme 8
-    traces_prd_features: []  # set during theme 8
-    traces_ux_surfaces: []   # set during theme 8
+    primary_entity: null     # PascalCase DATA entity NAME; set during theme 8
+    traces_prd_features: []  # FR-NNN ids; set during theme 8
+    traces_ux_surfaces: []   # SCR-NNN ids; set during theme 8
+    traces_prd_workflows: [] # WKF-NNN ids; optional; set during theme 8
 
-dropped_resource_candidates: []   # surface_id-style records of dropped candidates
+dropped_resource_candidates: []   # records of dropped candidates (so resume
+                                  # doesn't re-propose)
 
 partial_answers: {}         # mirrors API.yaml structure incrementally
 partial_resources: {}       # mirrors per-resource yamls incrementally,

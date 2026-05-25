@@ -12,14 +12,16 @@ Phase 5 (when presenting pre-fills for confirmation).
 | PRD / UX source                                                        | DATA-MODEL target                                  | Confidence tag |
 |------------------------------------------------------------------------|----------------------------------------------------|----------------|
 | `PRD.metadata.monorepo`                                                | `metadata.monorepo`                                | ✓ found        |
-| `PRD.data_model.key_entities`                                          | `entities` keys (one per name, PascalCase)         | ⚠ inferred     |
+| `PRD.data_model.key_entities[*]` — "ENT-NNN: <Name>"                   | `entities` keys (strip ENT prefix, keep PascalCase `<Name>`) | ⚠ inferred (the user already named the entity, but agent must confirm fields and traces) |
+| `PRD.data_model.key_entities[*]` — keep the ENT-NNN id                 | `state.defined_entities[].ent_id` (for the sweep)   | ✓ found        |
 | `PRD.data_model.storage_preferences[0]`                                | `persistence.primary_store`                        | ✓ found        |
 | `PRD.data_model.storage_preferences[1+]`                               | `persistence.secondary_stores` (and `polyglot: true`) | ✓ found     |
 | `PRD.data_model.storage_preferences` mentions "S3"/"GCS"/"Azure Blob"  | `persistence.file_blob_store`                      | ⚠ inferred     |
 | `PRD.data_model.storage_preferences_rationale`                         | `persistence.primary_store_rationale`              | ✓ found        |
-| `PRD.data_model.data_ownership`                                        | `data_warnings` note (downstream visibility)       | ✓ found        |
+| `PRD.data_model.data_ownership`                                        | `data_warnings` note (downstream visibility — `"WRN-NNN: data_ownership: <value>"`) | ✓ found        |
 | `PRD.data_model.data_volume_estimate`                                  | gates `scale_and_retention` promotion              | ✓ found        |
-| `PRD.functional_requirements.must_have_features[*].id` (FR-NNN)         | candidate `entities.*.traces_prd_features`         | ⚠ inferred     |
+| `PRD.functional_requirements.must_have_features[*]` (FR-NNN id)         | candidate `entities.*.traces_prd_features` (verbatim FR-NNN, no description text) | ⚠ inferred     |
+| `PRD.use_cases.core_workflows[*]` (WKF-NNN id)                         | candidate `entities.*.traces_prd_workflows` (verbatim WKF-NNN); sweep seed | ⚠ inferred |
 | `PRD.functional_requirements.integrations_required`                    | `external_data_sources[*].name`                    | ✓ found        |
 | `PRD.security_compliance.data_sensitivity`                             | `data_classification.regulated_fields` heuristic   | ⚠ inferred     |
 | `PRD.security_compliance.regulatory_requirements: [gdpr, ccpa]`        | `data_classification.pii_fields` default scope     | ⚠ inferred     |
@@ -30,11 +32,22 @@ Phase 5 (when presenting pre-fills for confirmation).
 | `PRD.non_functional_requirements.scalability ∈ [large, hyperscale]`    | promotes `scale_and_retention` to "now"            | ✓ found        |
 | `PRD.technical_constraints.primary_language: python` + `pyproject.toml` has `alembic` dep | `migrations_and_evolution.tool: alembic` | ⚠ inferred |
 | `PRD.technical_constraints.primary_language: typescript` + `prisma` dep | `migrations_and_evolution.tool: prisma_migrate`   | ⚠ inferred     |
-| `UX.surface_inventory[].traces_prd_flows`                              | reverse-trace: which entities back which surfaces  | ⚠ inferred     |
+| `UX.surface_inventory[].id` (SCR-NNN) + `references_entities`          | reverse-trace: write the SCR-NNN to the entity's `traces_ux_surfaces` | ⚠ inferred |
 | `UX__<surface>.layout` form fields                                     | candidate entity fields (names + types)            | ⚠ inferred     |
 | `UX__<surface>.validation_rules[].field` + `.rules`                    | entity field constraints (nullable, unique, regex) | ⚠ inferred     |
 | `UX__<surface>.components.content_slots` (label, placeholder)          | candidate entity field name + comment              | ⚠ inferred     |
-| `UX__<surface>.interactions.effects` matching `create/update/delete X` | trace surface → entity                             | ⚠ inferred     |
+| `UX__<surface>.interactions.effects` matching `create/update/delete X` | trace surface (SCR-NNN) → entity                   | ⚠ inferred     |
+
+### About `PRD.conventions`
+
+`PRD.conventions` is a project-defined `Dict[str, Any]` — its bucket
+names and sub-shapes are not fixed. Do NOT assume specific bucket names
+(e.g. `artifact_ids` or `nfr_propagation`) exist. If the PRD does
+carry an `nfr_propagation`-style bucket that names "Data Model" or
+"FR-007" as a consumer of certain PRD fields, treat that as a
+verbatim directive (read those PRD fields and pre-fill the DATA-MODEL
+sections it points at). When unsure, surface the bucket name to the
+user and ask whether it applies.
 
 ## Repo signals (Phase 2 scan)
 

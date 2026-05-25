@@ -20,14 +20,64 @@
 #   - Field names are snake_case (e.g. `created_at`, `user_id`).
 #   - `data_classification` lists fields by `Entity.field` reference, not
 #     inline on each field. Downstream agents cross-reference both blocks.
+#
+# ID conventions (format is always "<PREFIX>-NNN" with zero-padded 3-digit
+# numbers, NNN ≥ 001):
+#
+#   Families this skill EMITS:
+#     WRN — `data_warnings[]`. Writer-managed: every entry is prefixed
+#           `"WRN-NNN: <message>"` and the counter `state.last_ids.WRN`
+#           (or `state.last_ids_by_product[<slug>].WRN` in monorepo mode)
+#           is persisted after each append.
+#
+#   (Entities themselves are addressed by their PascalCase dict key — `User`,
+#   `Order`. The matching upstream `ENT-NNN` id lives in
+#   `PRD.data_model.key_entities` as `"ENT-NNN: <Name>"`; the dict key here
+#   is the unprefixed name. No fresh entity-level ID family is emitted.)
+#
+#   Families this skill CONSUMES from `docs/PRD.yaml` (verbatim — never
+#   renumber, never invent new items in these families):
+#     FR  — `PRD.functional_requirements.must_have_features` and
+#           `nice_to_have_features` — referenced from
+#           `entities.<E>.traces_prd_features`. Drives the feature-coverage
+#           cross-check (every PRD must-have FR-NNN must be traced by ≥1
+#           entity or land in a `data_warnings` deferral).
+#     WKF — `PRD.use_cases.core_workflows` — referenced from optional
+#           `entities.<E>.traces_prd_workflows`. Catches entities the
+#           model implies via a workflow even when no FR-NNN directly
+#           names them.
+#     ENT — `PRD.data_model.key_entities` (each entry is `"ENT-NNN: <Name>"`).
+#           Entries here pre-seed the `entities` dict keys: the agent
+#           strips the `ENT-NNN: ` prefix and treats the remainder
+#           (`<Name>` or `<Name> — <description>`) as the PascalCase
+#           entity name. Treated as `✓ found` candidates during Phase 3
+#           entity discovery.
+#
+#   Families this skill CONSUMES from `docs/UX.yaml` (verbatim — never
+#   renumber, never invent new items in these families):
+#     SCR — `UX.surface_inventory[].id` — referenced from
+#           `entities.<E>.traces_ux_surfaces`. SCR-NNN is the stable id;
+#           the slug `surface_id` is editable and MUST NOT appear here.
+#
+#   The validator enforces:
+#     * WRN-NNN format on every `data_warnings[]` entry.
+#     * FR-NNN format on every value in `entities.<E>.traces_prd_features`.
+#     * SCR-NNN format on every value in `entities.<E>.traces_ux_surfaces`.
+#     * WKF-NNN format on every value in `entities.<E>.traces_prd_workflows`.
+#     Values carrying the wrong prefix are warnings in `status: draft`,
+#     errors in `status: complete`.
+#
+#   In monorepo mode, the WRN counter resets per product
+#   (`state.last_ids_by_product[<slug>].WRN`). PRD/UX ID consumption draws
+#   from the matching product's PRD/UX subtree.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # metadata — always at top level, present in both single- and multi-product mode
 # -----------------------------------------------------------------------------
 metadata:
-  data_model_version: "1.0"                # schema version this file conforms to
-  last_updated: "2026-05-18T12:00:00Z"     # ISO-8601 UTC timestamp of last write
+  data_model_version: "1.1"                # schema version this file conforms to
+  last_updated: "2026-05-25T12:00:00Z"     # ISO-8601 UTC timestamp of last write
   generated_by: sdlc-data                  # always literal string "sdlc-data"
   session_id: "00000000-0000-0000-0000-000000000000"  # UUID of the interview session
   monorepo: false                          # mirrors PRD.metadata.monorepo
@@ -40,15 +90,28 @@ metadata:
                                            #      classification integrity,
                                            #      bounded-context partition,
                                            #      mode-mismatch, volume-vs-scale).
+  changelog: null                          # Optional[list[string]]. Append-only.
+                                           # Each entry one line, format:
+                                           #   "<version> (<YYYY-MM-DD>): <one-line summary>"
+                                           # Most-recent entry first. Used to record
+                                           # post-generation manual edits or skill
+                                           # re-runs that materially changed the file.
 
-# data_warnings — informational notes. Used for:
-#   * uncovered PRD FR-NNN features ("FR-007 has no entity trace")
-#   * surface-coverage gaps ("surface 'foo' has no entity trace")
-#   * classification orphans ("data_classification.pii_fields[2] = User.foo not in User")
+# data_warnings — informational notes carried into downstream agent context.
+# Each entry MUST start with a stable ID: "WRN-NNN: <message>".
+# IDs are assigned in collection order by the writer (WRN-001, WRN-002, …)
+# and are stable across re-runs. The writer-managed counter lives in
+# `state.last_ids.WRN`.
+#
+# Use for:
+#   * uncovered PRD FR-NNN features ("WRN-NNN: coverage: FR-007 has no entity trace")
+#   * surface-coverage gaps ("WRN-NNN: surface SCR-004 has no entity trace")
+#   * classification orphans ("WRN-NNN: data_classification.pii_fields[2] = User.foo not in User")
 #   * low-confidence answers
 #   * merge conflicts
 #   * deferred optional themes (now/skip/todo) recorded for downstream visibility
-data_warnings: []
+#   * entities dropped from the scope-completeness sweep with the user's "defer" decision
+data_warnings: []                          # list[string] of "WRN-NNN: <msg>" items
 
 # =============================================================================
 # SINGLE-PRODUCT MODE — themes at top level, in interview order
@@ -128,12 +191,28 @@ entities:                          # REQUIRED — dict[<PascalCaseEntityName>, E
         type: timestamptz
         nullable: false
         default: "now()"
-    traces_prd_features: ["FR-001"] # REQUIRED list[string] — FR-NNN feature IDs this
-                                   # entity realizes. Empty list `[]` is valid for
-                                   # purely-backend entities (e.g. AuditLog); `null`
-                                   # is rejected by the validator.
-    traces_ux_surfaces: null       # list[string] — UX surface_ids that read/write
-                                   # this entity (e.g. ["dashboard", "user-detail"])
+    traces_prd_features: ["FR-001"] # REQUIRED list[string] of "FR-NNN" ids (no
+                                   # verbatim PRD text). FR ids come from
+                                   # PRD.functional_requirements.must_have_features /
+                                   # nice_to_have_features. Empty list `[]` is valid
+                                   # for purely-backend entities (e.g. AuditLog);
+                                   # `null` is rejected by the validator.
+                                   # Drives the feature-coverage cross-check at
+                                   # validation: every PRD must_have FR-NNN must
+                                   # be traced by ≥1 entity (or deferred via a
+                                   # WRN-NNN entry in data_warnings).
+    traces_ux_surfaces: null       # list[string] of "SCR-NNN" ids (no kebab slugs).
+                                   # SCR ids come from UX.surface_inventory[].id.
+                                   # Use SCR-NNN — never the editable slug
+                                   # `surface_id`. Empty list `[]` is allowed for
+                                   # purely-backend entities.
+    traces_prd_workflows: null     # Optional list[string] of "WKF-NNN" ids
+                                   # (from PRD.use_cases.core_workflows). Use when
+                                   # an entity participates in a workflow even if
+                                   # no FR-NNN directly names it. The sweep at
+                                   # the end of the entities theme catches entities
+                                   # implied by an upstream WKF whose draft list
+                                   # missed.
 
 # -----------------------------------------------------------------------------
 # relationships — explicit edges between entities. Inline FK references on

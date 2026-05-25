@@ -35,13 +35,17 @@ truth.
    individually (hallucination guard).
 5. **Theme interview** → required themes always run; optional themes are
    gated now/skip/todo. Importance tiers (`med | high | critical`) control
-   batching. The `entities` theme is the lone `critical` — full per-entity
-   drill-down.
+   batching. The `entities` theme is the lone `critical` (and the lone
+   `synthesis: true` theme) — full per-entity drill-down followed by a
+   dynamic scope-completeness sweep that draws on ALL upstream ID
+   families (ENT, FR, WKF, JTB, UX surfaces) to surface candidate
+   entities the draft list may have missed.
 6. **Write + validate** → merge into `docs/DATA-MODEL.yaml`, run
-   `validate_schema.py` (Pydantic + 7 cross-checks: required fields,
+   `validate_schema.py` (Pydantic + cross-checks: required fields,
    relationship integrity, field references, classification integrity,
-   bounded-context partition, feature coverage, volume-vs-scale gate;
-   mode-mismatch is enforced by the Pydantic model itself).
+   bounded-context partition, ID-prefix format (WRN/FR/SCR/WKF), feature
+   coverage, volume-vs-scale gate; mode-mismatch is enforced by the
+   Pydantic model itself).
 7. **CLAUDE.md pointer + close** → inject the pointer block, mark state
    `complete`.
 
@@ -290,7 +294,17 @@ Each question in `data-questions.yaml` carries an `importance` field
   → next entity. Each entity is examined before being added. The
   per-entity questions use a `entity.<field>` prefix on `schema_path` that
   the agent rewrites per entity (e.g. `entity.fields` →
-  `entities.User.fields` when drilling User).
+  `entities.User.fields` when drilling User). Because the `entities`
+  theme is also `synthesis: true`, after the per-entity loop closes the
+  agent runs a **dynamic scope-completeness sweep** that reflects on:
+  (a) the draft entity list itself; (b) every upstream ID family that
+  could imply an entity (PRD `ENT-NNN` key_entities, `FR-NNN` features,
+  `WKF-NNN` workflows, `JTB-NNN` jobs, UX `SCR-NNN` surfaces with
+  data I/O); (c) project-type heuristics. Surfaces concrete candidate
+  entities — not categories — via one multi-select `AskUserQuestion`;
+  cap of 2 sweep passes; anti-padding rule. See
+  `references/entity-discovery.md` "Scope-completeness sweep" for the
+  full procedure.
 
 Order within a theme: run all `med` questions first (in 2–4-question
 batches), then each `high`/`critical` question as its own mini-section in
@@ -357,7 +371,7 @@ Schema:
 
 ```yaml
 session_id: <uuid4 string>
-skill_version: "1.0"
+skill_version: "1.1"
 started_at: <iso8601>
 last_updated: <iso8601>
 status: in_progress  # in_progress | complete | aborted
@@ -375,6 +389,18 @@ current_theme: null
 current_entity: null         # which entity is mid-deepdive in theme 3
 defined_entities: []         # list of {name, status: proposed|draft|confirmed|dropped, source}
 dropped_entity_candidates: []  # so we don't re-propose ones the user rejected
+
+# Per-family ID counters (single-product mode). Each entry is the last-assigned
+# integer for that family — increment, format as <PREFIX>-{:03d}, then persist.
+# This skill emits only the WRN family; the data model does not introduce a
+# new entity-level ID family (entity names are dict keys, and PRD's ENT-NNN
+# is consumed verbatim, not regenerated).
+last_ids: {}        # e.g. {WRN: 3}
+
+# Per-product ID counters (monorepo mode only). Same shape as last_ids, keyed
+# by product slug. Each product carries an independent WRN id space.
+last_ids_by_product: {}  # e.g. {billing: {WRN: 1}, notifications: {WRN: 2}}
+
 partial_answers: {}          # mirrors DATA-MODEL.yaml structure incrementally
 ```
 

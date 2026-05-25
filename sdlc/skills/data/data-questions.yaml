@@ -54,10 +54,15 @@ themes:
   - id: entities
     title: "Entities"
     required: true
+    synthesis: true
     description: >
       The core domain model: each entity, its fields, primary key, and
-      traceability back to PRD features and UX surfaces. Critical importance —
-      per-entity drill-down.
+      traceability back to PRD features, PRD workflows, and UX surfaces.
+      Critical importance — per-entity drill-down. Because synthesis: true,
+      the agent MUST run the dynamic scope-completeness sweep (drawing on
+      ALL upstream ID families: ENT, FR, WKF, JTB, ENT-name implications,
+      and UX surfaces) before closing the list. See references/entity-
+      discovery.md "Scope-completeness sweep" for the procedure.
 
   - id: relationships
     title: "Relationships"
@@ -303,7 +308,7 @@ questions:
     id: entity-traces-features
     schema_path: entity.traces_prd_features
     question: "Which PRD FR-NNN features does this entity realize? (e.g. FR-001, FR-003)"
-    hint: "Drives the feature-coverage cross-check at validation time. Every PRD must-have feature must be traced by ≥1 entity."
+    hint: "Pure ID list — no verbatim PRD text. Drives the feature-coverage cross-check at validation time. Every PRD must-have feature must be traced by ≥1 entity (or land in a WRN-NNN data_warnings deferral). The validator enforces FR-NNN format on every entry."
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -314,8 +319,20 @@ questions:
   - theme: entities
     id: entity-traces-surfaces
     schema_path: entity.traces_ux_surfaces
-    question: "Which UX surfaces read or write this entity? (surface_ids from UX.surface_inventory)"
-    hint: "Lets downstream `api` map endpoints back to entities. Empty list is OK for purely-backend entities (e.g. AuditLog)."
+    question: "Which UX surfaces read or write this entity? (SCR-NNN ids from UX.surface_inventory[].id)"
+    hint: "Pure ID list of SCR-NNN — never the editable `surface_id` slug. SCR-NNN is the stable contract; slugs may be renamed. Lets downstream `api` map endpoints back to entities. Empty list is OK for purely-backend entities (e.g. AuditLog). The validator enforces SCR-NNN format on every entry."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+    importance: critical
+
+  - theme: entities
+    id: entity-traces-workflows
+    schema_path: entity.traces_prd_workflows
+    question: "Which PRD core workflows does this entity participate in? (WKF-NNN ids from PRD.use_cases.core_workflows; optional)"
+    hint: "Optional. Use when an entity is implied by a workflow even though no FR-NNN names it directly. Catches the case where, e.g., a 'switch branch' workflow implies a BranchSession entity that isn't named in any FR. The validator enforces WKF-NNN format on every entry."
     suggested_answers: []
     free_text_allowed: true
     required: false

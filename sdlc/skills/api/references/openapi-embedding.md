@@ -23,8 +23,13 @@ keeps everything a code generator needs and drops the rest.
 
 Required for `status: complete`:
 
-- `operation_id` — kebab or snake-case unique id (used by downstream
-  codegen for function names).
+- `id` — SDLC sibling. Stable `OPR-NNN` (zero-padded 3-digit) used as
+  the cross-stage reference contract by downstream test/task/arch
+  agents. Assigned by the writer in collection order; persisted via
+  `state.last_ids.OPR`. Stripped before any OpenAPI tool round-trip.
+- `operation_id` — kebab or snake-case unique id used by downstream
+  codegen for function names. Editable; `OPR-NNN` is the stable
+  contract.
 - `method` — `GET | POST | PUT | PATCH | DELETE | HEAD | OPTIONS`.
 - `path` — full HTTP path; usually starts with the resource's
   `base_path`. Surface deviations as a warning during deep-dive.
@@ -46,6 +51,7 @@ Optional:
 SDLC siblings (alongside the OpenAPI keys; stripped before any
 OpenAPI tool round-trip):
 
+- `id` — see Required block above. Stable `OPR-NNN` reference.
 - `idempotent` — `true | false | null`; `null` means "inherit
   `API.yaml.idempotency.idempotent_methods`".
 - `rate_limit_override` — string; `null` means "inherit
@@ -307,8 +313,10 @@ For agents that want a strict OpenAPI 3.1 document for codegen tooling:
 2. For each resource in `API.yaml.resource_inventory`, load its
    `API__<resource>.yaml`:
    - For each endpoint, write to `paths[<path>][<method>]` as a vanilla
-     OpenAPI operation. **Strip** the SDLC siblings (`idempotent`,
-     `rate_limit_override`, `auth_override`).
+     OpenAPI operation. **Strip** the SDLC siblings (`id`/OPR-NNN,
+     `idempotent`, `rate_limit_override`, `auth_override`). Optionally
+     preserve the OPR-NNN id as an `x-opr-id` extension if downstream
+     consumers want it.
    - For each schema in the resource's `schemas`, write to
      `components.schemas[<name>]`. **Strip** the SDLC sibling
      `projects_from`.

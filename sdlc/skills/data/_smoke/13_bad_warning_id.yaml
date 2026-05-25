@@ -1,0 +1,44 @@
+# Invalid: data_warnings entry doesn't start with WRN-NNN: . Validator must
+# flag this as a hard error in status: complete.
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-25T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "13131313-1313-1313-1313-131313131313"
+  monorepo: false
+  status: "complete"
+
+data_warnings:
+  - "this warning is missing its WRN-NNN prefix"
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  User:
+    description: "Authenticated end-user."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+    traces_prd_features: []
+    traces_ux_surfaces: []
+
+relationships: []
+enums_and_lookups: { enums: {} }
+indexes_and_queries:
+  access_patterns:
+    - description: "Lookup."
+      entity: User
+      fields: [id]
+      read_or_write: read
+integrity_and_constraints:
+  default_on_delete: restrict
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []

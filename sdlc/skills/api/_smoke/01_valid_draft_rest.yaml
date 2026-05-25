@@ -5,8 +5,8 @@
 # the same dir).
 
 metadata:
-  api_version: "1.0"
-  last_updated: "2026-05-18T12:00:00Z"
+  api_version: "1.1"
+  last_updated: "2026-05-25T12:00:00Z"
   generated_by: sdlc-api
   session_id: "11111111-1111-1111-1111-111111111111"
   monorepo: false
@@ -58,4 +58,4 @@ resource_inventory:
     file_path: docs/API__users.yaml
     primary_entity: User
     traces_prd_features: ["FR-001"]
-    traces_ux_surfaces: ["user-list"]
+    traces_ux_surfaces: ["SCR-001"]

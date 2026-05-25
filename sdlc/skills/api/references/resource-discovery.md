@@ -148,14 +148,18 @@ multiSelect: true
 
 ```
 header: "Surfaces?"
-question: "Which UX surfaces does '<resource_id>' serve?"
+question: "Which UX surfaces (SCR-NNN ids) does '<resource_id>' serve?"
 options:
-  - { label: "<surface-id-1>",                description: "<surface_type>; <one-line description>" }
-  - { label: "<surface-id-2>",                description: "<surface_type>; <one-line description>" }
-  - { label: "Other (type)",                  description: "Type a UX surface_id verbatim." }
-  - { label: "None — internal-only resource", description: "Surface coverage will not credit this resource for any UX surface." }
+  - { label: "<SCR-NNN-1> (<surface_id slug>)", description: "<surface_type>; <one-line description>" }
+  - { label: "<SCR-NNN-2> (<surface_id slug>)", description: "<surface_type>; <one-line description>" }
+  - { label: "Other (type)",                  description: "Type a UX SCR-NNN id verbatim — never the kebab slug." }
+  - { label: "None — internal-only resource", description: "Surface coverage will not credit this resource for any UX surface; a WRN-NNN note is added to api_warnings." }
 multiSelect: true
 ```
+
+The user picks SCR-NNN ids; the slug (`surface_id`) is shown only as
+context. The stored `traces_ux_surfaces` list MUST contain SCR-NNN
+ids — never slugs.
 
 #### c) Next or end
 
@@ -174,25 +178,95 @@ options:
 politely and suggest splitting the product into multiple products
 (monorepo mode) or pushing some resources to a later phase.
 
-### Coverage hint at end of theme 8
+### Scope-completeness sweep at end of theme 8
 
-Before finishing theme 8, run the three coverage checks softly (no
-validator yet, just heuristics):
+Theme 8 is marked `synthesis: true` in `api-questions.yaml`. After the
+per-resource confirmation loop closes (the user picks "Done — wrap up
+inventory"), the agent MUST run a dynamic scope-completeness sweep
+before the inventory can close. This is the canonical sweep contract
+from CLAUDE.md "Cross-skill conventions" — read it ONCE before doing
+this for the first time.
 
-- For each PRD `FR-NNN` in `must_have_features`: is it traced?
-- For each data-bearing UX surface (see
-  `references/merge-validate.md` for the type list): is it traced?
-- For each DATA entity: is it the `primary_entity` of some resource?
+#### What to reflect on (every pass)
 
-If any are missing, tell the user which ones and ask:
+1. **The draft inventory itself** — which resources are present? What
+   axes (CRUD per entity / cross-cutting actions / domain workflows)
+   dominate? What axes are conspicuously absent?
+2. **Every upstream ID family**, not just the most-direct one:
+   - `PRD.functional_requirements.must_have_features` (FR-NNN) — is
+     every FR traced by a resource OR explicitly in
+     `non_api_features`? Read each FR's description text; some
+     features (e.g. "Bulk import CSV") imply resources the entity
+     axis missed.
+   - `PRD.use_cases.core_workflows` (WKF-NNN) — does any workflow
+     imply an API entry point (e.g. "switch git branch" → a
+     `sessions` or `projects` resource) the draft missed?
+   - `PRD.use_cases.primary_jobs_to_be_done` / `secondary_jobs`
+     (JTB-NNN) — similar implications.
+   - `UX.surface_inventory[].id` (SCR-NNN) — every data-bearing
+     surface should be traced by ≥1 resource. List the untraced
+     ones.
+   - `DATA-MODEL.yaml.entities` keys — every entity should be the
+     `primary_entity` of some resource, OR explicitly flagged
+     internal-only via a `WRN-NNN` warning (e.g. `AuditLog`,
+     `IdempotencyKey`).
+3. **Project-type heuristics** — a public SaaS API, an internal BFF,
+   a GraphQL gateway, and a CLI-fronted local tool each have very
+   different "things people forget":
+   - Public SaaS: health, version, webhooks_in receive endpoints,
+     admin DTOs gated behind a scope.
+   - Internal BFF: session refresh, server-time, feature flags.
+   - GraphQL: schema introspection, persisted queries.
+
+#### Format of the sweep question
+
+Format as **one** multi-select `AskUserQuestion` call surfacing the
+agent's top 2–4 candidate resources — concrete names, not category
+labels:
+
+```
+header: "Scope sweep"
+question: "Looking at your N resources alongside upstream PRD FR/WKF +
+  UX SCR + DATA entities, a few candidates look notable that aren't
+  in the inventory yet. Add any of these, or wrap up?"
+options:
+  - { label: "⚠ <candidate-resource-1>", description: "⚠ Implied by <upstream ref, e.g. WKF-004 / FR-031 / SCR-008>. Pick to draft." }
+  - { label: "⚠ <candidate-resource-2>", description: "⚠ Implied by <upstream ref>. Pick to draft." }
+  - { label: "⚠ <candidate-resource-3>", description: "⚠ Implied by <upstream ref>. Pick to draft." }
+  - { label: "Wrap up — inventory complete", description: "Skip these. The inventory closes as-is." }
+multiSelect: true
+```
+
+For each picked candidate: re-enter the per-resource state machine at
+**step a** (with the candidate pre-filled) → step b (traces) → record.
+Then return to the sweep for a second pass.
+
+#### Caps
+
+- **Sweep-pass cap**: at most 2 passes per inventory. After two
+  passes, defer remaining candidates to `api_warnings`:
+  `"WRN-NNN: inventory sweep suggested but not added — <Candidate>,
+  <Candidate>"`. Persist the WRN counter to `state.last_ids.WRN`.
+- **Anti-padding rule**: if no concrete candidates surface after
+  honest reflection, surface 0 — close the inventory without a
+  sweep question. Don't manufacture candidates to look thorough.
+- **Empty inventory**: if the user added 0 resources in the main
+  loop AND `api_kind != "none"`, write a `WRN-NNN: inventory empty
+  — no resources collected` note. (An empty inventory with
+  `api_kind != "none"` will also fail the feature-coverage check.)
+
+#### Fallback coverage gate
+
+If the sweep closes but some FR-NNN / SCR-NNN are still uncovered,
+offer the user a final-mile gate (this is the older "coverage hint"
+narrative, now scoped to after-the-sweep cleanup):
 
 ```
 header: "Coverage?"
-question: "These items aren't covered by any resource yet:\n - F-IDs: <ids>\n - UX surfaces: <ids>\n - DATA entities: <names>\nAdd resources for them now?"
+question: "After the sweep, these items still aren't covered:\n - FR ids: <ids>\n - SCR surfaces: <ids>\nWhat to do?"
 options:
-  - { label: "Add resource(s) now",          description: "I'll propose one per uncovered item." }
-  - { label: "Mark uncovered F-IDs as non_api_features", description: "They become UI-only / batch / internal — recorded in API.yaml.non_api_features." }
-  - { label: "Leave gap — record in api_warnings", description: "The items will be listed in api_warnings and API.yaml will save as draft." }
+  - { label: "Mark uncovered FR ids as non_api_features", description: "They become UI-only / batch / internal — recorded in API.yaml.non_api_features." }
+  - { label: "Leave gap — record in api_warnings (WRN-NNN)", description: "API.yaml will save as draft." }
   - { label: "Edit existing traces",         description: "Re-open an existing resource to add the missing trace(s)." }
 ```
 
@@ -235,13 +309,25 @@ Print to the chat:
 
 #### b) Endpoints
 
-Propose the canonical CRUD set adapted to the resource's verbs:
+Propose the canonical CRUD set adapted to the resource's verbs. Every
+endpoint carries TWO ids:
+
+- `id` — the stable `OPR-NNN` cross-stage reference (assigned by the
+  writer in collection order; persisted via `state.last_ids.OPR`).
+  Downstream test/task/arch agents reference this id.
+- `operation_id` — the codegen-naming hook (kebab/snake string,
+  unique within the file). Editable; OPR-NNN is the contract.
+
+Canonical starter set:
 
 - `list-<resource>` — `GET <base_path>` — returns paginated list
 - `get-<resource>` — `GET <base_path>/{id}` — returns one
 - `create-<resource>` — `POST <base_path>` — creates one
 - `update-<resource>` — `PUT <base_path>/{id}` or `PATCH` — updates
 - `delete-<resource>` — `DELETE <base_path>/{id}` — removes
+
+Each picks the next OPR-NNN from `state.last_ids.OPR` when the user
+approves it in step e.
 
 Pre-fills from DATA-MODEL:
 
@@ -313,9 +399,10 @@ header: "Traces ok?"
 question: "These traces are recorded for `<resource_id>`. Adjust before saving?"
 options:
   - { label: "Looks good",            description: "Keep traces as recorded." }
-  - { label: "Add an F-ID",           description: "Type the FR-NNN to add." }
-  - { label: "Add a UX surface",      description: "Type the surface_id to add." }
-  - { label: "Remove a trace",        description: "Type the FR-NNN or surface_id to remove." }
+  - { label: "Add an FR-NNN",         description: "Type the FR-NNN id to add (PRD must_have/nice_to_have)." }
+  - { label: "Add a SCR-NNN",         description: "Type the UX SCR-NNN id to add (never a kebab slug)." }
+  - { label: "Add a WKF-NNN",         description: "Type the PRD WKF-NNN workflow id to add (optional)." }
+  - { label: "Remove a trace",        description: "Type the FR-NNN / SCR-NNN / WKF-NNN id to remove." }
 ```
 
 #### e) Final approval

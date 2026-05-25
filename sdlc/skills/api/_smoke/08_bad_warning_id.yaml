@@ -1,0 +1,16 @@
+# Smoke fixture: api_warnings entry doesn't start with WRN-NNN: . Expected
+# validator behaviour: exit 1, "[FAIL]" naming api_warnings ID-format error.
+
+metadata:
+  api_version: "1.1"
+  last_updated: "2026-05-25T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "88888888-8888-8888-8888-888888888888"
+  monorepo: false
+  status: "complete"
+
+api_warnings:
+  - "this warning forgot its WRN prefix"
+
+api_kind: none
+rationale: "Pure CLI tool — no network surface."

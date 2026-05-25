@@ -100,6 +100,13 @@ per-entity drill-down — propose → describe → fields → primary_key →
 traces → approve → next entity. This is the data-model analogue of PRD's
 `must_have_features` per-feature flow.
 
+Because the theme is also marked `synthesis: true`, the per-entity
+loop is followed by a **dynamic scope-completeness sweep** (drawing
+on every upstream ID family: PRD `ENT-NNN`, `FR-NNN`, `WKF-NNN`,
+`JTB-NNN`, and UX `SCR-NNN`) before the theme is allowed to close.
+See `references/entity-discovery.md` "Scope-completeness sweep" for
+the procedure, caps, and anti-padding rule.
+
 ### State machine per entity
 
 For each entity in `state.defined_entities` (Phase 3 already drafted the
@@ -127,8 +134,9 @@ list), iterate through the following states:
    │   (e) PRIMARY KEY   Confirm primary_key (single field or composite).│
    │        │                                                            │
    │        ▼                                                            │
-   │   (f) TRACES        Confirm traces_prd_features (FR-NNN list) and    │
-   │        │            traces_ux_surfaces (surface_id list).           │
+   │   (f) TRACES        Confirm traces_prd_features (FR-NNN list),      │
+   │        │            traces_ux_surfaces (SCR-NNN list), and          │
+   │        │            traces_prd_workflows (WKF-NNN list, optional).  │
    │        ▼                                                            │
    │   (g) FINAL APPROVAL Show the full entity card; user confirms or    │
    │        │             requests revisions (back to any earlier step). │

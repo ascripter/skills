@@ -91,9 +91,23 @@ Write `docs/DATA-MODEL.yaml` with:
   - Set to `"draft"` on early EXIT, when any required field is still null,
     or when a soft cross-check (feature coverage, volume-vs-scale gate)
     reports issues.
-- `data_warnings`: informational notes (low-confidence answers, merge
-  conflicts, deferred themes, classification orphans flagged in error
-  recovery, etc.) — not used for required-field acknowledgement.
+- `metadata.changelog` (append-only, most-recent first): on a fresh
+  write, omit the field or initialize with a single
+  `"<version> (<YYYY-MM-DD>): initial."` entry. On an update-flow
+  merge, prepend ONE new entry summarising what materially changed in
+  this session (e.g. *"1.1 (2026-05-25): Added BranchSession entity
+  per WKF-004 sweep; rewired SCR traces."*). The validator only
+  type-checks `Optional[list[string]]`; format is convention, not
+  enforced — over-validating here would discourage manual edits, which
+  are explicitly allowed.
+- `data_warnings`: every entry MUST be `"WRN-NNN: <message>"`. The
+  WRN counter lives in `state.last_ids.WRN`; increment-then-write per
+  appended item. On resume, **reconcile the counter** with the
+  on-disk file before appending: if `max(WRN-NNN in on-disk
+  data_warnings) > state.last_ids.WRN`, sync the counter up. Used
+  for low-confidence answers, merge conflicts, deferred themes,
+  classification orphans flagged in error recovery, deferred sweep
+  candidates, etc. — not for required-field acknowledgement.
 
 ## Running the validator
 
@@ -118,18 +132,19 @@ user asks.
 
 ## Cross-check recovery flows
 
-The validator reports eight check categories (the seven explicit
-cross-checks plus the required-fields gate). Each has a different
-recovery path:
+The validator reports the following check categories. Each has a
+different recovery path:
 
 | Cross-check                       | If hard-fail at status:complete   | Recovery |
 |-----------------------------------|-----------------------------------|----------|
 | Required fields missing           | FAIL                              | Re-enter via AskUserQuestion |
+| `data_warnings` WRN-NNN format    | FAIL                              | The writer is at fault: re-prefix any bare entry with the next `state.last_ids.WRN` id |
+| Entity trace ID-format (FR / SCR / WKF) | FAIL                          | Show the offending field; if a kebab slug snuck into `traces_ux_surfaces`, replace with the matching `UX.surface_inventory[].id` (SCR-NNN) |
 | Relationship integrity            | FAIL                              | Show the relationship, ask user to fix from_entity / to_entity / join_table |
 | Field references                  | FAIL                              | Show entity.field.references, ask user to correct |
 | Classification integrity          | FAIL                              | Show offending Entity.field in pii_fields/regulated_fields/encrypted_at_rest |
 | Bounded-context partition         | FAIL                              | Show unassigned/duplicate entities, ask to reassign |
-| Feature coverage                  | Soft — force draft, warn          | Walk uncovered FR-NNN list, ask to assign each to ≥1 entity OR mark out-of-scope-for-data |
+| Feature coverage                  | Soft — force draft, warn          | Walk uncovered FR-NNN list, ask to assign each to ≥1 entity OR defer with a `WRN-NNN` note + mark out-of-scope-for-data |
 | Volume-vs-scale gate              | Soft — force draft, warn          | Prompt user to fill scale_and_retention partitioning/sharding/retention |
 | Mode mismatch                     | FAIL (pydantic)                   | Refuse to write; ask user to fix the structural state in Phase 4 |
 

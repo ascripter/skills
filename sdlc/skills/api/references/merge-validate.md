@@ -69,25 +69,38 @@ For `API.yaml`:
     1. all required fields are filled,
     2. the validator passes with `[OK]`,
     3. feature coverage passes,
-    4. surface coverage passes,
-    5. entity-link check passes
-       (or the validator skipped these because `api_kind: none`).
+    4. surface coverage passes (matched by SCR-NNN id),
+    5. entity-link check passes,
+    6. every ID-prefix format check passes (WRN/FR/SCR/WKF/OPR)
+       (or the validator skipped coverage/entity-link because
+       `api_kind: none`).
   - Set to `"draft"` on early EXIT, when any required field is null,
     OR when any check fails.
-- `api_warnings`: informational notes — uncovered PRD features,
-  uncovered UX surfaces, unresolved primary_entity references,
-  low-confidence answers, merge conflicts, dropped optional themes
-  (the now/skip/todo gates).
+- `metadata.changelog` (append-only, most-recent first): on a fresh
+  write, omit the field or initialize with a single
+  `"<version> (<YYYY-MM-DD>): initial."` entry. On an update-flow
+  merge, prepend ONE new entry summarising what materially changed.
+  Validator type-checks `Optional[list[string]]` only; format is
+  convention, not enforced.
+- `api_warnings`: every entry MUST be `"WRN-NNN: <message>"`. The
+  WRN counter lives in `state.last_ids.WRN`; increment-then-write per
+  appended item. On resume, reconcile the counter with the on-disk
+  file before appending. Used for uncovered PRD features, uncovered
+  UX surfaces, unresolved primary_entity references, low-confidence
+  answers, merge conflicts, dropped optional themes (the now/skip/todo
+  gates), sweep deferrals.
 
 For each `API__<resource_id>.yaml`:
 
 - Inline comments on top-level keys.
-- Updated metadata (`last_updated`, `session_id`).
+- Updated metadata (`last_updated`, `session_id`); optional
+  `metadata.changelog` follows the same rules as `API.yaml`.
 - `metadata.status: complete` only when all required resource fields
-  are filled (`resource_id`, `base_path`, `traces_prd_features`,
-  `traces_ux_surfaces`, `endpoints` — each endpoint with
-  `operation_id`, `method`, `path`, `summary`, `responses`) AND the
-  user explicitly approved in theme 10 step e.
+  are filled (`resource_id`, `base_path`, `traces_prd_features` with
+  FR-NNN format, `traces_ux_surfaces` with SCR-NNN format, `endpoints`
+  — each endpoint with `id` (OPR-NNN), `operation_id`, `method`,
+  `path`, `summary`, `responses`) AND the user explicitly approved in
+  theme 10 step e.
 
 ## Running the validator
 
@@ -157,7 +170,8 @@ Uncovered features:
 ### Surface coverage
 
 The validator walks `docs/UX__*.yaml` files. For each surface, it
-checks `surface_type`:
+checks `surface_type` and reads the surface's **stable `id` field
+(SCR-NNN)** — never the editable `surface_id` slug:
 
 - Data-bearing (covered by this check):
   `screen`, `page`, `tab`, `modal`, `dialog`, `drawer`, `panel`,
@@ -166,10 +180,16 @@ checks `surface_type`:
   `toast`, `empty_state`, `overlay`.
 
 A data-bearing surface is **covered** when at least one resource
-lists its `surface_id` in `traces_ux_surfaces`.
+lists its `SCR-NNN` id in `traces_ux_surfaces`.
+
+For backward compatibility, if a per-surface yaml predates the
+SCR-NNN convention and has no `id` field, the validator falls back to
+its `surface_id` slug — but new sessions should migrate the surface
+file to carry an `id: SCR-NNN`.
 
 Uncovered surfaces follow the same warnings + draft-forcing rules as
-features.
+features. Soft notes are appended to `api_warnings` as
+`"WRN-NNN: coverage: SCR-<N> has no endpoint trace"`.
 
 ### Entity-link check
 

@@ -1,7 +1,7 @@
 """Validate DATA-MODEL.yaml against the canonical sdlc-data schema, and run
 cross-checks against the upstream PRD.yaml (feature coverage) plus internal
 consistency checks (relationship integrity, classification integrity,
-bounded-context partition, volume-vs-scale gate).
+bounded-context partition, volume-vs-scale gate, ID-prefix format).
 
 Run from the project root:
 
@@ -10,7 +10,7 @@ Run from the project root:
 
 Validates:
     1. docs/DATA-MODEL.yaml (or --path) — single-file data model.
-    2. Cross-checks (7 total; hardness as marked):
+    2. Cross-checks (hardness as marked):
        - Required fields present: REQUIRED_PATHS + ENTITY_REQUIRED_PATHS.
          Failure -> hard error in status:complete.
        - Relationship integrity: every from_entity / to_entity / join_table
@@ -23,6 +23,10 @@ Validates:
          entity belongs to exactly one context. Failure -> hard error.
        - Mode-mismatch: monorepo: true requires products:; false forbids it.
          Failure -> hard error (raised by the pydantic model_validator).
+       - ID-prefix format: WRN-NNN on every data_warnings entry; FR-NNN on
+         every traces_prd_features entry; SCR-NNN on every traces_ux_surfaces
+         entry; WKF-NNN on every traces_prd_workflows entry. Hard error in
+         status:complete; warning (force draft) otherwise.
        - Feature coverage: every PRD must_have_features FR-NNN appears in some
          entity's traces_prd_features. Failure -> force draft (soft).
        - Volume-vs-scale gate: if PRD data_volume_estimate in {terabytes,
@@ -308,6 +312,7 @@ class Entity(_Permissive):
     fields: Optional[Dict[str, FieldSpec]] = None
     traces_prd_features: Optional[List[str]] = None
     traces_ux_surfaces: Optional[List[str]] = None
+    traces_prd_workflows: Optional[List[str]] = None
 
 
 class SecondaryStore(_Permissive):
@@ -517,6 +522,7 @@ class Metadata(BaseModel):
     session_id: str
     monorepo: bool = False
     status: Literal["draft", "complete"] = "draft"
+    changelog: Optional[List[str]] = None
 
 
 class DataModelProduct(_Permissive):
@@ -731,6 +737,65 @@ def check_required(dm: DataModel) -> List[str]:
 # =============================================================================
 
 _FEATURE_ID_RE = re.compile(r"^FR-\d+", re.IGNORECASE)
+_WRN_RE = re.compile(r"^WRN-\d{3,}:\s+.+")
+_FR_PREFIX_RE = re.compile(r"^FR-\d{3,}$", re.IGNORECASE)
+_SCR_PREFIX_RE = re.compile(r"^SCR-\d{3,}$", re.IGNORECASE)
+_WKF_PREFIX_RE = re.compile(r"^WKF-\d{3,}$", re.IGNORECASE)
+
+
+def check_warning_ids(warnings: List[str]) -> List[str]:
+    """Every data_warnings entry must match WRN-NNN: <message>."""
+    errs: List[str] = []
+    for i, w in enumerate(warnings or []):
+        if not isinstance(w, str) or not _WRN_RE.match(w.strip()):
+            errs.append(
+                f"data_warnings[{i}]: '{w}' must start with 'WRN-NNN: ' "
+                f"(zero-padded 3-digit number)"
+            )
+    return errs
+
+
+def _check_id_prefix(values: object, regex: "re.Pattern[str]", path_label: str) -> List[str]:
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        return [f"{path_label}: expected a list, got {type(values).__name__}"]
+    errs: List[str] = []
+    for i, v in enumerate(values):
+        if not isinstance(v, str) or not regex.match(v.strip()):
+            errs.append(f"{path_label}[{i}]: '{v}' does not match expected ID format")
+    return errs
+
+
+def check_trace_id_formats(root: object) -> List[str]:
+    """Enforce <PREFIX>-NNN format on every per-entity trace list."""
+    errs: List[str] = []
+    entities = _get_dotted(root, "entities")
+    if not isinstance(entities, dict):
+        return errs
+    for ename, entity in entities.items():
+        errs.extend(
+            _check_id_prefix(
+                getattr(entity, "traces_prd_features", None),
+                _FR_PREFIX_RE,
+                f"entities.{ename}.traces_prd_features (expected FR-NNN)",
+            )
+        )
+        errs.extend(
+            _check_id_prefix(
+                getattr(entity, "traces_ux_surfaces", None),
+                _SCR_PREFIX_RE,
+                f"entities.{ename}.traces_ux_surfaces (expected SCR-NNN)",
+            )
+        )
+        errs.extend(
+            _check_id_prefix(
+                getattr(entity, "traces_prd_workflows", None),
+                _WKF_PREFIX_RE,
+                f"entities.{ename}.traces_prd_workflows (expected WKF-NNN)",
+            )
+        )
+    return errs
 
 
 def _entity_names(root: object) -> List[str]:
@@ -1071,8 +1136,11 @@ def validate_file(path: Path) -> int:
     field_ref_errs: List[str] = []
     classification_errs: List[str] = []
     bounded_ctx_errs: List[str] = []
+    trace_id_errs: List[str] = []
     uncovered_features: List[str] = []
     volume_errs: List[str] = []
+
+    warning_id_errs = check_warning_ids(dm.data_warnings or [])
 
     def _per_scope(scope_label: str, root: object, scope_features: List[str]) -> None:
         scope = scope_label if scope_label else ""
@@ -1084,6 +1152,8 @@ def validate_file(path: Path) -> int:
             classification_errs.append(f"{scope}{e_}")
         for e_ in check_bounded_context_partition(root):
             bounded_ctx_errs.append(f"{scope}{e_}")
+        for e_ in check_trace_id_formats(root):
+            trace_id_errs.append(f"{scope}{e_}")
         volume_err = check_volume_scale_gate(prd_volume, root)
         if volume_err:
             volume_errs.append(f"{scope}{volume_err}")
@@ -1109,7 +1179,13 @@ def validate_file(path: Path) -> int:
     # Soft errors (force draft): feature coverage gaps, volume-vs-scale gate.
 
     hard_problems = bool(
-        missing or relationship_errs or field_ref_errs or classification_errs or bounded_ctx_errs
+        missing
+        or relationship_errs
+        or field_ref_errs
+        or classification_errs
+        or bounded_ctx_errs
+        or warning_id_errs
+        or trace_id_errs
     )
     soft_problems = bool(uncovered_features or volume_errs)
 
@@ -1120,6 +1196,16 @@ def validate_file(path: Path) -> int:
                 print(f"{len(missing)} required field(s) missing:")
                 for m in missing:
                     print(f"  - {m}")
+                print()
+            if warning_id_errs:
+                print(f"{len(warning_id_errs)} data_warnings ID-format error(s):")
+                for e_ in warning_id_errs:
+                    print(f"  - {e_}")
+                print()
+            if trace_id_errs:
+                print(f"{len(trace_id_errs)} entity trace ID-format error(s):")
+                for e_ in trace_id_errs:
+                    print(f"  - {e_}")
                 print()
             if relationship_errs:
                 print(f"{len(relationship_errs)} relationship integrity error(s):")
@@ -1184,6 +1270,14 @@ def validate_file(path: Path) -> int:
         print(f"\n{len(missing)} required field(s) missing:")
         for m in missing:
             print(f"  - {m}")
+    if warning_id_errs:
+        print(f"\n{len(warning_id_errs)} data_warnings ID-format error(s):")
+        for e_ in warning_id_errs:
+            print(f"  - {e_}")
+    if trace_id_errs:
+        print(f"\n{len(trace_id_errs)} entity trace ID-format error(s):")
+        for e_ in trace_id_errs:
+            print(f"  - {e_}")
     if relationship_errs:
         print(f"\n{len(relationship_errs)} relationship integrity error(s):")
         for e_ in relationship_errs:
@@ -1214,6 +1308,8 @@ def validate_file(path: Path) -> int:
         or field_ref_errs
         or classification_errs
         or bounded_ctx_errs
+        or warning_id_errs
+        or trace_id_errs
         or uncovered_features
         or volume_errs
     ):

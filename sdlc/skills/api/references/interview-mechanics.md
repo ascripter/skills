@@ -182,8 +182,11 @@ cap 12.
 
 Reserved for **theme 8 (`resource_inventory`)** and **theme 10
 (`per_resource_deepdive`)** — the per-item state machines that drive
-the entire API skill. See `references/resource-discovery.md` for the
-full per-resource state machine.
+the entire API skill. Both themes are also marked `synthesis: true`:
+after theme 8's per-item loop closes, the agent runs a dynamic
+scope-completeness sweep against every upstream ID family (FR / WKF /
+SCR / DATA entity names). See `references/resource-discovery.md` for
+the full per-resource state machine and the sweep contract.
 
 ## Conditional promotions (`required_if`)
 

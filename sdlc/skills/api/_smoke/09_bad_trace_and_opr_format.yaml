@@ -1,0 +1,48 @@
+# Smoke fixture: trace lists use the wrong prefix family, plus the resource
+# yaml's endpoint is missing the OPR-NNN id. Expected: exit 1, "[FAIL]"
+# with ID-format error(s).
+#
+# This is the top-level API.yaml; the matching API__bad-traces.yaml below
+# (08_bad_trace_and_opr_format__resource.yaml) is named for parity with
+# the actual file discovery glob (API__*.yaml). The validator follows the
+# glob in the same directory, so we keep a slim sibling file here.
+
+metadata:
+  api_version: "1.1"
+  last_updated: "2026-05-25T12:00:00Z"
+  generated_by: sdlc-api
+  session_id: "99999999-9999-9999-9999-999999999999"
+  monorepo: false
+  status: "complete"
+
+api_warnings: []
+
+api_kind: rest
+api_kind_confidence: confirmed
+transport_styles: [rest]
+transport_styles_confidence: confirmed
+
+versioning:
+  strategy: path
+  current_version: "v1"
+auth:
+  schemes: [bearer_jwt]
+  default_visibility: authenticated
+errors:
+  envelope: rfc7807
+pagination:
+  strategy: none
+idempotency:
+  idempotent_methods: [GET]
+rate_limiting:
+  scopes: [per_user]
+
+resource_inventory:
+  - resource_id: users
+    base_path: /v1/users
+    status: confirmed
+    file_path: docs/API__users.yaml
+    primary_entity: User
+    traces_prd_features: ["SCR-001"]     # wrong family — should be FR-NNN
+    traces_ux_surfaces: ["user-list"]    # kebab slug — should be SCR-NNN
+    traces_prd_workflows: ["FR-001"]     # wrong family — should be WKF-NNN

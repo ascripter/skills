@@ -12,7 +12,8 @@ traces_prd_features: []
 traces_ux_surfaces: []
 
 endpoints:
-  - operation_id: list-widgets
+  - id: OPR-001
+    operation_id: list-widgets
     method: GET
     path: /v1/widgets
     summary: "List widgets"

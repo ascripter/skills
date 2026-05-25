@@ -24,14 +24,72 @@
 #     files) are wire DTOs. Persistent entity shapes live in
 #     `docs/DATA-MODEL.yaml`. DTOs may `$ref` DATA entities; see
 #     `references/openapi-embedding.md`.
+#
+# ID conventions (format is always "<PREFIX>-NNN" with zero-padded 3-digit
+# numbers, NNN ≥ 001):
+#
+#   Families this skill EMITS:
+#     WRN — `api_warnings[]`. Writer-managed: every entry is prefixed
+#           `"WRN-NNN: <message>"` and the counter `state.last_ids.WRN`
+#           (or `state.last_ids_by_product[<slug>].WRN` in monorepo mode)
+#           is persisted after each append.
+#     OPR — per-endpoint stable id. Lives on each endpoint as a sibling
+#           field `id` (e.g. `id: OPR-001`) in every
+#           `docs/API__<resource>.yaml.endpoints[]`. Assigned in
+#           collection order when an endpoint is confirmed during theme
+#           10's per-resource deep-dive. Counter:
+#           `state.last_ids.OPR` (or `last_ids_by_product[<slug>].OPR`).
+#           `operation_id` (kebab/snake string) is unchanged and stays
+#           the codegen-naming hook; `id` (OPR-NNN) is the cross-stage
+#           reference contract downstream test/task/arch agents use.
+#
+#   Families this skill CONSUMES from `docs/PRD.yaml` (verbatim — never
+#   renumber, never invent new items in these families):
+#     FR  — `PRD.functional_requirements.must_have_features` and
+#           `nice_to_have_features` — referenced from
+#           `resource_inventory[].traces_prd_features`, per-resource
+#           `traces_prd_features`, and `non_api_features`. Drives the
+#           feature-coverage check.
+#     WKF — `PRD.use_cases.core_workflows` — referenced from optional
+#           `resource_inventory[].traces_prd_workflows` and per-resource
+#           `traces_prd_workflows`. Use when a resource is the API entry
+#           point for a workflow even though no single FR directly
+#           anchors it.
+#
+#   Families this skill CONSUMES from `docs/UX.yaml` (verbatim):
+#     SCR — `UX.surface_inventory[].id` — referenced from
+#           `resource_inventory[].traces_ux_surfaces` and per-resource
+#           `traces_ux_surfaces`. The slug `surface_id` is NOT accepted
+#           — SCR-NNN is the stable contract. Drives surface coverage.
+#
+#   Entity references:
+#     `primary_entity` on every resource is the PascalCase DATA entity
+#     NAME (the dict key in `DATA-MODEL.yaml.entities`), NOT an
+#     `ENT-NNN` id. This is the bridge contract: DATA's dict key IS the
+#     stable identifier on the data side. `null` is allowed for
+#     cross-cutting resources (`/search`, `/health`).
+#
+#   The validator enforces:
+#     * WRN-NNN format on every `api_warnings[]` entry.
+#     * OPR-NNN format on every endpoint's `id` field.
+#     * FR-NNN format on every value in `traces_prd_features` /
+#       `non_api_features`.
+#     * SCR-NNN format on every value in `traces_ux_surfaces`.
+#     * WKF-NNN format on every value in optional `traces_prd_workflows`.
+#     Values carrying the wrong prefix are warnings in `status: draft`,
+#     errors in `status: complete`.
+#
+#   In monorepo mode, WRN and OPR counters reset per product
+#   (`state.last_ids_by_product[<slug>].<PREFIX>`). PRD/UX/DATA
+#   consumption still draws from the matching product's subtree.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # metadata — always at top level, present in both single- and multi-product mode
 # -----------------------------------------------------------------------------
 metadata:
-  api_version: "1.0"                       # schema version this file conforms to
-  last_updated: "2026-05-18T12:00:00Z"     # ISO-8601 UTC timestamp of last write
+  api_version: "1.1"                       # schema version this file conforms to
+  last_updated: "2026-05-25T12:00:00Z"     # ISO-8601 UTC timestamp of last write
   generated_by: sdlc-api                   # always literal string "sdlc-api"
   session_id: "00000000-0000-0000-0000-000000000000"  # UUID of the interview session
   monorepo: false                          # mirrors PRD.metadata.monorepo
@@ -44,21 +102,33 @@ metadata:
                                            #      traced or in non_api_features),
                                            #   4) surface coverage passes
                                            #      (every UX surface with data
-                                           #      I/O is traced by ≥1 endpoint),
+                                           #      I/O is traced by ≥1 endpoint
+                                           #      via SCR-NNN),
                                            #   5) entity-link check passes
                                            #      (every primary_entity exists
                                            #      in DATA-MODEL).
                                            # Coverage + entity-link checks are
                                            # skipped when api_kind: none.
+  changelog: null                          # Optional[list[string]]. Append-only.
+                                           # Each entry one line, format:
+                                           #   "<version> (<YYYY-MM-DD>): <one-line summary>"
+                                           # Most-recent entry first.
 
-# api_warnings — informational notes. Used for:
-#   * uncovered PRD FR-NNN features ("feature FR-007 has no resource trace")
-#   * uncovered UX surfaces with data I/O ("surface 'foo' has no endpoint")
-#   * unresolved DATA entity refs ("primary_entity 'Bar' not in DATA-MODEL")
+# api_warnings — informational notes carried into downstream agent context.
+# Each entry MUST start with a stable ID: "WRN-NNN: <message>".
+# IDs are assigned in collection order by the writer (WRN-001, WRN-002, …)
+# and are stable across re-runs. The writer-managed counter lives in
+# `state.last_ids.WRN`.
+#
+# Use for:
+#   * uncovered PRD FR-NNN features ("WRN-NNN: coverage: FR-007 has no resource trace")
+#   * uncovered UX surfaces with data I/O ("WRN-NNN: surface SCR-004 has no endpoint")
+#   * unresolved DATA entity refs ("WRN-NNN: primary_entity 'Bar' not in DATA-MODEL")
 #   * low-confidence answers
 #   * merge conflicts
 #   * deferred optional themes (now/skip/todo) recorded for downstream visibility
-api_warnings: []
+#   * resources/endpoints deferred from a sweep
+api_warnings: []                           # list[string] of "WRN-NNN: <msg>" items
 
 # =============================================================================
 # SINGLE-PRODUCT MODE — themes at top level, in interview order
@@ -208,20 +278,30 @@ shared_schemas:                 # object — OpenAPI 3.1 schemas, keyed by name
 # endpoint + schema spec lives there (see API__RESOURCE.schema.yaml).
 # -----------------------------------------------------------------------------
 resource_inventory:             # list[ResourceInventoryItem]
-  - resource_id: null           # kebab-case unique id (string)
+  - resource_id: null           # kebab-case unique slug (string), unique within
+                                # the product. The matching SCR-style stable id
+                                # for endpoints is OPR-NNN (lives on each endpoint).
     base_path: null             # e.g. "/v1/users" (string)
     status: defined             # one of: defined | draft | confirmed (enum)
                                 #   defined  = id + base_path known, no endpoints yet
                                 #   draft    = deep-dive started, not approved
                                 #   confirmed= deep-dive complete + user-approved
     file_path: null             # always docs/API__<resource_id>.yaml (string)
-    primary_entity: null        # DATA-MODEL entity name this resource fronts
-                                # (string|null). Null only for resources that
-                                # span entities (e.g. /search).
-    traces_prd_features: null   # list[string] — PRD FR-NNN feature IDs this
-                                # resource implements
-    traces_ux_surfaces: null    # list[string] — UX surface_ids this resource
-                                # serves (used by the surface-coverage check)
+    primary_entity: null        # DATA-MODEL entity NAME (PascalCase dict key in
+                                # DATA-MODEL.yaml.entities) this resource fronts
+                                # (string|null). Null only for cross-cutting
+                                # resources (/search, /health). NOT an ENT-NNN id.
+    traces_prd_features: null   # list[string] of "FR-NNN" ids (no verbatim
+                                # PRD text). Validator enforces FR-NNN format.
+    traces_ux_surfaces: null    # list[string] of "SCR-NNN" ids (from
+                                # UX.surface_inventory[].id). Never the
+                                # editable `surface_id` slug. Drives the
+                                # surface-coverage check.
+    traces_prd_workflows: null  # Optional list[string] of "WKF-NNN" ids
+                                # (from PRD.use_cases.core_workflows). Use
+                                # when a resource is the API entry point for
+                                # a workflow even though no single FR anchors
+                                # it directly.
 
 # -----------------------------------------------------------------------------
 # non_api_features — PRD FR-NNN feature IDs explicitly NOT exposed via API.
@@ -261,7 +341,7 @@ non_api_features: null          # list[string] of FR-NNN IDs, e.g.
 #         status: confirmed
 #         file_path: docs/API__billing__invoices.yaml
 #         primary_entity: Invoice
-#         traces_prd_features: [FR-001, FR-002]
-#         traces_ux_surfaces: [invoice-list, invoice-detail]
+#         traces_prd_features: ["FR-001", "FR-002"]
+#         traces_ux_surfaces: ["SCR-004", "SCR-005"]
 #   notifications:
 #     # ...

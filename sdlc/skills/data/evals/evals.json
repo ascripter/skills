@@ -1,0 +1,26 @@
+{
+  "skill_name": "sdlc-data",
+  "evals": [
+    {
+      "id": 1,
+      "name": "workflow-implied-entity",
+      "prompt": "Run sdlc-data against the docs/PRD.yaml and docs/UX.yaml in this project. For every multiple-choice question, pick the recommended (position-1) option. For free-text questions, give a one-line plausible answer. Skip optional themes during the gate. The PRD declares WKF-001..WKF-004 and a single ENT-001 (Project) — but WKF-003 ('switch git branch and continue work on a separate isolated stream') strongly implies a per-branch session-style entity that NO FR-NNN and NO ENT-NNN names directly. Verify that the agent's scope-completeness sweep at the end of the entities theme catches this and proposes a BranchSession-style entity. Then write DATA-MODEL.yaml and validate.",
+      "expected_output": "A docs/DATA-MODEL.yaml with at least 2 entities — the PRD's Project plus the sweep-derived BranchSession-style entity. Every entity has traces_prd_features in FR-NNN format (validator-enforced), traces_ux_surfaces in SCR-NNN format (validator-enforced), and the sweep-derived entity has traces_prd_workflows containing 'WKF-003'. metadata.changelog is present and prepended with at least one entry of the form '<ver> (<YYYY-MM-DD>): ...'. All data_warnings entries (if any) start with WRN-NNN. validate_schema.py exits 0 and emits [OK] with status complete.",
+      "files": [
+        "evals/fixtures/workflow-implied-entity/docs/PRD.yaml",
+        "evals/fixtures/workflow-implied-entity/docs/UX.yaml"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "existing-data-update-flow",
+      "prompt": "Run sdlc-data against the existing docs/PRD.yaml, docs/UX.yaml, and docs/DATA-MODEL.yaml in this project. The DATA-MODEL.yaml is stale: it predates the v1.1 conventions (no metadata.changelog), has no WRN-NNN warnings, only traces FR-001/FR-002, and is missing the Comment entity that FR-003 / WKF-003 imply. For every choice, pick the recommended (position-1) option; for free-text, give a one-line plausible answer; accept any sweep candidate the agent proposes. Then write DATA-MODEL.yaml and validate.",
+      "expected_output": "The on-disk DATA-MODEL.yaml is rewritten with: (a) a new Comment entity whose traces_prd_features contains 'FR-003' and traces_ux_surfaces contains 'SCR-003'; (b) metadata.changelog populated with at least ONE new entry prepended (most-recent first); (c) every data_warnings entry — if any — formatted as 'WRN-NNN: ...'; (d) the existing Task entity's traces preserved; (e) metadata.data_model_version bumped to 1.1 (or higher). validate_schema.py exits 0 with [OK] and status complete.",
+      "files": [
+        "evals/fixtures/existing-data-update-flow/docs/PRD.yaml",
+        "evals/fixtures/existing-data-update-flow/docs/UX.yaml",
+        "evals/fixtures/existing-data-update-flow/docs/DATA-MODEL.yaml"
+      ]
+    }
+  ]
+}
