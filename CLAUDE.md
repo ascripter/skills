@@ -141,16 +141,29 @@ There is no SAVE command — saving is implicit after every confirmed batch.
 
 #### Importance tiers (recommended)
 
-Question entries may set `importance: med | high | critical` to control
-how they are run:
+Question entries may set `importance: med | high | critical | nested_freeform`
+to control how they are run:
 
 - **`med`** (default) — batched 2–4 per `AskUserQuestion` call.
 - **`high`** — own mini-section. Agent drafts an answer, user approves
   or iterates (cap iterations, e.g. 3).
 - **`critical`** — full per-item drill-down (propose → challenge →
-  detail → final approval → next item).
+  detail → final approval → next item). When the theme is also marked
+  `synthesis: true`, a **scope-completeness sweep** runs before the
+  list closes (see "Scope-completeness sweep" below).
+- **`nested_freeform`** — for a `Dict[str, Any]` field whose shape is
+  project-defined (e.g. `prd`'s `conventions` block). Per-bucket draft-
+  approve loop, validator only type-checks the top-level mapping.
 
-Reserve `critical` for scope-defining fields (e.g. MVP features in `prd`).
+Reserve `critical` for scope-defining fields (e.g. MVP features in
+`prd`; surface inventory in `ux`).
+
+The canonical specification of all four tiers — including the sweep,
+the per-item state machine, the structured detail slots, iteration
+caps, and EXIT-mid-flow rules — lives in
+`sdlc/skills/prd/references/importance-flows.md`. Downstream skills
+should point at that file rather than re-document the tiers from
+scratch.
 
 #### Confidence / rationale sibling fields (recommended)
 
@@ -161,6 +174,135 @@ For fields where downstream agents benefit from knowing certainty or the
 - `<field>_rationale`: short string explaining the trade-off
 
 The schema file documents which sibling pairs exist.
+
+### Cross-skill conventions (apply to every SDLC skill)
+
+These conventions surfaced first in `prd` and `ux`, then proved generic
+enough that they belong here. Every new skill should adopt them unless
+there's a concrete reason not to. Downstream skills (`data`, `api`,
+`arch`, `test`, `task`, `deploy`) MUST adopt them.
+
+#### 1. `metadata.changelog: Optional[List[str]]` on every artifact
+
+Every output artifact carries an optional, append-only changelog inside
+`metadata`. Each entry is a single line:
+
+```yaml
+metadata:
+  changelog:
+    - "1.1 (2026-05-21): Manual review pass. <one-line summary>."
+    - "1.0 (2026-05-21): Initial spec produced by sdlc-<skill>."
+```
+
+Format: `"<artifact_version> (<YYYY-MM-DD>): <one-line summary>"`.
+Most-recent entry first. Append-only — never rewrite or reorder. On a
+brand-new write the changelog may be omitted or initialized with a
+single `"initial."` entry; both are valid.
+
+The validator type-checks `Optional[List[str]]` only; it does NOT
+enforce format on individual entries (over-validation here would
+discourage manual edits, which are explicitly allowed and the
+common case for the field).
+
+#### 2. `WRN-NNN` is the universal warnings family
+
+Every artifact's `*_warnings` list (`prd_warnings`, `ux_warnings`,
+`data_warnings`, etc.) uses the `WRN-NNN` family. Items are formatted
+as `"WRN-NNN: <message>"`. The counter is **writer-managed** — there
+is no interview question for warnings; the agent appends them at write
+time and persists `state.last_ids.WRN` (or
+`state.last_ids_by_product[<slug>].WRN` in monorepo mode).
+
+The validator enforces format `^WRN-\d{3,}:\s+.+` on every entry.
+Counter reconciliation on resume: if the on-disk file has a higher
+WRN-NNN than `state.last_ids.WRN`, sync the state counter to
+`max(on_disk, state)` before appending the next warning.
+
+#### 3. Scope-completeness sweep for `critical synthesis: true` themes
+
+A theme marked both `importance: critical` per question AND
+`synthesis: true` per theme produces a scope-defining list whose
+contents are inferred from upstream artifacts (PRD features synthesized
+from problem/users/use-cases; UX surfaces synthesized from PRD WKF/FR/
+ENT/JTB ids). For every such theme, **after the per-item loop closes,
+run a dynamic scope-completeness sweep** that:
+
+- reflects on the draft list itself,
+- reflects on **every upstream artifact's ID families** (not just the
+  most direct one), and
+- reflects on project-type heuristics (CLI tool, SaaS app, library,
+  pipeline, etc.).
+
+The sweep surfaces concrete candidate items — *not* category labels —
+via one multi-select `AskUserQuestion`. Caps: at most 2 sweep passes
+per list; defer remaining candidates to a `WRN-NNN` warning; honour
+the anti-padding rule (surface 0 candidates rather than manufacture).
+
+Canonical specification: PRD's `importance-flows.md`, section
+"The `critical` flow → Step e — dynamic scope-completeness sweep".
+Reference it instead of duplicating.
+
+The sweep is the single most important defence against synthesis-stage
+gaps — the kind where an item implied by an upstream ID family (e.g.
+an entity whose description literally names a CLI verb) didn't make it
+into the draft list because the agent only seeded from the most-direct
+upstream signal. **Skip the sweep at your peril.**
+
+#### 4. Upstream-ID consumption rule
+
+When a skill consumes IDs from an upstream artifact:
+
+- **Read the upstream's `conventions.artifact_ids` block** (if present)
+  to know which families exist and what they mean.
+- **Reference upstream IDs by their stable prefix** (`"FR-001"`,
+  `"WKF-003"`), never by verbatim description text. The PRD's IDs are
+  the stable contract; the description text is editable.
+- **Never invent IDs in an upstream family.** Don't write `"FR-099"`
+  in a UX or DATA-MODEL artifact unless it already exists in PRD.
+- **Never renumber upstream IDs.** Promoting an item between sibling
+  lists (e.g. PRD nice-to-have → must-have) preserves the ID.
+- **Surface stale refs explicitly.** When PRD is edited between
+  sessions and a downstream artifact references an id that no longer
+  exists, ask the user per stale ref — do NOT silently delete.
+- **Categorize refs by semantic role** (recommended). Rather than one
+  flat `prd_refs: list[id]`, prefer multiple fields that capture *what
+  this surface/operation/component does with* the upstream id (e.g.
+  `traces_workflows`, `implements_requirements`, `references_entities`
+  in UX; analogous fields downstream). Validator enforces per-field
+  family prefix (WKF/FR/ENT/...).
+
+#### 5. ID families a skill emits get `state.last_ids.<PREFIX>` counters
+
+A skill that emits ID-prefixed list items declares each family in the
+top of its output schema yaml, runs a writer-managed counter in
+`state.last_ids.<PREFIX>`, and enforces the format `<PREFIX>-{:03d}`
+in its validator. Items in those families are stable across the
+artifact's lifetime — once written, the id never changes. Renaming a
+slug or human label does not change the id.
+
+In monorepo mode, every emitted family has its counter under
+`state.last_ids_by_product[<slug>].<PREFIX>` instead — each product
+carries an independent id space per family.
+
+Counters persist after every accepted item (including sweep
+acceptances). EXIT/resume must not produce gaps or duplicates.
+
+#### Implications for downstream skills
+
+Any new skill that consumes the PRD (directly or indirectly via UX,
+DATA-MODEL, API, etc.) should:
+
+- Read every relevant upstream artifact's IDs during Phase 2.
+- Seed `critical synthesis: true` lists from **all** upstream families
+  it can plausibly draw on.
+- Run the scope-completeness sweep before closing every synthesis list.
+- Emit its own `<PREFIX>-NNN` family if it produces a new artifact
+  type downstream agents will reference (declare it in the schema's
+  header).
+- Carry `metadata.changelog` and `<artifact>_warnings` with the WRN
+  family.
+- Inherit the upstream's `conventions.artifact_ids` block verbatim
+  where applicable; consult it before writing IDs.
 
 ### Schema validation contract
 
