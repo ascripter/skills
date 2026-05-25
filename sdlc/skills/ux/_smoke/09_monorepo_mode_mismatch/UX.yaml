@@ -1,0 +1,37 @@
+# Expected outcome: [FAIL] — model_validator rejects the mismatch:
+# metadata.monorepo == true but `products:` is absent.
+metadata:
+  ux_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "99990099-9999-9999-9999-999999999999"
+  monorepo: true                     # claims monorepo …
+  status: "complete"
+
+ux_warnings: []
+
+# … but no `products:` key, AND top-level theme blocks present:
+surface_family: web
+surface_family_confidence: confirmed
+
+design_principles:
+  tenets: ["Keyboard-first"]
+
+navigation_model:
+  type: sitemap
+  top_level_nodes: ["/x"]
+
+surface_inventory:
+  - id: SCR-001
+    surface_id: x
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__x.yaml
+    traces_workflows: []
+    implements_requirements: []
+    references_entities: []
+
+component_library: { name: "shadcn/ui" }
+state_patterns: { error: "Inline error + retry" }
+content_rules: { tone: "Neutral" }
+accessibility: { wcag_target: wcag_aa }

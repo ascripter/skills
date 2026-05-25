@@ -1,0 +1,51 @@
+# Expected outcome: [FAIL] — id-prefix format errors on every malformed id.
+# Status: complete forces every ID-format violation to be an error (not a warning).
+metadata:
+  ux_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "66660066-6666-6666-6666-666666666666"
+  monorepo: false
+  status: "complete"
+
+ux_warnings: []
+
+surface_family: web
+surface_family_confidence: confirmed
+
+design_principles:
+  tenets: ["Keyboard-first"]
+
+navigation_model:
+  type: sitemap
+  top_level_nodes: ["/dashboard"]
+
+surface_inventory:
+  - id: SCR1                       # invalid — missing dash; must match "SCR-NNN"
+    surface_id: dashboard
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__dashboard.yaml
+    traces_workflows: []
+    implements_requirements: []
+    references_entities: []
+  - id: surface-002                # invalid — wrong family prefix
+    surface_id: settings
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__settings.yaml
+    traces_workflows: []
+    implements_requirements: []
+    references_entities: []
+
+component_library:
+  name: "shadcn/ui"
+
+state_patterns:
+  error: "Inline error + retry"
+
+content_rules:
+  tone: "Professional + concise"
+
+accessibility:
+  wcag_target: wcag_aa

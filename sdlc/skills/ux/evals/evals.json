@@ -1,0 +1,14 @@
+{
+  "skill_name": "sdlc-ux",
+  "evals": [
+    {
+      "id": 1,
+      "name": "cli-with-entity-implied-surface",
+      "prompt": "Run sdlc-ux against the docs/PRD.yaml in this project. For every multiple-choice question, pick the first option. For free-text questions, give a one-line plausible answer. Skip optional themes during the gate. The PRD declares 3 WKF-### workflows (init, run, status) plus an ENT-### entity named 'ProjectRegistry' whose description literally names a 'myapp list' CLI command that NO workflow mentions — verify that the agent's scope-completeness sweep catches it and proposes a `cmd-list` (or similar) surface so that all PRD ID-families implied are covered. Then write UX.yaml + per-surface yamls + validate. Save outputs to docs/UX.yaml and docs/UX__<surface>.yaml.",
+      "expected_output": "A docs/UX.yaml with surface_inventory of >= 4 surfaces (3 WKF-driven + at least 1 sweep-derived list/registry surface). Every WKF-001/002/003 is referenced by at least one surface's traces_workflows. The sweep-derived surface includes ENT-001 in references_entities. All surface ids match SCR-NNN format. All ux_warnings (if any) start with WRN-NNN. metadata.status == 'complete' AND validate_schema.py exits 0.",
+      "files": [
+        "evals/fixtures/cli-with-entity-implied-surface/docs/PRD.yaml"
+      ]
+    }
+  ]
+}

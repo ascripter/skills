@@ -1,10 +1,11 @@
 metadata:
-  ux_surface_version: "1.0"
+  ux_surface_version: "1.1"
   last_updated: "2026-05-18T12:00:00Z"
   generated_by: sdlc-ux
   session_id: "55555555-5555-5555-5555-555555555555"
   status: "complete"
 
+id: SCR-001
 surface_id: task-add
 surface_type: cli_command
 cli_invocation: "acme task add <title> [--priority=<level>]"
@@ -63,5 +64,7 @@ validation_rules:
 
 accessibility_notes: "inherit"
 
-traces_prd_flows:
-  - "Add a task in under 3 seconds"
+traces_workflows:
+  - "WKF-001"
+implements_requirements: []
+references_entities: []

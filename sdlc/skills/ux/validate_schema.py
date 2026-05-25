@@ -5,21 +5,24 @@ Run from the project root:
 
     python sdlc/skills/ux/validate_schema.py
     python sdlc/skills/ux/validate_schema.py --path docs/UX.yaml
-    python sdlc/skills/ux/validate_schema.py --docs-dir other/docs
 
 Validates:
     1. docs/UX.yaml (or --path) — global UX contract.
     2. Every docs/UX__*.yaml sibling — one per surface.
-    3. Coverage: every PRD use_cases.core_workflows entry is referenced by
-       at least one UX__*.yaml via `traces_prd_flows`. Uncovered flows
-       appear in UX.yaml's `ux_warnings`. If UX.yaml claims status:complete
-       but coverage is incomplete, validation fails.
+    3. ID-family prefix formats: SCR-NNN on surface ids, WRN-NNN on
+       ux_warnings, WKF-NNN in traces_workflows, FR-NNN in
+       implements_requirements, ENT-NNN in references_entities.
+    4. Coverage: every WKF-NNN id in PRD use_cases.core_workflows must be
+       referenced by at least one UX__*.yaml via `traces_workflows`.
+       Coverage matches by WKF-NNN id (not verbatim text), so PRD text
+       edits don't break UX traces.
 
 Exit codes:
     0 — schema valid; either status='complete' (with all required fields
         filled AND coverage check passing) or status='draft'.
     1 — schema invalid (pydantic error), OR status='complete' but required
-        fields are missing, OR status='complete' but coverage is incomplete.
+        fields are missing, OR status='complete' but coverage is incomplete,
+        OR status='complete' but ID-prefix format violations exist.
     2 — could not read or parse one of the files (missing, bad YAML, etc.)
     3 — required dependency missing (pydantic v2 or pyyaml).
 """
@@ -27,6 +30,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from enum import Enum
 from pathlib import Path
@@ -49,6 +53,24 @@ except ImportError:
         file=sys.stderr,
     )
     sys.exit(3)
+
+
+# =============================================================================
+# ID-family prefix regexes (kept in lockstep with UX.schema.yaml header)
+# =============================================================================
+
+# Three-digit padding minimum; allow longer numbers for projects with many items.
+ID_PATTERN = r"-\d{3,}"
+SCR_ID_RE = re.compile(rf"^SCR{ID_PATTERN}$")
+WRN_ITEM_RE = re.compile(rf"^WRN{ID_PATTERN}:\s+.+", re.DOTALL)  # WRN items carry message text
+WKF_ID_RE = re.compile(rf"^WKF{ID_PATTERN}$")
+FR_ID_RE = re.compile(rf"^FR{ID_PATTERN}$")
+ENT_ID_RE = re.compile(rf"^ENT{ID_PATTERN}$")
+
+# Extract the leading WKF-NNN id from a PRD core_workflows entry of the form
+# "WKF-001: <verbatim description>". The PRD writes the verbatim form; UX
+# references only the leading id.
+WKF_PREFIX_EXTRACT_RE = re.compile(rf"^(WKF{ID_PATTERN})(?::|\s|$)")
 
 
 # =============================================================================
@@ -166,11 +188,14 @@ class NavigationModel(_ThemeBase):
 
 
 class SurfaceInventoryItem(_ThemeBase):
+    id: Optional[str] = None  # SCR-NNN
     surface_id: Optional[str] = None
     surface_type: Optional[SurfaceType] = None
     status: Optional[SurfaceStatus] = None
     file_path: Optional[str] = None
-    traces_prd_flows: Optional[List[str]] = None
+    traces_workflows: Optional[List[str]] = None
+    implements_requirements: Optional[List[str]] = None
+    references_entities: Optional[List[str]] = None
 
 
 class ThemingTokens(_ThemeBase):
@@ -247,7 +272,12 @@ class Cli(_ThemeBase):
     help_text_format: Optional[HelpTextFormat] = None
     output_formats: Optional[CliOutputFormats] = None
     exit_code_convention: Optional[str] = None
-    exit_codes: Optional[Any] = None
+    # exit_codes is a Dict[str, Any] so projects can use either the legacy
+    # {code: "description"} string-only shape or the new
+    # {code: {description, implements_requirements, ...}} mapping shape.
+    # ID-prefix checks below walk the dict and validate FR-NNN refs when
+    # present.
+    exit_codes: Optional[Dict[str, Any]] = None
     interactive_mode: Optional[Any] = None
     config_file: Optional[CliConfigFile] = None
 
@@ -266,6 +296,7 @@ class UXMetadata(BaseModel):
     session_id: str
     monorepo: bool = False
     status: Literal["draft", "complete"] = "draft"
+    changelog: Optional[List[str]] = None
 
 
 class UXProduct(_ThemeBase):
@@ -366,6 +397,7 @@ class SurfaceMetadata(BaseModel):
     generated_by: str = "sdlc-ux"
     session_id: str
     status: Literal["draft", "complete"] = "draft"
+    changelog: Optional[List[str]] = None
 
 
 class SurfaceLayout(_ThemeBase):
@@ -394,6 +426,7 @@ class UXSurface(BaseModel):
 
     metadata: SurfaceMetadata
 
+    id: Optional[str] = None  # SCR-NNN
     surface_id: Optional[str] = None
     surface_type: Optional[SurfaceType] = None
     parent_surface: Optional[str] = None
@@ -407,7 +440,9 @@ class UXSurface(BaseModel):
     components: Optional[List[Any]] = None
     validation_rules: Optional[List[Any]] = None
     accessibility_notes: Optional[Any] = None  # list[string] | "inherit" | null
-    traces_prd_flows: Optional[List[str]] = None
+    traces_workflows: Optional[List[str]] = None
+    implements_requirements: Optional[List[str]] = None
+    references_entities: Optional[List[str]] = None
     notes: Optional[str] = None
 
 
@@ -440,10 +475,11 @@ UX_CLI_REQUIRED_PATHS: List[str] = [
 
 # UX__<surface>.yaml required paths.
 SURFACE_REQUIRED_PATHS: List[str] = [
+    "id",
     "surface_id",
     "surface_type",
     "layout",
-    "traces_prd_flows",
+    "traces_workflows",
 ]
 
 
@@ -478,6 +514,26 @@ def check_ux_required(ux: UX) -> List[str]:
             for path in UX_CLI_REQUIRED_PATHS:
                 if _is_empty(_get_dotted(root, path)):
                     missing.append(f"{scope_label}{path}")
+        # Per-inventory-item required fields. Each surface in
+        # surface_inventory must carry id/surface_id/surface_type/file_path
+        # by the time the artifact claims complete; traces_workflows must
+        # be non-None (empty list [] is allowed — see check_surface_required).
+        inv: Optional[List[SurfaceInventoryItem]] = getattr(
+            root, "surface_inventory", None
+        )
+        if inv:
+            for i, item in enumerate(inv):
+                where = f"{scope_label}surface_inventory[{i}]"
+                if _is_empty(item.id):
+                    missing.append(f"{where}.id")
+                if _is_empty(item.surface_id):
+                    missing.append(f"{where}.surface_id")
+                if _is_empty(item.surface_type):
+                    missing.append(f"{where}.surface_type")
+                if _is_empty(item.file_path):
+                    missing.append(f"{where}.file_path")
+                if item.traces_workflows is None:
+                    missing.append(f"{where}.traces_workflows")
 
     if ux.metadata.monorepo and ux.products:
         for slug, product in ux.products.items():
@@ -492,21 +548,160 @@ def check_surface_required(surface: UXSurface, file_label: str) -> List[str]:
     """Return list of missing required fields for one surface yaml."""
     missing: List[str] = []
     for path in SURFACE_REQUIRED_PATHS:
+        # traces_workflows: [] is allowed (non-flow surfaces) — only None/missing
+        # counts as unfilled here; the coverage check handles flow obligations.
+        if path == "traces_workflows":
+            if _get_dotted(surface, path) is None:
+                missing.append(f"{file_label}: {path}")
+            continue
         if _is_empty(_get_dotted(surface, path)):
             missing.append(f"{file_label}: {path}")
     return missing
 
 
 # =============================================================================
-# PRD-flow coverage check.
-# Every PRD use_cases.core_workflows entry must be referenced by at least one
-# UX__*.yaml via traces_prd_flows. Uncovered flows are returned for surfacing.
+# ID-prefix format checks.
+# All values are tested against the appropriate family's regex. Violations are
+# returned as human-readable strings so the caller can print them.
 # =============================================================================
 
 
-def load_prd_core_workflows(prd_path: Path) -> List[str]:
-    """Return list of core_workflows from PRD.yaml. Empty if file missing or
-    flows section absent. In monorepo mode, returns the union across products.
+def _check_list_prefix(
+    values: Optional[List[str]],
+    pattern: re.Pattern[str],
+    expected: str,
+    where: str,
+) -> List[str]:
+    """Return one error string per value that fails `pattern`."""
+    if not values:
+        return []
+    errors: List[str] = []
+    for v in values:
+        if not isinstance(v, str) or not pattern.match(v.strip()):
+            errors.append(
+                f"{where}: '{v}' does not match {expected}"
+            )
+    return errors
+
+
+def check_ux_id_prefixes(ux: UX) -> List[str]:
+    """Validate SCR/WRN/WKF/FR/ENT prefixes inside UX.yaml. Returns error
+    strings; an empty list means all formats are valid.
+    """
+    errors: List[str] = []
+
+    # ux_warnings — every entry "WRN-NNN: <message>"
+    for i, w in enumerate(ux.ux_warnings or []):
+        if not isinstance(w, str) or not WRN_ITEM_RE.match(w.strip()):
+            errors.append(
+                f"ux_warnings[{i}]: '{w}' must match 'WRN-NNN: <message>'"
+            )
+
+    def _check_product(scope: str, product: object) -> None:
+        inv: Optional[List[SurfaceInventoryItem]] = getattr(
+            product, "surface_inventory", None
+        )
+        if inv:
+            for i, item in enumerate(inv):
+                where = f"{scope}surface_inventory[{i}]"
+                if item.id is not None and not SCR_ID_RE.match(item.id.strip()):
+                    errors.append(
+                        f"{where}.id: '{item.id}' must match 'SCR-NNN'"
+                    )
+                errors.extend(
+                    _check_list_prefix(
+                        item.traces_workflows,
+                        WKF_ID_RE,
+                        "'WKF-NNN'",
+                        f"{where}.traces_workflows",
+                    )
+                )
+                errors.extend(
+                    _check_list_prefix(
+                        item.implements_requirements,
+                        FR_ID_RE,
+                        "'FR-NNN'",
+                        f"{where}.implements_requirements",
+                    )
+                )
+                errors.extend(
+                    _check_list_prefix(
+                        item.references_entities,
+                        ENT_ID_RE,
+                        "'ENT-NNN'",
+                        f"{where}.references_entities",
+                    )
+                )
+        cli: Optional[Cli] = getattr(product, "cli", None)
+        if cli and cli.exit_codes:
+            for code, spec in cli.exit_codes.items():
+                if isinstance(spec, dict):
+                    fr_refs = spec.get("implements_requirements")
+                    errors.extend(
+                        _check_list_prefix(
+                            fr_refs if isinstance(fr_refs, list) else None,
+                            FR_ID_RE,
+                            "'FR-NNN'",
+                            f"{scope}cli.exit_codes['{code}'].implements_requirements",
+                        )
+                    )
+
+    if ux.metadata.monorepo and ux.products:
+        for slug, product in ux.products.items():
+            _check_product(f"products.{slug}.", product)
+    else:
+        _check_product("", ux)
+
+    return errors
+
+
+def check_surface_id_prefixes(surface: UXSurface, file_label: str) -> List[str]:
+    """Validate prefixes inside a UX__<surface>.yaml file."""
+    errors: List[str] = []
+
+    if surface.id is not None and not SCR_ID_RE.match(surface.id.strip()):
+        errors.append(f"{file_label}: id: '{surface.id}' must match 'SCR-NNN'")
+    errors.extend(
+        _check_list_prefix(
+            surface.traces_workflows,
+            WKF_ID_RE,
+            "'WKF-NNN'",
+            f"{file_label}: traces_workflows",
+        )
+    )
+    errors.extend(
+        _check_list_prefix(
+            surface.implements_requirements,
+            FR_ID_RE,
+            "'FR-NNN'",
+            f"{file_label}: implements_requirements",
+        )
+    )
+    errors.extend(
+        _check_list_prefix(
+            surface.references_entities,
+            ENT_ID_RE,
+            "'ENT-NNN'",
+            f"{file_label}: references_entities",
+        )
+    )
+    return errors
+
+
+# =============================================================================
+# PRD-flow coverage check.
+# Coverage matches by WKF-NNN id (not verbatim text). PRD core_workflows
+# entries are of the form "WKF-NNN: <description>"; the leading id is
+# extracted and compared against UX surface traces_workflows (which carry
+# WKF-NNN ids only).
+# =============================================================================
+
+
+def load_prd_core_workflow_ids(prd_path: Path) -> List[str]:
+    """Return list of WKF-NNN ids parsed out of PRD.use_cases.core_workflows.
+    Empty if file missing or flows section absent. In monorepo mode, returns
+    the union across products. Entries that don't begin with a WKF-NNN id are
+    skipped (they'd fail PRD validation anyway).
     """
     if not prd_path.exists():
         return []
@@ -517,9 +712,19 @@ def load_prd_core_workflows(prd_path: Path) -> List[str]:
     if not isinstance(raw, dict):
         return []
 
-    flows: List[str] = []
+    ids: List[str] = []
     metadata = raw.get("metadata") or {}
     monorepo = bool(metadata.get("monorepo"))
+
+    def _collect(workflows: Any) -> None:
+        if not isinstance(workflows, list):
+            return
+        for entry in workflows:
+            if not isinstance(entry, str):
+                continue
+            m = WKF_PREFIX_EXTRACT_RE.match(entry.strip())
+            if m:
+                ids.append(m.group(1))
 
     if monorepo:
         products = raw.get("products") or {}
@@ -529,29 +734,29 @@ def load_prd_core_workflows(prd_path: Path) -> List[str]:
                     continue
                 uc = prod.get("use_cases") or {}
                 cw = uc.get("core_workflows") if isinstance(uc, dict) else None
-                if isinstance(cw, list):
-                    flows.extend([str(x) for x in cw if x])
+                _collect(cw)
     else:
         uc = raw.get("use_cases") or {}
         cw = uc.get("core_workflows") if isinstance(uc, dict) else None
-        if isinstance(cw, list):
-            flows.extend([str(x) for x in cw if x])
+        _collect(cw)
 
-    return flows
+    return ids
 
 
-def collect_traced_flows(surfaces: Dict[str, UXSurface]) -> List[str]:
+def collect_traced_workflow_ids(surfaces: Dict[str, UXSurface]) -> List[str]:
     traced: List[str] = []
     for _, surface in surfaces.items():
-        if surface.traces_prd_flows:
-            traced.extend([str(x) for x in surface.traces_prd_flows if x])
+        if surface.traces_workflows:
+            traced.extend(
+                str(x).strip() for x in surface.traces_workflows if x
+            )
     return traced
 
 
-def check_coverage(prd_flows: List[str], traced_flows: List[str]) -> List[str]:
-    """Return list of PRD flows with no surface trace."""
-    traced_set = {f.strip() for f in traced_flows}
-    return [f for f in prd_flows if f.strip() not in traced_set]
+def check_coverage(prd_ids: List[str], traced_ids: List[str]) -> List[str]:
+    """Return list of PRD WKF-NNN ids with no surface trace."""
+    traced_set = set(traced_ids)
+    return [w for w in prd_ids if w not in traced_set]
 
 
 # =============================================================================
@@ -609,7 +814,6 @@ def validate_all(ux_path: Path) -> int:
     # 2) Each UX__<surface>.yaml
     surface_files = discover_surface_files(ux_path)
     surfaces: Dict[str, UXSurface] = {}
-    surface_errors: List[str] = []
     for sp in surface_files:
         s_raw, s_err = _load_yaml(sp)
         if s_err:
@@ -622,7 +826,6 @@ def validate_all(ux_path: Path) -> int:
             for line in _format_pydantic_errors(e):
                 print(f"  - {line}")
             return 1
-        # Use file-name-derived key for traceability
         surfaces[sp.name] = surface
 
     # 3) Required-field checks
@@ -631,17 +834,22 @@ def validate_all(ux_path: Path) -> int:
     for name, surface in surfaces.items():
         missing_surface.extend(check_surface_required(surface, name))
 
-    # 4) Coverage check
+    # 4) ID-prefix format checks
+    id_errors = check_ux_id_prefixes(ux)
+    for name, surface in surfaces.items():
+        id_errors.extend(check_surface_id_prefixes(surface, name))
+
+    # 5) Coverage check (WKF-NNN id-based)
     prd_path = Path("docs", "PRD.yaml")
-    prd_flows = load_prd_core_workflows(prd_path)
-    traced_flows = collect_traced_flows(surfaces)
-    uncovered = check_coverage(prd_flows, traced_flows) if prd_flows else []
+    prd_ids = load_prd_core_workflow_ids(prd_path)
+    traced_ids = collect_traced_workflow_ids(surfaces)
+    uncovered = check_coverage(prd_ids, traced_ids) if prd_ids else []
 
     status = ux.metadata.status
     n_surfaces = len(surfaces)
 
     if status == "complete":
-        problems_found = bool(missing_ux or missing_surface or uncovered)
+        problems_found = bool(missing_ux or missing_surface or id_errors or uncovered)
         if problems_found:
             print(f"[FAIL] UX.yaml claims status 'complete' but has errors ({ux_path})\n")
             if missing_ux:
@@ -654,15 +862,20 @@ def validate_all(ux_path: Path) -> int:
                 for m in missing_surface:
                     print(f"  - {m}")
                 print()
+            if id_errors:
+                print(f"{len(id_errors)} ID-prefix format violation(s):")
+                for m in id_errors:
+                    print(f"  - {m}")
+                print()
             if uncovered:
-                print(f"{len(uncovered)} PRD core_workflow(s) with no surface trace:")
+                print(f"{len(uncovered)} PRD WKF-NNN(s) with no surface trace:")
                 for f in uncovered:
                     print(f"  - {f}")
             return 1
         print(
             f"[OK] UX.yaml is valid and complete ({ux_path}); "
             f"{n_surfaces} surface file(s); "
-            f"{len(prd_flows)} PRD core_workflow(s) all covered."
+            f"{len(prd_ids)} PRD WKF-NNN(s) all covered."
         )
         return 0
 
@@ -670,7 +883,7 @@ def validate_all(ux_path: Path) -> int:
     print(
         f"[DRAFT] UX.yaml is a draft ({ux_path}); "
         f"{n_surfaces} surface file(s); "
-        f"{len(prd_flows)} PRD core_workflow(s) discovered."
+        f"{len(prd_ids)} PRD WKF-NNN(s) discovered."
     )
     if missing_ux:
         print(f"\n{len(missing_ux)} required UX.yaml field(s) missing:")
@@ -680,11 +893,15 @@ def validate_all(ux_path: Path) -> int:
         print(f"\n{len(missing_surface)} required surface field(s) missing:")
         for m in missing_surface:
             print(f"  - {m}")
+    if id_errors:
+        print(f"\n{len(id_errors)} ID-prefix format violation(s) (warnings in draft):")
+        for m in id_errors:
+            print(f"  - {m}")
     if uncovered:
-        print(f"\n{len(uncovered)} PRD core_workflow(s) with no surface trace:")
+        print(f"\n{len(uncovered)} PRD WKF-NNN(s) with no surface trace:")
         for f in uncovered:
             print(f"  - {f}")
-    if not (missing_ux or missing_surface or uncovered):
+    if not (missing_ux or missing_surface or id_errors or uncovered):
         print("\nAll required fields filled and coverage complete. "
               "Set metadata.status: complete when done.")
     return 0

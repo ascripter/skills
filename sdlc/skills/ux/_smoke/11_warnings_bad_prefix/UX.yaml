@@ -1,0 +1,39 @@
+# Expected outcome: [FAIL] — ux_warnings entries must match "WRN-NNN: <message>".
+metadata:
+  ux_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "11110111-1111-1111-1111-111111111111"
+  monorepo: false
+  status: "complete"
+
+ux_warnings:
+  - "An informational note without a WRN-NNN prefix"   # bad
+  - "WRN1: missing dash"                                # bad
+  - "WRN-001: this one is well formed"                  # OK
+  - "INFO-001: wrong family prefix"                     # bad
+
+surface_family: web
+surface_family_confidence: confirmed
+
+design_principles:
+  tenets: ["Keyboard-first"]
+
+navigation_model:
+  type: sitemap
+  top_level_nodes: ["/x"]
+
+surface_inventory:
+  - id: SCR-001
+    surface_id: x
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__x.yaml
+    traces_workflows: []
+    implements_requirements: []
+    references_entities: []
+
+component_library: { name: "shadcn/ui" }
+state_patterns: { error: "Inline error + retry" }
+content_rules: { tone: "Neutral" }
+accessibility: { wcag_target: wcag_aa }

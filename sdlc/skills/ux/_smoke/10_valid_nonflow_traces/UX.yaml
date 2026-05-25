@@ -1,0 +1,55 @@
+# Expected outcome: [OK] complete — surface with traces_workflows: [] is allowed
+# (non-flow / chrome / diagnostic surface). No PRD in fixture dir = no coverage
+# check; combined with empty traces, no uncovered WKF means clean pass.
+metadata:
+  ux_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "10100110-1010-1010-1010-101010101010"
+  monorepo: false
+  status: "complete"
+
+# WRN entry acknowledges the intentional non-flow surface (best practice;
+# not enforced by validator, but documents intent for downstream agents).
+ux_warnings:
+  - "WRN-001: Surface cmd-doctor has no PRD workflow trace; it is a cross-cutting diagnostic surface."
+
+surface_family: cli
+surface_family_confidence: confirmed
+
+design_principles:
+  tenets: ["Read-only diagnostics"]
+
+navigation_model:
+  type: command_tree
+  top_level_nodes: ["doctor"]
+
+surface_inventory:
+  - id: SCR-001
+    surface_id: cmd-doctor
+    surface_type: cli_command
+    status: confirmed
+    file_path: docs/UX__cmd-doctor.yaml
+    traces_workflows: []                # empty list — non-flow surface
+    implements_requirements: ["FR-001"]
+    references_entities: []
+
+component_library:
+  name: "rich (Python)"
+
+state_patterns:
+  error: "stderr message + non-zero exit"
+
+content_rules:
+  tone: "Technical + precise"
+
+accessibility:
+  wcag_target: not_applicable_cli
+  keyboard_only: true
+
+cli:
+  root_command: "acme"
+  arg_parsing_library: "typer"
+  output_formats:
+    supported: ["table", "json"]
+    default: "table"

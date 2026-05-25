@@ -1,5 +1,5 @@
 metadata:
-  ux_version: "1.0"
+  ux_version: "1.1"
   last_updated: "2026-05-18T12:00:00Z"
   generated_by: sdlc-ux
   session_id: "22222222-2222-2222-2222-222222222222"
@@ -25,13 +25,14 @@ navigation_model:
     - "/settings"
 
 surface_inventory:
-  - surface_id: dashboard
+  - id: SCR-001
+    surface_id: dashboard
     surface_type: screen
     status: confirmed
     file_path: docs/UX__dashboard.yaml
-    traces_prd_flows:
-      - "Add a task in under 3 seconds"
-      - "Mark tasks done from the keyboard"
+    traces_workflows:
+      - "WKF-001"
+      - "WKF-002"
 
 component_library:
   name: "shadcn/ui"

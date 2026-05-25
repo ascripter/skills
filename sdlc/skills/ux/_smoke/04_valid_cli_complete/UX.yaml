@@ -1,5 +1,5 @@
 metadata:
-  ux_version: "1.0"
+  ux_version: "1.1"
   last_updated: "2026-05-18T12:00:00Z"
   generated_by: sdlc-ux
   session_id: "55555555-5555-5555-5555-555555555555"
@@ -23,11 +23,15 @@ navigation_model:
     - "project"
 
 surface_inventory:
-  - surface_id: task-add
+  - id: SCR-001
+    surface_id: task-add
     surface_type: cli_command
     status: confirmed
     file_path: docs/UX__task-add.yaml
-    traces_prd_flows: ["Add a task in under 3 seconds"]
+    traces_workflows:
+      - "WKF-001"
+    implements_requirements: []
+    references_entities: []
 
 component_library:
   name: "rich (Python)"
@@ -58,6 +62,10 @@ cli:
     supported: ["table", "json"]
     default: "table"
   exit_code_convention: "POSIX (0=ok, 1=error, 2=misuse)"
+  exit_codes:
+    "0": { description: "success", implements_requirements: [] }
+    "1": { description: "generic error", implements_requirements: [] }
+    "2": { description: "misuse (missing title)", implements_requirements: [] }
   config_file:
     location: "$XDG_CONFIG_HOME/acme/config.yaml"
     precedence: "cli_flag > env > config_file > default"

@@ -20,14 +20,66 @@
 #   - Per-surface contents live in sibling files `docs/UX__<surface>.yaml`
 #     (see UX__SURFACE.schema.yaml). UX.yaml lists them in
 #     `surface_inventory:` and never duplicates their content.
+#
+# ID conventions:
+#   The UX skill emits and consumes the following ID families. Format is
+#   always "<PREFIX>-NNN" with zero-padded 3-digit numbers (NNN ≥ 001).
+#
+#   Families this skill EMITS:
+#     SCR — `surface_inventory[].id`, also the top-level `id` of every
+#           `docs/UX__<surface>.yaml`. Assigned in collection order when
+#           a candidate is accepted in theme 4. Stable across renames of
+#           `surface_id` (the kebab-case slug). Counter:
+#           `state.last_ids.SCR`.
+#     WRN — `ux_warnings[]`. Writer-managed: every entry appended to
+#           `ux_warnings` is prefixed `"WRN-NNN: <message>"` and the
+#           counter `state.last_ids.WRN` is persisted.
+#
+#   Families this skill CONSUMES from `docs/PRD.yaml` (verbatim — never
+#   renumber, never invent new items in these families):
+#     WKF — `PRD.use_cases.core_workflows` — referenced from
+#           `surface_inventory[].traces_workflows` and from per-surface
+#           `traces_workflows`. Coverage check requires every WKF-NNN in
+#           PRD to be referenced by at least one surface.
+#     FR  — `PRD.functional_requirements.must_have_features` and
+#           `nice_to_have_features` — referenced from
+#           `implements_requirements` and from `cli.exit_codes[code].
+#           implements_requirements`.
+#     ENT — `PRD.data_model.key_entities` — referenced from
+#           `references_entities`. Catches surfaces implied by entities
+#           (e.g. a `ProjectRegistry` entity implies a `list` command).
+#     JTB — `PRD.use_cases.primary_jobs_to_be_done` / `secondary_jobs` —
+#           consulted during the scope-completeness sweep in theme 4 but
+#           does not appear as an explicit ref field at the surface level;
+#           per-surface yamls may cite JTB-NNN ids inside notes when the
+#           surface addresses a specific job.
+#     NFR, INT, AIF, PER, GOL, PAN, EDG, and any future PRD families —
+#           may appear in prose (notes, rationale) but no dedicated ref
+#           field exists at the UX level.
+#
+#   The validator enforces:
+#     * SCR-NNN format on `surface_inventory[].id` and per-surface `id`.
+#     * WRN-NNN format on `ux_warnings[]`.
+#     * <PREFIX>-NNN format on every value in `traces_workflows`,
+#       `implements_requirements`, and `references_entities`. Values
+#       carrying the wrong prefix (e.g. an FR-NNN inside `traces_workflows`)
+#       are flagged as errors in `status: complete`, warnings in `draft`.
+#
+#   In monorepo mode, each product carries its own independent ID space
+#   for SCR and WRN. PRD ID consumption still draws from the matching
+#   product's PRD subtree.
+#
+#   The validator's coverage check matches WKF-NNN IDs (not verbatim
+#   strings). This means PRD text edits do NOT break UX traces — the IDs
+#   are the stable contract.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # metadata — always at top level, present in both single- and multi-product mode
 # -----------------------------------------------------------------------------
 metadata:
-  ux_version: "1.0"                       # schema version this file conforms to
-  last_updated: "2026-05-05T12:00:00Z"     # ISO-8601 UTC timestamp of last write
+  ux_version: "1.1"                        # schema version this file conforms to
+  last_updated: "2026-05-21T12:00:00Z"     # ISO-8601 UTC timestamp of last write
   generated_by: sdlc-ux                    # always literal string "sdlc-ux"
   session_id: "00000000-0000-0000-0000-000000000000"  # UUID of the interview session
   monorepo: false                          # mirrors PRD.metadata.monorepo
@@ -35,15 +87,28 @@ metadata:
                                            # writer sets to "complete" only when:
                                            #   1) all required fields are filled,
                                            #   2) the validator passes,
-                                           #   3) every PRD core_workflow is traced
-                                           #      by at least one surface.
+                                           #   3) every PRD WKF-NNN is traced by
+                                           #      at least one surface.
+  changelog: null                          # Optional[list[string]]. Append-only.
+                                           # Each entry one line, format:
+                                           #   "<version> (<YYYY-MM-DD>): <one-line summary>"
+                                           # Most-recent entry first. Used to record
+                                           # post-generation manual edits or skill
+                                           # re-runs that materially changed the file.
 
-# ux_warnings — informational notes. Used for:
-#   * uncovered PRD workflows ("flow X has no surface trace")
+# ux_warnings — informational notes carried into downstream agent context.
+# Each entry MUST start with a stable ID: "WRN-NNN: <message>".
+# IDs are assigned in collection order by the writer (WRN-001, WRN-002, …)
+# and are stable across re-runs. The writer-managed counter lives in
+# `state.last_ids.WRN`.
+#
+# Use for:
+#   * uncovered PRD workflows ("WRN-NNN: coverage: WKF-007 has no surface trace")
 #   * low-confidence answers
 #   * merge conflicts
 #   * deferred optional themes (now/skip/todo) recorded for downstream visibility
-ux_warnings: []
+#   * surfaces dropped from the sweep with the user's "defer" decision
+ux_warnings: []                            # list[string] of "WRN-NNN: <msg>" items
 
 # =============================================================================
 # SINGLE-PRODUCT MODE — themes at top level, in interview order
@@ -89,8 +154,26 @@ navigation_model:
 # Each entry POINTS to a docs/UX__<surface_id>.yaml file. The full surface
 # spec lives there (see UX__SURFACE.schema.yaml).
 # -----------------------------------------------------------------------------
+# ID conventions for entries below:
+#   id                       — REQUIRED. Stable "SCR-NNN" assigned by the writer
+#                              when a candidate is accepted in theme 4. Survives
+#                              `surface_id` renames; only retired when the user
+#                              explicitly drops the surface in an update session.
+#   traces_workflows         — list of WKF-NNN ids from PRD.use_cases.core_workflows
+#                              that this surface participates in. Drives the
+#                              coverage check.
+#   implements_requirements  — list of FR-NNN ids from PRD.functional_requirements
+#                              (must_have + nice_to_have) that this surface
+#                              implements. Optional; absent for navigation-only
+#                              or chrome surfaces.
+#   references_entities      — list of ENT-NNN ids from PRD.data_model.key_entities
+#                              that this surface displays, edits, or directly
+#                              acts on. Optional; populated when the surface's
+#                              purpose is anchored on an entity (CRUD screens,
+#                              list/registry views, detail surfaces).
 surface_inventory:                # list[SurfaceInventoryItem]
-  - surface_id: null              # kebab-case unique id (string)
+  - id: null                      # REQUIRED — "SCR-NNN" (string, zero-padded 3-digit)
+    surface_id: null              # kebab-case slug, unique within the project (string)
     surface_type: null            # one of: screen | modal | panel | drawer |
                                   #         cli_command | flow_step |
                                   #         empty_state | toast | overlay |
@@ -100,9 +183,10 @@ surface_inventory:                # list[SurfaceInventoryItem]
                                   #   draft    = deep-dive started, not approved
                                   #   confirmed= deep-dive complete + user-approved
     file_path: null               # always docs/UX__<surface_id>.yaml (string)
-    traces_prd_flows: null        # PRD use_cases.core_workflows entries this
-                                  # surface participates in (list[string])
-                                  # — used by the coverage check at validation.
+    traces_workflows: null        # list[string] of "WKF-NNN" ids (no verbatim text).
+                                  # Drives the coverage check at validation.
+    implements_requirements: null # list[string] of "FR-NNN" ids (optional)
+    references_entities: null     # list[string] of "ENT-NNN" ids (optional)
 
 # -----------------------------------------------------------------------------
 # component_library — library choice + theming tokens
@@ -185,8 +269,19 @@ cli:
     supported: null             # REQUIRED — list[string] of supported formats
     default: null               # REQUIRED — the default emitted format (string)
   exit_code_convention: null    # description of exit-code scheme (string)
-  exit_codes: null              # explicit per-code semantics (any — map or list)
-                                # e.g. { "0": "success", "1": "generic error", "2": "misuse" }
+  # exit_codes — explicit per-code semantics. Each key is the exit-code value
+  # as a string (so YAML preserves ordering and codes like "130" sort cleanly);
+  # each value is a mapping with at least `description`. The optional
+  # `implements_requirements` field lists FR-NNN ids the exit code traces to
+  # (the FR(s) that mandate that this exit code exists or that determine its
+  # semantics). The validator allows extra keys (e.g. project-specific tags).
+  #
+  # Example:
+  #   exit_codes:
+  #     "0":   { description: "success",       implements_requirements: [] }
+  #     "3":   { description: "gate failure",  implements_requirements: ["FR-018", "FR-019"] }
+  #     "130": { description: "SIGINT graceful shutdown", implements_requirements: [] }
+  exit_codes: null              # Optional[Dict[str, ExitCodeSpec]]
   interactive_mode: null        # description; or false/None if non-interactive (any)
   config_file:
     location: null              # path/pattern (string|null)
@@ -198,6 +293,8 @@ cli:
 # blocks above. Each entry under `products:` mirrors the single-product shape.
 # Each product also has its own surface_inventory; per-surface files are
 # named docs/UX__<product-slug>__<surface-slug>.yaml so they don't collide.
+# SCR-NNN and WRN-NNN counters reset per product (each product carries its
+# own independent ID space).
 # =============================================================================
 #
 # products:
@@ -207,11 +304,14 @@ cli:
 #       tenets: [...]
 #     navigation_model: { ... }
 #     surface_inventory:
-#       - surface_id: login
+#       - id: SCR-001
+#         surface_id: login
 #         surface_type: screen
 #         status: confirmed
 #         file_path: docs/UX__auth__login.yaml
-#         traces_prd_flows: ["sign up", "sign in"]
+#         traces_workflows: ["WKF-001", "WKF-002"]
+#         implements_requirements: ["FR-005"]
+#         references_entities: []
 #     component_library: { ... }
 #     state_patterns: { ... }
 #     content_rules: { ... }

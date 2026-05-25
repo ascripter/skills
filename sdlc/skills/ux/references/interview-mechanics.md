@@ -174,7 +174,18 @@ clarifying round on free-text items, append. Soft cap 8 items, hard cap 12.
 Reserved for **theme 4 (`surface_inventory`)** and **theme 11
 (`per_surface_deepdive`)** — the per-item state machines that drive the
 entire UX skill. See `references/surface-discovery.md` for the full
-per-surface state machine.
+per-surface state machine, the **scope-completeness sweep** (theme 4
+step e — analogous to PRD's `must_have_features` sweep in
+`importance-flows.md`), and the SCR-NNN assignment timing.
+
+The sweep is mandatory in theme 4: after the per-item loop closes, the
+agent runs up to two reflective passes over every upstream PRD family
+(WKF, FR, ENT, JTB) plus project-type heuristics to catch surfaces the
+initial seeding missed. Adding the sweep is the single most important
+defence against gaps like "an entity literally named a CLI command in
+its description but no workflow mentioned it, so the surface didn't
+make it into the inventory." See `surface-discovery.md` for the exact
+caps, anti-padding rule, and confidence-tagging behaviour.
 
 ## Conditional promotions (`required_if`)
 

@@ -26,7 +26,8 @@ flow step they need to implement.
 1. **Resume check** → load existing state if any.
 2. **Scan + idea capture** → read `docs/PRD.yaml`, verify
    `metadata.status == "complete"`, run PRD's validator, exit early if
-   the PRD isn't there or isn't complete.
+   the PRD isn't there or isn't complete. Build a pre-fill map from
+   **every relevant PRD family** (WKF, FR, ENT, JTB), not just workflows.
 3. **Structural questions** → confirm surface family
    (cli | web | mobile | desktop | mixed) derived from
    `PRD.technical_constraints.runtime_platform`.
@@ -34,10 +35,15 @@ flow step they need to implement.
 5. **Theme interview** → required themes always run; optional themes are
    gated now/skip/todo. Theme 4 (`surface_inventory`) and theme 11
    (`per_surface_deepdive`) run as `critical` per-item drill-downs —
-   every surface is examined, confirmed, and traced back to PRD flows.
+   every surface is examined, assigned a stable `SCR-NNN` id, and traced
+   back to PRD via `traces_workflows` / `implements_requirements` /
+   `references_entities`. Theme 4 closes with a **dynamic scope-
+   completeness sweep** (analogous to PRD's `must_have_features` sweep)
+   that catches surfaces implied by FR/ENT/JTB ids but not by any WKF.
 6. **Write & validate** → merge into `docs/UX.yaml` and write all
-   `docs/UX__<surface>.yaml`, then run `validate_schema.py` (which also
-   runs the PRD-flow coverage check).
+   `docs/UX__<surface>.yaml`, prefixing every `ux_warnings` entry with a
+   stable `WRN-NNN`, then run `validate_schema.py` (schema + ID-prefix
+   format + PRD WKF-### coverage).
 7. **CLAUDE.md pointer + close** → call `set_claude_md_pointer.py`, mark
    state `complete`.
 
@@ -113,10 +119,23 @@ Read these files at startup:
      - `technical_constraints.runtime_platform` → preliminary `surface_family`
      - `technical_constraints.framework` → preliminary component-library hint
      - `non_functional_requirements.accessibility` → preliminary WCAG target
-     - `use_cases.core_workflows` → preliminary surface inventory candidates
+     - `use_cases.core_workflows` (WKF-###) → primary seed for surface inventory
+     - `functional_requirements.must_have_features` (FR-###) → seed for
+       feature-driven surfaces (verbs/screens that implement a specific FR)
+     - `functional_requirements.nice_to_have_features` (FR-###) → secondary
+       seed; surfaces here get `status: defined` but may stay
+       post-MVP-only at the user's discretion
+     - `data_model.key_entities` (ENT-###) → seed for entity-driven
+       surfaces (CRUD screens, list/detail/registry views, e.g. a
+       `ProjectRegistry` entity implies a `list` command)
+     - `use_cases.primary_jobs_to_be_done` and `secondary_jobs` (JTB-###)
+       → orthogonal lens consulted during the scope-completeness sweep
      - `users_personas.expertise_level` → tone hint
-     - `product_identity.name`, `product_identity.one_liner` → context only
-     - `functional_requirements.must_have_features` → may suggest surfaces
+     - `product_identity.name`, `product_identity.one_liner`,
+       `product_identity.slug` → context + CLI root_command pre-fill
+     - `conventions.artifact_ids` (if present) → the binding ID-family
+       map. The UX skill respects every family listed and never invents
+       IDs in an upstream family.
      - `metadata.monorepo` + `products: <slug>:` → if true, the UX skill
        runs the interview **per product** and writes one `UX.yaml` per
        product slug. (See `references/edge-cases.md` — monorepo mode.)
@@ -223,10 +242,18 @@ machine.
 Tier assignments (set in `ux-questions.yaml`):
 
 - Theme 4 (`surface_inventory`) → `critical` per item — every surface
-  is examined, named, typed, and traced back to PRD flows.
+  is examined, named, typed, assigned the next `SCR-NNN` id, and traced
+  to PRD via `traces_workflows`. **After the per-item loop closes, a
+  dynamic scope-completeness sweep runs** over every upstream PRD family
+  (WKF, FR, ENT, JTB) plus project-type heuristics to catch missed
+  surfaces. See `references/surface-discovery.md`.
 - Theme 11 (`per_surface_deepdive`) → `critical` per surface — for each
   surface, run the full per-surface mini-interview (layout / states /
-  interactions / components / validation / accessibility / traces).
+  interactions / components / validation / accessibility /
+  traces_workflows). `implements_requirements` (FR-###) and
+  `references_entities` (ENT-###) are inferred by the agent from the
+  surface's purpose and presented in the final-approval draft for the
+  user to correct.
 - Themes 2, 3, 5, 7 → mostly `high` (agent drafts; user iterates).
 - Remainder → `med` (batched 2–4 per `AskUserQuestion` call).
 
@@ -259,17 +286,36 @@ Write or merge `docs/UX.yaml` and write every `docs/UX__<surface>.yaml`
 in one consistent batch (so that the surface inventory and the per-
 surface files always agree).
 
+Writer responsibilities for the new ID conventions:
+
+- Every entry appended to `ux_warnings` is prefixed `"WRN-NNN: <message>"`,
+  using and persisting `state.last_ids.WRN`.
+- Every surface in `surface_inventory` carries its stable `id: SCR-NNN`
+  (assigned in theme 4; persisted in `state.last_ids.SCR`).
+- The corresponding `docs/UX__<surface_id>.yaml` mirrors the same
+  `id: SCR-NNN`.
+- All PRD references — in `traces_workflows`, `implements_requirements`,
+  `references_entities`, and `cli.exit_codes[code].implements_requirements`
+  — are stored as **ID strings only** (e.g. `"WKF-001"`), never as
+  verbatim text. The validator's coverage check matches by id.
+- `metadata.changelog`: when running in update mode (existing UX.yaml on
+  disk), prepend one entry describing the material change, format
+  `"<version> (<YYYY-MM-DD>): <one-line summary>"`. Append-only — never
+  rewrite existing entries.
+
 Then run:
 
 ```bash
 python "${CLAUDE_SKILL_DIR}/validate_schema.py" --path docs/UX.yaml
 ```
 
-The validator also walks `docs/UX__*.yaml` siblings and runs the
-**PRD-flow coverage check**: every entry in `PRD.use_cases.core_workflows`
-must be referenced by at least one `UX__<surface>.yaml` via
-`traces_prd_flows`. Any uncovered flow is appended to `UX.yaml`'s
-`ux_warnings` and forces `status: draft`.
+The validator walks `docs/UX__*.yaml` siblings, enforces ID-prefix
+formats (SCR/WRN/WKF/FR/ENT), and runs the **PRD WKF-NNN coverage check**:
+every WKF-NNN parsed out of `PRD.use_cases.core_workflows` must be
+referenced by at least one `UX__<surface>.yaml` via `traces_workflows`.
+Any uncovered id is appended to `UX.yaml`'s `ux_warnings` (as a fresh
+`WRN-NNN: coverage: WKF-XYZ has no surface trace` entry) and forces
+`status: draft`.
 
 For full merge logic and the exit-code recovery flow, see
 `references/merge-validate.md`.
@@ -310,7 +356,7 @@ Schema (extends the baseline state schema from CLAUDE.md):
 
 ```yaml
 session_id: <uuid4 string>
-skill_version: "1.0"
+skill_version: "1.1"
 started_at: <iso8601>
 last_updated: <iso8601>
 status: in_progress  # in_progress | complete | aborted
@@ -329,19 +375,40 @@ skipped_themes: []
 todo_themes: []
 pending_themes: []
 current_theme: null
-current_surface: null       # which surface_id is mid-deepdive (theme 11)
+current_surface: null       # which SCR-NNN is mid-deepdive (theme 11)
+
+# Per-family ID counters (single-product mode). Each entry is the last-
+# assigned integer for that family — increment, format as <PREFIX>-{:03d},
+# then persist. Families this skill emits:
+#   SCR — surface inventory ids (writer-managed; assigned when a surface
+#         candidate is accepted in theme 4 step a, or accepted from the
+#         scope-completeness sweep in theme 4 step e).
+#   WRN — ux_warnings entries (writer-managed; assigned at write time).
+last_ids: {}                # e.g. {SCR: 9, WRN: 11}
+
+# Per-product ID counters (monorepo mode only). Same shape as last_ids,
+# keyed by product slug. Each product carries an independent SCR/WRN space.
+last_ids_by_product: {}     # e.g. {auth: {SCR: 3, WRN: 1}, billing: {SCR: 5}}
 
 # Surface registry — one entry per defined surface
 defined_surfaces:           # extension over the baseline state schema
-  - surface_id: <kebab>
+  - id: <SCR-NNN>            # stable id assigned in theme 4
+    surface_id: <kebab>      # slug; may be renamed by the user — id stays
     surface_type: <enum>     # screen | modal | panel | cli_command | flow_step | …
     status: defined          # defined | draft | confirmed
     file_path: docs/UX__<slug>.yaml
-    traces_prd_flows: []     # filled during theme 11
+    traces_workflows: []     # WKF-NNN ids; filled during theme 4/11
+    implements_requirements: []  # FR-NNN ids (optional; inferred during deepdive)
+    references_entities: []      # ENT-NNN ids (optional; inferred during deepdive)
+
+# Sweep state — tracks scope-completeness sweep passes for theme 4
+sweep_passes_done: 0        # 0 | 1 | 2; capped at 2 per importance-flows.md
+dropped_surface_candidates: []  # candidates the user explicitly dropped;
+                                # not re-proposed on resume
 
 partial_answers: {}         # mirrors UX.yaml structure incrementally
 partial_surfaces: {}        # mirrors per-surface yamls incrementally,
-                            # keyed by surface_id
+                            # keyed by SCR-NNN (stable across renames)
 ```
 
 Rules:

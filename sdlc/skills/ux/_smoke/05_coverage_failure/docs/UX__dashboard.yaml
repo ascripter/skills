@@ -1,10 +1,11 @@
 metadata:
-  ux_surface_version: "1.0"
+  ux_surface_version: "1.1"
   last_updated: "2026-05-18T12:00:00Z"
   generated_by: sdlc-ux
   session_id: "66666666-6666-6666-6666-666666666666"
   status: "complete"
 
+id: SCR-001
 surface_id: dashboard
 surface_type: screen
 route: "/dashboard"
@@ -14,6 +15,8 @@ layout:
     - id: content
       role: content
 
-traces_prd_flows:
-  - "Add a task in under 3 seconds"
-  - "Mark tasks done from the keyboard"
+traces_workflows:
+  - "WKF-001"
+  - "WKF-002"
+implements_requirements: []
+references_entities: []

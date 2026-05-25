@@ -39,6 +39,48 @@ the happy path.
   often expose a CLI admin tool plus a web admin panel — `mixed` is
   the common answer.
 
+## ID-family edge cases
+
+- **Surface implied by ENT-### but no WKF-### mentions it.** This is the
+  canonical "missed surface" pattern. Don't try to special-case it in
+  the per-item flow — let the **scope-completeness sweep** (theme 4
+  step e, `surface-discovery.md`) catch it. The sweep reflects on
+  every ENT-### description and surfaces concrete candidates like
+  *"⚠ cmd-list — implied by ENT-032 ProjectRegistry"*. If the user
+  accepts, the candidate enters the per-item flow at step a and gets
+  the next `SCR-NNN`.
+
+- **`SCR-NNN` collision after merge.** When merging into an existing
+  UX.yaml, you may find two surfaces with the same `SCR-NNN` (e.g.
+  the user manually edited the file and renumbered, then the skill
+  re-ran). Behaviour: surface the conflict via the standard merge-
+  conflict prompt (see `merge-validate.md`); do NOT silently
+  renumber. SCR-NNN ids are stable by contract — preserving the user's
+  manual edits beats automated renumbering.
+
+- **A surface's `traces_workflows`, `implements_requirements`, or
+  `references_entities` references an id that no longer exists in PRD.**
+  Happens when PRD was edited between sessions to remove an item.
+  Behaviour on resume: detect the stale ref during Phase 2 scan; ask
+  the user *"Surface `<SCR-NNN>/<surface_id>` references `<WKF-NNN |
+  FR-NNN | ENT-NNN>` which no longer exists in PRD. Remove the ref,
+  re-route to a different id, or leave + record a ux_warnings entry?"*
+  Do not silently delete refs.
+
+- **Changelog entry was deleted or reordered manually.** The changelog
+  is append-only by contract, but the validator does NOT enforce
+  append-only on disk (it only checks the type is `list[string]`).
+  Behaviour: trust the on-disk file as the source of truth. If you
+  notice obvious tampering (e.g. the version numbers don't increase
+  monotonically), surface a one-time warning to the user but proceed
+  without rejecting.
+
+- **`WRN-NNN` counter drift.** If `state.last_ids.WRN` is lower than
+  the max WRN-NNN already in `ux_warnings` on disk (e.g. the user
+  copied warnings between projects), reconcile by setting the counter
+  to `max(on_disk, state) + 0` before writing the next warning. Same
+  rule for `SCR-NNN`.
+
 ## Surface-inventory edge cases
 
 - **Surfaceless PRD flow**: a `core_workflow` for which the agent can't
@@ -100,27 +142,31 @@ override in `ux_warnings` only if it appears unintentional (e.g.
 several surfaces silently override the same default; ask the user
 whether they want to update the global pattern instead).
 
-## Deleted PRD workflows mid-session
+## Deleted PRD workflows / entities / features mid-session
 
 The user is mid-interview, switches to another shell, edits
-`docs/PRD.yaml` to remove a workflow, then resumes. The agent's
-in-memory inventory still references the old flow.
+`docs/PRD.yaml` to remove a WKF-/FR-/ENT- entry, then resumes. The
+agent's in-memory inventory still references the old id.
 
 Behavior on resume:
 
-1. Re-read `docs/PRD.yaml`.
-2. Diff the workflows the state file knows about vs. the workflows
-   currently in PRD.
-3. If any flow was removed but is still referenced in
-   `state.defined_surfaces[*].traces_prd_flows`, prompt:
+1. Re-read `docs/PRD.yaml` and re-derive the ID inventories (WKF-### in
+   `use_cases.core_workflows`, FR-### in `functional_requirements.must_
+   have_features` + `nice_to_have_features`, ENT-### in
+   `data_model.key_entities`).
+2. Diff against `state.defined_surfaces[*].{traces_workflows,
+   implements_requirements, references_entities}`.
+3. If any id was removed but is still referenced, prompt per stale ref:
 
-   > "The PRD removed workflow `<flow>`. Surface `<id>` still
-   > references it. Remove the trace, or keep it?"
+   > "PRD no longer contains `<WKF-NNN | FR-NNN | ENT-NNN>`. Surface
+   > `<SCR-NNN>/<surface_id>` still references it. Remove the ref,
+   > re-route to a different id, or keep + record a ux_warnings entry?"
 
-4. Update `traces_prd_flows` based on the user's answer.
+4. Update the ref list based on the user's answer.
 
-If new flows were added, also offer to add candidate surfaces for
-them (re-running theme 4 step a only for the new flows).
+If new ids were added (a new WKF/FR/ENT in PRD), also offer to extend
+the inventory: re-run theme 4 step a only for the new ids, then re-run
+the scope-completeness sweep over the union.
 
 ## Validation failures
 
@@ -130,9 +176,21 @@ draft status?" Re-run validation after re-entry.
 
 Common failure modes specific to UX:
 
-- **Surface yaml claims `status: complete` but `traces_prd_flows` is
-  empty**: validator fails. The user must either add a trace or accept
-  the surface staying `draft`.
+- **Surface yaml claims `status: complete` but `traces_workflows` is
+  unset (None)**: validator fails. Either set it to `[]` (explicit
+  non-flow surface; record a WRN-NNN entry so downstream knows it's
+  intentional) or add WKF-NNN id(s).
+- **`traces_workflows: []` is allowed** (non-flow / chrome / diagnostic
+  surfaces) — the validator only enforces that the field is filled in
+  (non-None), not non-empty. The coverage check separately verifies
+  that *every PRD WKF-NNN* is referenced by *some* surface; a single
+  surface with an empty list is fine as long as another surface
+  picks up the slack for its WKF-NNN(s).
+- **An ID value in a ref field has the wrong family prefix** (e.g. an
+  `FR-NNN` mistakenly listed in `traces_workflows`): validator
+  surfaces it as an ID-prefix format violation. In `status: complete`
+  this is an error; in `draft` it's a warning. Resolution: move the
+  id to its correct family field.
 - **`UX.yaml.surface_inventory[i].file_path` points to a non-existent
   file**: validator does NOT explicitly check this (the discovery scans
   the docs/ folder), but `set_claude_md_pointer.py` still injects the

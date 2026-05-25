@@ -105,8 +105,25 @@ Three viable conventions:
 - **Custom** — only when the product has specific signalling needs
   (e.g. `2` for "no results", `3` for "stale cache").
 
-Whatever the choice, record specific exit codes per command in the
-per-surface yaml (`UX__<command>.yaml.notes` or in a custom field).
+Whatever the choice, record specific exit codes per command in
+`UX.yaml.cli.exit_codes` (preferred — a project-wide map) OR in the
+per-surface yaml's `notes` (when the code is surface-specific). The
+project-wide map uses the structured shape:
+
+```yaml
+cli:
+  exit_codes:
+    "0":   { description: "success",      implements_requirements: [] }
+    "2":   { description: "misuse",       implements_requirements: [] }
+    "3":   { description: "gate failure", implements_requirements: ["FR-018", "FR-019"] }
+    "130": { description: "SIGINT graceful shutdown", implements_requirements: [] }
+```
+
+The `implements_requirements` field per code lists the FR-NNN id(s)
+that *mandate* this exit code's existence or define its semantics. The
+validator enforces FR-NNN format on any value present. Codes without
+a mandating FR (generic success, generic error, POSIX signals) use
+`implements_requirements: []`.
 
 ### 8. `interactive_mode`
 

@@ -64,9 +64,15 @@ themes:
     synthesis: true
     description: >
       The full list of surfaces (screens, modals, panels, CLI commands,
-      flow steps). Synthesized from PRD use_cases.core_workflows;
-      per-item drill-down to confirm each surface's id, type, and
-      trace back to PRD flows.
+      flow steps). Seeded from multiple PRD families: WKF-### workflows
+      (primary), FR-### features (often imply verbs/screens), ENT-### data
+      entities (often imply CRUD/list/detail surfaces), and JTB-### jobs
+      (orthogonal lens). Per-item drill-down assigns SCR-### ids and traces
+      back to the upstream PRD ids. A dynamic scope-completeness sweep
+      reflects on the draft inventory + every upstream family before the
+      list closes — this is the gate that catches surfaces implied by an
+      entity or feature but not by any explicit workflow (e.g. a
+      ProjectRegistry entity implies a `list` command).
 
   - id: component_library
     title: "Component Library"
@@ -311,8 +317,17 @@ questions:
   - theme: surface_inventory
     id: surfaces
     schema_path: surface_inventory
-    question: "Confirm or revise the surface inventory drawn from PRD flows."
-    hint: "Each PRD core_workflow must end up referenced by at least one surface (coverage check at validation)."
+    question: "Confirm or revise the surface inventory drawn from PRD."
+    hint: >
+      Candidates are seeded from WKF-### workflows, FR-### features
+      (verbs/screens), ENT-### entities (CRUD/list/detail surfaces), and
+      JTB-### jobs. Each accepted candidate is assigned the next SCR-NNN
+      and persisted in state.last_ids.SCR. After the per-item loop closes,
+      a scope-completeness sweep reflects on the draft list + every
+      upstream PRD family to surface surfaces likely missed (e.g. a
+      doctor/diagnostic command, a cross-project enumeration view).
+      Every WKF-### must end up referenced by at least one surface's
+      traces_workflows (coverage check at validation).
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -1009,10 +1024,19 @@ questions:
     importance: med
 
   - theme: per_surface_deepdive
-    id: traces_prd_flows
-    schema_path: surface.traces_prd_flows
-    question: "Which PRD core_workflows does this surface participate in?"
-    hint: "Drives the coverage check. At least one trace is expected for every surface that's part of an MVP workflow."
+    id: traces_workflows
+    schema_path: surface.traces_workflows
+    question: "Which PRD WKF-### workflows does this surface participate in?"
+    hint: >
+      List WKF-### ids only (e.g. "WKF-001"), not verbatim text. Drives the
+      coverage check. Empty list [] is allowed for non-flow surfaces
+      (chrome, settings, diagnostic helpers) — record a ux_warnings entry
+      via the writer when this happens so downstream agents know it's
+      intentional. The sibling fields `implements_requirements` (FR-###)
+      and `references_entities` (ENT-###) are inferred by the agent from
+      the surface's purpose + the deep-dive answers, presented in the
+      final-approval draft, and corrected by the user there — they are
+      not asked here to keep the interview tight.
     suggested_answers: []
     free_text_allowed: true
     required: true

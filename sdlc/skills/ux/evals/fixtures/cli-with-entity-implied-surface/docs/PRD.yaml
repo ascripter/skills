@@ -1,0 +1,79 @@
+# Minimal PRD fixture for sdlc-ux eval.
+# Three WKF workflows + one ENT entity whose description names a CLI verb
+# ("myapp list") that is NOT in any workflow — this is the sweep canary.
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "ev01ev01-ev01-ev01-ev01-ev01ev01ev01"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+problem_opportunity:
+  problem_statement: "Developers need a tiny CLI to manage local notes."
+  who_has_pain: ["solo developers", "tinkerers"]
+  current_workarounds: ["plain text files", "ad-hoc shell scripts"]
+
+users_personas:
+  primary_users:
+    - "PER-001: Solo developers comfortable with the terminal"
+  user_goals:
+    - "GOL-001: Capture a note quickly without leaving the shell"
+  user_frustrations:
+    - "PAN-001: Existing note apps require switching context"
+  expertise_level: intermediate
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Initialize a new notes project in the current directory"
+    - "WKF-002: Add a new note with a title and body"
+    - "WKF-003: Show a single note by id"
+  primary_jobs_to_be_done:
+    - "JTB-001: Capture a thought before it disappears"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: `myapp init` scaffolds a new notes directory with .notesdb"
+    - "FR-002: `myapp add <title> <body>` appends a Note to the local registry"
+    - "FR-003: `myapp show <id>` prints a single Note from the local registry"
+    - "FR-004: Notes are persisted in a small SQLite registry at .notesdb"
+  out_of_scope:
+    - "OOS-001: Web UI"
+
+technical_constraints:
+  primary_language: python
+  primary_language_confidence: confirmed
+  framework: ["typer", "rich"]
+  runtime_platform: cli
+  runtime_platform_confidence: confirmed
+  deployment_target: self_hosted
+
+product_identity:
+  name: "myapp"
+  slug: "myapp"
+  one_liner: "Tiny local CLI for personal notes."
+
+non_functional_requirements:
+  scalability: small
+  reliability: best_effort
+  accessibility: not_applicable_cli
+
+data_model:
+  # ENT-002's description names the `myapp list` CLI verb explicitly — this is
+  # the canary for the scope-completeness sweep. No WKF mentions cross-note
+  # listing, so without the sweep, `cmd-list` would not surface as a candidate.
+  key_entities:
+    - "ENT-001: Note — a single note with id, title, body, created_at"
+    - "ENT-002: NoteRegistry — index of all notes in the .notesdb (consumed by `myapp list` to enumerate notes; also read by `myapp show <id>` to resolve ids)"
+  data_ownership: user_owned
+  data_volume_estimate: kilobytes
+
+security_compliance:
+  auth_model: none
+  data_sensitivity: internal
+
+business_model:
+  monetization: open_source
+  license_type: mit

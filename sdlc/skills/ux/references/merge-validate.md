@@ -67,23 +67,38 @@ For `UX.yaml`:
 - `metadata.status`:
   - Set to `"complete"` only when:
     1. all required fields are filled,
-    2. the validator passes with `[OK]`,
-    3. every entry in `PRD.use_cases.core_workflows` is referenced by
-       at least one surface's `traces_prd_flows`.
+    2. the validator passes with `[OK]` (schema + ID-prefix format),
+    3. every WKF-NNN parsed from `PRD.use_cases.core_workflows` is
+       referenced by at least one surface's `traces_workflows`.
   - Set to `"draft"` on early EXIT, when any required field is null,
-    OR when any PRD flow is uncovered.
-- `ux_warnings`: informational notes — uncovered PRD flows, low-
-  confidence answers, merge conflicts, dropped optional themes
-  (the now/skip/todo gates).
+    OR when any PRD WKF-NNN is uncovered.
+- `metadata.changelog`: append-only. When running in update mode (an
+  existing UX.yaml is on disk), prepend ONE entry summarizing this
+  session's material changes in the format
+  `"<ux_version> (<YYYY-MM-DD>): <one-line summary>"`. Never rewrite
+  earlier entries; never reorder; never delete. On a brand-new write
+  (no existing UX.yaml), the changelog may be omitted entirely or
+  initialized with a single `"<ux_version> (<YYYY-MM-DD>): initial."`
+  entry — both are valid.
+- `ux_warnings`: informational notes, each prefixed with a writer-
+  managed `WRN-NNN:`. Used for uncovered PRD WKF-NNN, low-confidence
+  answers, merge conflicts, dropped optional themes (the now/skip/todo
+  gates), sweep candidates the user deferred, and any other note
+  downstream agents should see. The counter lives in
+  `state.last_ids.WRN` (or `state.last_ids_by_product[<slug>].WRN`
+  in monorepo mode).
 
 For each `UX__<surface_id>.yaml`:
 
 - Inline comments on top-level keys.
 - Updated metadata (`last_updated`, `session_id`).
+- `metadata.changelog`: same append-only rule as UX.yaml.
 - `metadata.status: complete` only when all required surface fields
-  are filled (`surface_id`, `surface_type`, `layout`,
-  `traces_prd_flows`) AND the user explicitly approved in theme 11
-  step e.
+  are filled (`id` = SCR-NNN, `surface_id`, `surface_type`, `layout`,
+  `traces_workflows` — may be `[]` for non-flow surfaces) AND the user
+  explicitly approved in theme 11 step e. The validator additionally
+  enforces SCR-NNN format on `id` and WKF/FR/ENT format on each ref
+  list.
 
 ## Running the validator
 
@@ -91,14 +106,23 @@ For each `UX__<surface_id>.yaml`:
 python "${CLAUDE_SKILL_DIR}/validate_schema.py" --path docs/UX.yaml
 ```
 
-The validator does three things in one pass:
+The validator does four things in one pass:
 
 1. Schema-validates `docs/UX.yaml`.
 2. Schema-validates every `docs/UX__*.yaml` sibling.
-3. Cross-reference check: every entry in
+3. ID-prefix format checks: `SCR-NNN` on every surface id (in both
+   `surface_inventory[].id` and per-surface top-level `id`); `WRN-NNN:
+   <message>` on every `ux_warnings` entry; `WKF-NNN` on values in
+   `traces_workflows`; `FR-NNN` on values in `implements_requirements`
+   and in `cli.exit_codes[<code>].implements_requirements`; `ENT-NNN`
+   on values in `references_entities`. Violations are warnings when
+   `status: draft`, errors when `status: complete`.
+4. Coverage check: every WKF-NNN id parsed from
    `PRD.use_cases.core_workflows` (read from `docs/PRD.yaml` directly,
    not from state) must be referenced by at least one surface yaml's
-   `traces_prd_flows`. Uncovered flows are surfaced in the output.
+   `traces_workflows`. Matching is by id only — verbatim text in PRD
+   may change freely without breaking the coverage. Uncovered ids are
+   surfaced in the output.
 
 Exit codes:
 
@@ -116,23 +140,27 @@ validator exits non-zero. Document this in CLAUDE.md if the user asks.
 
 ## Coverage-check details
 
-The coverage check reads `docs/PRD.yaml` and extracts
-`use_cases.core_workflows` (or, in monorepo mode, the union across
-products). For each flow string, it scans every surface yaml's
-`traces_prd_flows` list. A flow is **covered** when at least one
-surface lists it verbatim. Whitespace is stripped before comparison;
-case is preserved.
+The coverage check reads `docs/PRD.yaml` and extracts the WKF-NNN id
+prefix from each entry in `use_cases.core_workflows` (or, in monorepo
+mode, the union across products). PRD entries are of the form
+`"WKF-NNN: <description>"`; the leading id is extracted via regex. A
+WKF-NNN id is **covered** when it appears verbatim in at least one
+surface yaml's `traces_workflows` list. Matching is on the id only —
+the description text in PRD may change freely without breaking the
+trace.
 
 If `docs/PRD.yaml` is missing, the validator continues without the
-coverage check and prints `0 PRD core_workflow(s) discovered.` so the
-user knows it wasn't run.
+coverage check and prints `0 PRD WKF-NNN(s) discovered.` so the user
+knows it wasn't run.
 
-Any uncovered flow:
+Any uncovered WKF-NNN:
 
-1. Appears in the validator's output ("PRD core_workflow(s) with no
-   surface trace").
+1. Appears in the validator's output ("PRD WKF-NNN(s) with no surface
+   trace").
 2. Must be written to `UX.yaml.ux_warnings` by the agent during Phase 7
-   *before* validation runs (`"coverage: '<flow>' has no surface trace"`).
+   *before* validation runs, as a `WRN-NNN:` entry, e.g.
+   `"WRN-007: coverage: WKF-008 has no surface trace"`. The WRN-NNN is
+   assigned from `state.last_ids.WRN` (writer-managed counter).
 3. Forces `UX.yaml.metadata.status: draft`.
 
 ## CLAUDE.md pointer (Phase 8)
