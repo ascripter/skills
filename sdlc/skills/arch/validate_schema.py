@@ -1,6 +1,6 @@
 """Validate ARCH.yaml + every ARCH__*.yaml against the sdlc-arch schemas,
-and run four cross-checks: API-resource coverage, UX-surface coverage,
-DATA-store coverage, and edge endpoint integrity.
+and run the cross-check suite (coverage, edge integrity, container/system
+consistency, upstream traceability).
 
 Run from the project root:
 
@@ -12,17 +12,32 @@ Validates:
     1. docs/ARCH.yaml (or --path) — system architecture.
     2. Every docs/ARCH__*.yaml sibling — one per container.
     3. Required-field checks (status: complete gate).
-    4. Cross-checks:
+    4. ID-prefix formats (cross-skill conventions):
+       - WRN-NNN on every arch_warnings entry (system + each container).
+       - FR-NNN on every implements_requirements entry (containers +
+         components) and on non_container_features.
+       - WKF-NNN on every traces_prd_workflows entry (containers +
+         components).
+    5. Coverage cross-checks (block status: complete):
        - API-resource coverage: every API__*.yaml resource_id appears
          in some container's owns_api_resources.
        - UX-surface coverage: every UX__*.yaml data-bearing surface_id
          appears in some container's owns_ux_surfaces.
        - DATA-store coverage: every store id in
-         DATA-MODEL.yaml.persistence.*_stores appears in some
-         container's persistence.
+         DATA-MODEL.yaml.persistence.* appears in some container's
+         persistence.
+       - PRD feature coverage: every PRD must_have_features FR-NNN
+         appears in some container's implements_requirements OR in
+         ARCH.yaml.non_container_features. Skipped if PRD.yaml absent.
+    6. Edge + trace integrity (block status: complete):
        - Edge endpoint integrity: every edge's `from` / `to` is a valid
          container_id (system level) or component_id (container level),
          and external_edges' `to` resolves against the on-disk graph.
+       - Edge via_* resolution against API / DATA upstreams.
+       - Component traces (api/ux/data/operations) resolve upstream and
+         sit within the parent container's owns_*.
+       - implements_requirements / traces_prd_workflows resolve to PRD
+         FR-NNN / WKF-NNN ids; component features ⊆ parent container's.
 
 Exit codes:
     0 — schema valid; status='complete' (with all checks passing) or
@@ -37,6 +52,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from enum import Enum
 from pathlib import Path
@@ -233,6 +249,7 @@ class ArchMetadata(BaseModel):
     generated_by: str = "sdlc-arch"
     session_id: str
     status: Literal["draft", "complete"] = "draft"
+    changelog: Optional[List[str]] = None
 
 
 class ArchitecturePattern(_Base):
@@ -264,6 +281,8 @@ class Container(_Base):
     owns_api_resources: Optional[List[str]] = None
     owns_ux_surfaces: Optional[List[str]] = None
     persistence: Optional[List[str]] = None
+    implements_requirements: Optional[List[str]] = None  # FR-NNN
+    traces_prd_workflows: Optional[List[str]] = None      # WKF-NNN
     deployment_unit: Optional[DeploymentUnit] = None
     ownership: Optional[ContainerOwnership] = None
     external: bool = False
@@ -293,6 +312,7 @@ class Arch(BaseModel):
     identity_and_auth: Optional[IdentityAndAuth] = None
     containers: Optional[List[Container]] = None
     edges: Optional[List[Edge]] = None
+    non_container_features: Optional[List[str]] = None  # FR-NNN opt-out
     arch_warnings: List[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -320,6 +340,7 @@ class ContainerArtifactMetadata(BaseModel):
     generated_by: str = "sdlc-arch"
     session_id: str
     status: Literal["draft", "complete"] = "draft"
+    changelog: Optional[List[str]] = None
 
 
 class TechStack(_Base):
@@ -428,6 +449,8 @@ class Component(_Base):
     traces_api_operations: Optional[List[str]] = None
     traces_ux_surfaces: Optional[List[str]] = None
     traces_data_entities: Optional[List[str]] = None
+    implements_requirements: Optional[List[str]] = None  # FR-NNN
+    traces_prd_workflows: Optional[List[str]] = None      # WKF-NNN
     failure_modes: Optional[List[ComponentFailureMode]] = None
     acceptance_criteria: Optional[List[str]] = None
     status: Optional[ContainerStatus] = None
@@ -589,6 +612,70 @@ def check_container_required(
                 if _is_empty(getattr(comp, field, None)):
                     missing.append(f"{file_label}: components[{i}].{field}")
     return missing
+
+
+# =============================================================================
+# ID-prefix format checks (cross-skill conventions)
+# =============================================================================
+
+_FEATURE_ID_RE = re.compile(r"^FR-\d+", re.IGNORECASE)
+_WRN_RE = re.compile(r"^WRN-\d{3,}:\s+.+")
+_FR_PREFIX_RE = re.compile(r"^FR-\d{3,}$", re.IGNORECASE)
+_WKF_PREFIX_RE = re.compile(r"^WKF-\d{3,}$", re.IGNORECASE)
+
+
+def check_warning_ids(warnings: List[str], label: str) -> List[str]:
+    """Every *_warnings entry must match 'WRN-NNN: <message>'."""
+    errs: List[str] = []
+    for i, w in enumerate(warnings or []):
+        if not isinstance(w, str) or not _WRN_RE.match(w.strip()):
+            errs.append(
+                f"{label}[{i}]: '{w}' must start with 'WRN-NNN: ' "
+                f"(zero-padded 3-digit number)"
+            )
+    return errs
+
+
+def _check_id_prefix(values: object, regex: "re.Pattern[str]", path_label: str) -> List[str]:
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        return [f"{path_label}: expected a list, got {type(values).__name__}"]
+    errs: List[str] = []
+    for i, v in enumerate(values):
+        if not isinstance(v, str) or not regex.match(v.strip()):
+            errs.append(f"{path_label}[{i}]: '{v}' does not match expected ID format")
+    return errs
+
+
+def check_arch_id_formats(arch: Arch) -> List[str]:
+    """Enforce FR-NNN / WKF-NNN format on container PRD traces and the
+    top-level non_container_features opt-out list."""
+    errs: List[str] = []
+    errs.extend(_check_id_prefix(
+        arch.non_container_features, _FR_PREFIX_RE,
+        "non_container_features (expected FR-NNN)"))
+    for i, c in enumerate(arch.containers or []):
+        errs.extend(_check_id_prefix(
+            c.implements_requirements, _FR_PREFIX_RE,
+            f"containers[{i}]='{c.container_id}'.implements_requirements (expected FR-NNN)"))
+        errs.extend(_check_id_prefix(
+            c.traces_prd_workflows, _WKF_PREFIX_RE,
+            f"containers[{i}]='{c.container_id}'.traces_prd_workflows (expected WKF-NNN)"))
+    return errs
+
+
+def check_container_id_formats(container: ArchContainer, file_label: str) -> List[str]:
+    """Enforce FR-NNN / WKF-NNN format on per-component PRD traces."""
+    errs: List[str] = []
+    for i, comp in enumerate(container.components or []):
+        errs.extend(_check_id_prefix(
+            comp.implements_requirements, _FR_PREFIX_RE,
+            f"{file_label}: components[{i}]='{comp.component_id}'.implements_requirements (expected FR-NNN)"))
+        errs.extend(_check_id_prefix(
+            comp.traces_prd_workflows, _WKF_PREFIX_RE,
+            f"{file_label}: components[{i}]='{comp.component_id}'.traces_prd_workflows (expected WKF-NNN)"))
+    return errs
 
 
 # =============================================================================
@@ -768,6 +855,172 @@ def load_data_store_ids(data_path: Path) -> Optional[List[str]]:
             elif isinstance(s, str):
                 ids.append(s)
     return ids
+
+
+def load_prd_must_have_features(prd_path: Path) -> List[str]:
+    """Return FR-NNN prefixes from PRD.functional_requirements.must_have_features.
+
+    Each entry typically starts with 'FR-NNN: <description>'. Returns just the
+    normalized FR-NNN prefix. Honors monorepo mode (pulls from every product).
+    """
+    if not prd_path.exists():
+        return []
+    try:
+        raw = yaml.safe_load(prd_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return []
+    if not isinstance(raw, dict):
+        return []
+    features: List[str] = []
+    metadata = raw.get("metadata") or {}
+    monorepo = bool(metadata.get("monorepo")) if isinstance(metadata, dict) else False
+
+    def _pull(node: dict) -> None:
+        fr = node.get("functional_requirements") or {}
+        mhf = fr.get("must_have_features") if isinstance(fr, dict) else None
+        if isinstance(mhf, list):
+            for item in mhf:
+                m = _FEATURE_ID_RE.match(str(item).strip())
+                if m:
+                    features.append(m.group(0).upper())
+
+    if monorepo:
+        products = raw.get("products") or {}
+        if isinstance(products, dict):
+            for prod in products.values():
+                if isinstance(prod, dict):
+                    _pull(prod)
+    else:
+        _pull(raw)
+    return features
+
+
+def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
+    """Return the union of FR-NNN and WKF-NNN ids declared anywhere in PRD.
+
+    FR draws from must_have_features + nice_to_have_features; WKF from
+    use_cases.core_workflows. Used for the existence check on
+    implements_requirements / traces_prd_workflows. Honors monorepo mode.
+    """
+    fr: Set[str] = set()
+    wkf: Set[str] = set()
+    if not prd_path.exists():
+        return {"FR": fr, "WKF": wkf}
+    try:
+        raw = yaml.safe_load(prd_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return {"FR": fr, "WKF": wkf}
+    if not isinstance(raw, dict):
+        return {"FR": fr, "WKF": wkf}
+    metadata = raw.get("metadata") or {}
+    monorepo = bool(metadata.get("monorepo")) if isinstance(metadata, dict) else False
+
+    _fr_re = re.compile(r"^FR-\d+", re.IGNORECASE)
+    _wkf_re = re.compile(r"^WKF-\d+", re.IGNORECASE)
+
+    def _pull(node: dict) -> None:
+        freqs = node.get("functional_requirements") or {}
+        if isinstance(freqs, dict):
+            for key in ("must_have_features", "nice_to_have_features"):
+                for item in (freqs.get(key) or []):
+                    m = _fr_re.match(str(item).strip())
+                    if m:
+                        fr.add(m.group(0).upper())
+        ucs = node.get("use_cases") or {}
+        if isinstance(ucs, dict):
+            for item in (ucs.get("core_workflows") or []):
+                m = _wkf_re.match(str(item).strip())
+                if m:
+                    wkf.add(m.group(0).upper())
+
+    if monorepo:
+        products = raw.get("products") or {}
+        if isinstance(products, dict):
+            for prod in products.values():
+                if isinstance(prod, dict):
+                    _pull(prod)
+    else:
+        _pull(raw)
+    return {"FR": fr, "WKF": wkf}
+
+
+def check_feature_coverage(arch: Arch, prd_features: List[str]) -> List[str]:
+    """Return PRD must-have FR-NNN ids implemented by no container and not
+    opted out via non_container_features."""
+    if not prd_features:
+        return []
+    implemented: Set[str] = set()
+    for c in arch.containers or []:
+        for f in c.implements_requirements or []:
+            m = _FEATURE_ID_RE.match(str(f).strip())
+            if m:
+                implemented.add(m.group(0).upper())
+    for f in arch.non_container_features or []:
+        m = _FEATURE_ID_RE.match(str(f).strip())
+        if m:
+            implemented.add(m.group(0).upper())
+    return [f for f in prd_features if f.upper() not in implemented]
+
+
+def check_prd_trace_existence(
+    arch: Arch,
+    containers_on_disk: Dict[str, "ArchContainer"],
+    prd_fr_ids: Set[str],
+    prd_wkf_ids: Set[str],
+) -> List[str]:
+    """implements_requirements / traces_prd_workflows must resolve to PRD ids.
+
+    Also enforces component containment: a component's implements_requirements
+    must be a subset of its parent container's implements_requirements.
+    Skipped silently when the PRD declares no ids (file absent / pre-convention).
+    """
+    errs: List[str] = []
+    container_implements: Dict[str, Set[str]] = {}
+    for c in arch.containers or []:
+        cset: Set[str] = set()
+        for f in c.implements_requirements or []:
+            fu = str(f).strip().upper()
+            cset.add(fu)
+            if prd_fr_ids and fu not in prd_fr_ids:
+                errs.append(
+                    f"containers[id='{c.container_id}'].implements_requirements "
+                    f"contains '{f}' which is not an FR-NNN id in PRD.yaml"
+                )
+        for w in c.traces_prd_workflows or []:
+            wu = str(w).strip().upper()
+            if prd_wkf_ids and wu not in prd_wkf_ids:
+                errs.append(
+                    f"containers[id='{c.container_id}'].traces_prd_workflows "
+                    f"contains '{w}' which is not a WKF-NNN id in PRD.yaml"
+                )
+        container_implements[c.container_id] = cset
+
+    for fname, container in containers_on_disk.items():
+        parent_fr = container_implements.get(container.container_id, set())
+        for i, comp in enumerate(container.components or []):
+            for f in comp.implements_requirements or []:
+                fu = str(f).strip().upper()
+                if prd_fr_ids and fu not in prd_fr_ids:
+                    errs.append(
+                        f"{fname}: components[{i}]='{comp.component_id}'."
+                        f"implements_requirements contains '{f}' which is not "
+                        f"an FR-NNN id in PRD.yaml"
+                    )
+                elif parent_fr and fu not in parent_fr:
+                    errs.append(
+                        f"{fname}: components[{i}]='{comp.component_id}'."
+                        f"implements_requirements contains '{f}' which is not in "
+                        f"the parent container's implements_requirements"
+                    )
+            for w in comp.traces_prd_workflows or []:
+                wu = str(w).strip().upper()
+                if prd_wkf_ids and wu not in prd_wkf_ids:
+                    errs.append(
+                        f"{fname}: components[{i}]='{comp.component_id}'."
+                        f"traces_prd_workflows contains '{w}' which is not a "
+                        f"WKF-NNN id in PRD.yaml"
+                    )
+    return errs
 
 
 def check_api_coverage(arch: Arch, api_ids: List[str]) -> List[str]:
@@ -1267,6 +1520,9 @@ def validate_all(arch_path: Path) -> int:
     ux_ids_set: Set[str] = set(ux_ids)
     store_ids = load_data_store_ids(docs_dir / "DATA-MODEL.yaml")
     data_entity_names = load_data_entity_names(docs_dir / "DATA-MODEL.yaml")
+    prd_path = docs_dir / "PRD.yaml"
+    prd_features = load_prd_must_have_features(prd_path)
+    prd_families = load_prd_id_families(prd_path)
 
     # 4) Required fields (with new external-container exemption)
     missing_arch = check_arch_required(arch)
@@ -1276,6 +1532,8 @@ def validate_all(arch_path: Path) -> int:
     component_trace_errs: List[str] = []
     container_via_errs: List[str] = []
     deployment_compat_errs: List[str] = []
+    warning_id_errs: List[str] = check_warning_ids(arch.arch_warnings, "arch_warnings")
+    id_format_errs: List[str] = check_arch_id_formats(arch)
     for name, c in containers.items():
         missing_containers.extend(check_container_required(c, name, arch))
         edge_errs_containers.extend(check_container_edges(c, name, arch))
@@ -1295,11 +1553,17 @@ def validate_all(arch_path: Path) -> int:
             )
         )
         deployment_compat_errs.extend(check_deployment_compatibility(c, arch, name))
+        warning_id_errs.extend(check_warning_ids(c.arch_warnings, f"{name}: arch_warnings"))
+        id_format_errs.extend(check_container_id_formats(c, name))
 
     # 5) Cross-checks (system level)
     uncovered_api = check_api_coverage(arch, api_ids)
     uncovered_ux = check_ux_coverage(arch, ux_ids)
     uncovered_stores = check_store_coverage(arch, store_ids)
+    uncovered_features = check_feature_coverage(arch, prd_features)
+    prd_trace_errs = check_prd_trace_existence(
+        arch, containers, prd_families["FR"], prd_families["WKF"]
+    )
     bad_arch_edges = check_arch_edges(arch)
     arch_via_errs = check_edge_via_fields_arch(
         arch, api_ids_set, api_channel_ids, data_entity_names
@@ -1310,6 +1574,15 @@ def validate_all(arch_path: Path) -> int:
 
     status = arch.metadata.status
     n_containers = len(containers)
+
+    # New convention-driven problem categories (printed via a dedicated
+    # helper so the legacy _print_problems signature stays stable).
+    extra_problems: List[Tuple[str, List[str]]] = [
+        ("arch_warnings / container warnings not in WRN-NNN format", warning_id_errs),
+        ("PRD trace ID-format error(s) (expected FR-NNN / WKF-NNN)", id_format_errs),
+        ("PRD must-have FR-NNN feature(s) implemented by no container", uncovered_features),
+        ("implements_requirements / traces_prd_workflows resolution error(s)", prd_trace_errs),
+    ]
 
     # 6) Reporting — hard problems force draft / block complete.
     # Warnings (external_warnings, upstream_warnings) are surfaced but do
@@ -1328,6 +1601,7 @@ def validate_all(arch_path: Path) -> int:
         or arch_via_errs
         or deployment_compat_errs
         or file_path_errs
+        or any(items for _, items in extra_problems)
     )
 
     if status == "complete" and problems:
@@ -1348,6 +1622,7 @@ def validate_all(arch_path: Path) -> int:
             file_path_errs,
             store_ids,
         )
+        _print_extra_problems(extra_problems)
         _print_warnings(external_warnings, upstream_warnings)
         return 1
 
@@ -1356,12 +1631,16 @@ def validate_all(arch_path: Path) -> int:
             f"{len(store_ids)} DATA store(s) all bound" if store_ids is not None
             else "DATA-MODEL.yaml missing — store-coverage skipped"
         )
+        feat_note = (
+            f"{len(prd_features)} PRD FR-NNN feature(s) all implemented"
+            if prd_features else "PRD.yaml missing — feature-coverage skipped"
+        )
         print(
             f"[OK] ARCH.yaml is valid and complete ({arch_path}); "
             f"{n_containers} container file(s); "
             f"{len(api_ids)} API resource(s) all owned; "
             f"{len(ux_ids)} data-bearing UX surface(s) all owned; "
-            f"{store_note}; edges resolve."
+            f"{store_note}; {feat_note}; edges resolve."
         )
         _print_warnings(external_warnings, upstream_warnings)
         return 0
@@ -1395,6 +1674,7 @@ def validate_all(arch_path: Path) -> int:
             file_path_errs,
             store_ids,
         )
+        _print_extra_problems(extra_problems)
     else:
         print(
             "\nAll required fields filled, coverage complete, edges resolve. "
@@ -1484,6 +1764,16 @@ def _print_problems(
         print(f"{len(file_path_errs)} container file_path integrity error(s):")
         for b in file_path_errs:
             print(f"  - {b}")
+
+
+def _print_extra_problems(extra: List[Tuple[str, List[str]]]) -> None:
+    """Print convention-driven problem categories (WRN format, PRD traces,
+    feature coverage). Kept separate from the legacy _print_problems()."""
+    for title, items in extra:
+        if items:
+            print(f"\n{len(items)} {title}:")
+            for it in items:
+                print(f"  - {it}")
 
 
 def _print_warnings(external_warnings: List[str], upstream_warnings: List[str]) -> None:

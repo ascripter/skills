@@ -174,7 +174,58 @@ Persist the confirmed list to
 ```
 
 After Phase 3 confirmation, Phase 6's `container_inventory` theme walks
-the *confirmed* list per-item (critical state machine).
+the *confirmed* list per-item (critical state machine). During that
+per-item drill-down, record the FR-NNN that seeded the container (Pass 4)
+into the container's `implements_requirements` — this is what makes an
+operational container (scheduler/worker, no API resource) traceable.
+
+## Scope-completeness sweep (synthesis theme)
+
+`container_inventory` is a `critical synthesis: true` theme. The
+container list is the single most consequential scope decision in the
+whole architecture — a missed container cascades into every downstream
+skill. So **after the per-item loop closes, before the inventory is
+finalized, run a dynamic scope-completeness sweep** (canonical spec:
+`sdlc/skills/prd/references/importance-flows.md` →
+"The `critical` flow → Step e — dynamic scope-completeness sweep").
+
+Reflect, in order, on:
+
+1. **The draft container list itself** — are two candidates really one
+   container? Is one candidate secretly two (e.g. a "backend" that both
+   serves an API and runs a nightly job)?
+2. **Every upstream ID family**, not just the most direct one:
+   - **PRD `FR-NNN` must-have features** — is every must-have feature
+     implemented by some container in the list? An FR with no home is
+     the loudest signal of a missing container (esp. operational ones).
+     This is the same set the Phase 7 feature-coverage check enforces —
+     surfacing it here is cheaper than failing validation later.
+   - **PRD `WKF-NNN` workflows** — does any workflow span a step that no
+     container performs (e.g. an async "send digest email" step)?
+   - **PRD `ENT-NNN` / DATA entities + `persistence.*` stores** — is
+     every store bound to a container? A store with no owner is a
+     missing data-store container.
+   - **API resources + `events.channels`** — every resource needs a
+     backend owner; every event channel needs at least one publisher and
+     one subscriber container.
+   - **UX `SCR-NNN` surfaces** — every data-bearing surface needs a
+     frontend owner.
+3. **Project-type heuristics** — CLI tool, SaaS web app, library, data
+   pipeline, browser extension: each implies a characteristic container
+   set (e.g. a pipeline implies ingest + transform + sink stages).
+
+Surface the concrete missed **candidate containers** — not category
+labels — via **one multi-select `AskUserQuestion`** ("I may have missed
+these — which are real containers?"). Caps: at most **2 sweep passes**;
+defer anything still unresolved to an `arch_warnings` `WRN-NNN` entry;
+honour the **anti-padding rule** — surface zero candidates rather than
+manufacture filler. Accepted candidates re-enter the per-item state
+machine before the list is finalized.
+
+**Skip the sweep at your peril** — it's the main defence against the
+synthesis-stage gap where an FR-NNN literally naming an operational
+verb ("nightly cleanup", "send invoices") never became a container
+because Phase 3 only seeded from the most-direct upstream signal.
 
 ## Edge cases
 

@@ -1,0 +1,64 @@
+# 16 — Happy path exercising the cross-skill conventions:
+#   * metadata.changelog
+#   * WRN-NNN arch_warnings
+#   * implements_requirements (FR-NNN) covering every PRD must-have
+#   * non_container_features opt-out
+#   * traces_prd_workflows (WKF-NNN)
+# FR-001 implemented by `app`; FR-002 implemented by `cleanup-job`.
+# Expectation: validator exits 0 with [OK].
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-05-26T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "16161616-aaaa-1616-1616-161616161616"
+  status: "complete"
+  changelog:
+    - "1.1 (2026-05-26): Added PRD feature traces and changelog."
+    - "1.0 (2026-05-26): Initial spec produced by sdlc-arch."
+
+architecture_pattern:
+  pattern: modular_monolith
+  pattern_confidence: confirmed
+  rationale: "Small team; one deployable plus a scheduled cleanup job."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "Serves task CRUD."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "FR-001"
+    traces_prd_workflows:
+      - "WKF-001"
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: "docs/ARCH__app.yaml"
+  - container_id: cleanup-job
+    archetype: scheduler
+    purpose: "Nightly purge of stale tasks."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "FR-002"
+    traces_prd_workflows:
+      - "WKF-002"
+    deployment_unit: scheduled_job
+    external: false
+    status: confirmed
+
+edges: []
+
+non_container_features: []
+
+arch_warnings:
+  - "WRN-001: ownership.team left unset for solo project."

@@ -132,7 +132,40 @@ Persist the confirmed list to
 
 After Phase 3 confirmation, Phase 6's `component_inventory` and
 `per_component_deepdive` themes walk the confirmed list per-item
-(critical state machines).
+(critical state machines). During `per_component_deepdive`, set each
+component's `implements_requirements` to the FR-NNN it realizes — this
+MUST be a subset of the parent container's `implements_requirements`
+(the validator enforces containment), so draw only from the features the
+container itself claims.
+
+## Scope-completeness sweep (synthesis theme)
+
+`component_inventory` is a `critical synthesis: true` theme. After the
+per-item loop closes, run a dynamic scope-completeness sweep (canonical
+spec: `sdlc/skills/prd/references/importance-flows.md`). Reflect on:
+
+1. **The draft component list** — are layers missing (controller without
+   a service, repository without a client)? Is one component doing two
+   jobs?
+2. **Every upstream signal the container owns**:
+   - **owned API resources / operations** — does every owned
+     `resource_id` (and key `operation_id`) have a component that
+     implements it?
+   - **owned UX surfaces** — does every owned `surface_id` have a view
+     component?
+   - **persistence bindings** — does every store the container binds to
+     have a client/repository component?
+   - **the container's `implements_requirements` (FR-NNN)** — is every
+     feature the container claims realized by at least one component?
+     An FR with no component is a missing component.
+   - **the container's `subscribes_to` / `publishes` edges** (from
+     `ARCH.yaml`) — each needs an event-handler / publisher component.
+3. **Archetype heuristics** — cross-cutting plumbing (config-loader,
+   error-handler, observability-bootstrap) that's easy to forget.
+
+Surface concrete missed **candidate components** via **one multi-select
+`AskUserQuestion`**. Caps: at most **2 sweep passes**; defer leftovers
+to a `WRN-NNN` `arch_warnings` entry; honour the **anti-padding rule**.
 
 ## Edge cases
 

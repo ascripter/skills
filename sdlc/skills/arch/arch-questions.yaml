@@ -39,6 +39,19 @@
 #                                       `per_component_deepdive`, and
 #                                       `internal_and_external_edges`.
 #
+# Theme-level key:
+#   synthesis: true    — the theme produces a scope-defining list synthesized
+#                        from upstream artifacts. After the per-item loop
+#                        closes, the agent runs a dynamic scope-completeness
+#                        sweep that reflects on the draft list + ALL upstream
+#                        ID families + project-type heuristics, surfaces
+#                        concrete missed candidates via one multi-select
+#                        AskUserQuestion (cap 2 passes, anti-padding, defer
+#                        leftovers to a WRN-NNN warning). Marked on
+#                        `container_inventory` (system) and
+#                        `component_inventory` (container). Canonical spec:
+#                        sdlc/skills/prd/references/importance-flows.md.
+#
 # Theme order below is the canonical interview order for each mode.
 # =============================================================================
 
@@ -60,6 +73,11 @@ themes:
     mode: system
     title: "Container Inventory"
     required: true
+    synthesis: true   # scope-defining list synthesized from ALL upstream ID
+                      # families (PRD FR/WKF/ENT, UX surfaces, DATA stores,
+                      # API resources/channels). Runs the scope-completeness
+                      # sweep after the per-item loop — see
+                      # references/container-discovery.md.
     description: "The canonical set of independently runnable/deployable units."
 
   - id: cross_container_edges
@@ -115,6 +133,11 @@ themes:
     mode: container
     title: "Component Inventory"
     required: true
+    synthesis: true   # scope-defining list synthesized from the container's
+                      # owned API resources + UX surfaces + persistence
+                      # bindings + archetype scaffold + the FR-NNN/WKF-NNN it
+                      # implements. Runs the scope-completeness sweep after the
+                      # per-item loop — see references/component-discovery.md.
     description: "Internal decomposition. Seeded from API resources + UX surfaces + archetype."
 
   - id: per_component_deepdive
@@ -322,6 +345,37 @@ questions:
     required: true
     confidence_field: false
     importance: critical
+
+  - theme: container_inventory
+    id: implements_requirements
+    schema_path: container.implements_requirements
+    question: "Which PRD must-have features (FR-NNN) does this container deliver?"
+    hint: >
+      Reference PRD must_have_features by stable FR-NNN id (never verbatim
+      text). EVERY PRD must-have FR-NNN must be claimed by some container (or
+      listed in non_container_features) — this is the feature-coverage check.
+      Operational containers (scheduler/worker) seeded from an FR keyword in
+      Phase 3 record that FR here; it's the only place those API-less features
+      become traceable. Validated for FR-NNN format + existence in PRD.yaml.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: container_inventory
+    id: traces_prd_workflows
+    schema_path: container.traces_prd_workflows
+    question: "Which PRD core workflows (WKF-NNN) does this container participate in?"
+    hint: >
+      Reference PRD core_workflows by stable WKF-NNN id. Optional, but helps
+      downstream `test` scaffold workflow-level integration tests. Validated
+      for WKF-NNN format + existence in PRD.yaml.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
 
   - theme: container_inventory
     id: deployment_unit
@@ -880,6 +934,33 @@ questions:
     required: false
     confidence_field: false
     importance: high
+
+  - theme: per_component_deepdive
+    id: implements_requirements
+    schema_path: component.implements_requirements
+    question: "Which PRD must-have features (FR-NNN) does this component implement?"
+    hint: >
+      Reference FR-NNN by stable id. Must be a SUBSET of the parent
+      container's implements_requirements (a component can't implement a
+      feature its container doesn't own). Validated for FR-NNN format,
+      existence in PRD.yaml, and parent containment. Empty for plumbing
+      components (config-loader, serializer, etc.).
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: per_component_deepdive
+    id: traces_prd_workflows
+    schema_path: component.traces_prd_workflows
+    question: "Which PRD core workflows (WKF-NNN) does this component participate in?"
+    hint: "Reference WKF-NNN by stable id. Validated for format + existence in PRD.yaml. Optional."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
 
   - theme: per_component_deepdive
     id: failure_modes

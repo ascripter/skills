@@ -1,0 +1,64 @@
+{
+  "skill_name": "sdlc-arch",
+  "evals": [
+    {
+      "id": 1,
+      "name": "web-app-with-digest-job",
+      "prompt": "Run sdlc-arch in SYSTEM mode (/sdlc:arch) against the complete docs/ chain in this project (PRD.yaml, UX.yaml + UX__*.yaml, DATA-MODEL.yaml, API.yaml + API__*.yaml — all status: complete). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; skip optional themes at the gate. Then write docs/ARCH.yaml and run validate_schema.py. The product is a small web task tracker. KEY CANARIES: (1) FR-005 ('automatically send the weekly digest email') is a MUST-HAVE with NO API resource and NO UX surface — it is opted into API non_api_features — so you must infer a scheduler/worker container and record FR-005 in its implements_requirements (the PRD feature-coverage check HARD-fails if FR-005 is owned by nobody). (2) PRD.conventions.nfr_propagation says auth_model: jwt -> token_strategy must be jwt and an identity-provider container should be proposed. (3) Every PRD must-have FR-001..FR-005 must end up in some container's implements_requirements or in non_container_features; FR-004 (digest settings) is served by the digest-settings API resource. Do NOT enumerate edges from scratch — derive them.",
+      "expected_output": "docs/ARCH.yaml with a chosen architecture_pattern + rationale; identity_and_auth.token_strategy == 'jwt' and an identity-provider container; a backend container owning the tasks, comments and digest-settings API resources; a frontend container owning the four UX surfaces (task-list, task-detail, comments-panel, digest-settings by surface_id); a postgres store bound to some container's persistence; AND a scheduler/worker container whose implements_requirements contains FR-005. Every PRD must-have FR-001..FR-005 appears in some container's implements_requirements OR in non_container_features. Every implements_requirements entry is FR-NNN format; every traces_prd_workflows entry is WKF-NNN; every arch_warnings entry (if any) starts with WRN-NNN. metadata.changelog has >= 1 entry. validate_schema.py exits 0 with [OK] and status complete (coverage, feature-coverage, edge integrity, ID formats all pass).",
+      "files": [
+        "evals/fixtures/web-app-with-digest-job/docs/PRD.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__task-list.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__task-detail.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__comments-panel.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__digest-settings.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/DATA-MODEL.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API__tasks.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API__comments.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API__digest-settings.yaml"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "container-mode-component-traces",
+      "prompt": "Run sdlc-arch in CONTAINER mode for the `backend-api` container (equivalent to `/sdlc:arch backend-api`). The project already has a complete, validator-clean docs/ARCH.yaml plus the full upstream chain (PRD.yaml, UX.yaml + UX__*.yaml, DATA-MODEL.yaml, API.yaml + API__*.yaml — all status: complete). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; skip optional themes at the gate. Decompose `backend-api` into components, derive its internal + external edges (do NOT enumerate from scratch), then write docs/ARCH__backend-api.yaml and run validate_schema.py until it validates. KEY CANARIES: (1) backend-api owns the tasks/comments/digest-settings API resources and implements FR-001..FR-004 — it does NOT implement FR-005 (that belongs to digest-worker). Every component's implements_requirements MUST be a SUBSET of the parent container's {FR-001, FR-002, FR-003, FR-004}; the validator HARD-fails if any component claims an FR (e.g. FR-005) the parent does not own. (2) Every component's traces_api_resources must be a subset of backend-api's owns_api_resources {tasks, comments, digest-settings}. (3) Container mode must update docs/ARCH.yaml.containers[backend-api].file_path to point at the new file but otherwise must NOT touch ARCH.yaml. (4) The container artifact carries metadata.changelog and any arch_warnings use WRN-NNN.",
+      "expected_output": "docs/ARCH__backend-api.yaml with a non-empty component inventory; each component has component_id + archetype + purpose; every component's implements_requirements (if any) is a subset of {FR-001..FR-004} and every traces_api_resources entry is a subset of {tasks, comments, digest-settings}; no component implements FR-005. All implements_requirements entries are FR-NNN; all traces_prd_workflows are WKF-NNN; all arch_warnings (if any) start with WRN-NNN; metadata.changelog has >= 1 entry. docs/ARCH.yaml.containers[backend-api].file_path now points at docs/ARCH__backend-api.yaml. validate_schema.py exits 0 with [OK] and status complete (component trace integrity + parent-subset checks pass).",
+      "files": [
+        "evals/fixtures/web-app-with-digest-job/docs/PRD.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__task-list.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__task-detail.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__comments-panel.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__digest-settings.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/DATA-MODEL.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API__tasks.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API__comments.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API__digest-settings.yaml",
+        "evals/fixtures/web-app-container-mode/docs/ARCH.yaml"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "edge-rederivation",
+      "prompt": "Run sdlc-arch in EDGE-REDERIVATION mode at the system level (equivalent to `/sdlc:arch -d`). The project has a complete docs/ARCH.yaml whose container inventory is finished but whose `edges` list is EMPTY, plus the full upstream chain (PRD/UX/DATA/API, all status: complete). Re-derive the cross-container typed edge graph from API.yaml + DATA-MODEL.yaml + UX.yaml — do NOT re-run the interview and do NOT modify the container inventory or metadata.status. Present/apply the derived edges, write docs/ARCH.yaml (edges + last_updated only), optionally write a derivation report, then run validate_schema.py. KEY CANARIES: (1) The five containers (web-frontend, backend-api, digest-worker, primary-postgres, identity-provider) must be left exactly as-is — no additions, removals, or renames. (2) The derived edges must include: web-frontend -> backend-api (calls, one per owned API resource: tasks, comments, digest-settings), backend-api -> primary-postgres (reads and/or writes), backend-api -> identity-provider (calls, JWT validation), and digest-worker -> primary-postgres (reads and/or writes). (3) Every edge endpoint resolves to an existing container and every via_resource_id / via_entity resolves to an upstream id. (4) metadata.status stays 'complete' (edge-only writes never change status).",
+      "expected_output": "docs/ARCH.yaml with a now-populated edges list containing at least: 3 web-frontend->backend-api calls keyed by via_resource_id tasks/comments/digest-settings, >=1 backend-api->primary-postgres reads/writes edge, 1 backend-api->identity-provider calls edge, and >=1 digest-worker->primary-postgres reads/writes edge. The container inventory (5 containers, same container_ids) is unchanged. metadata.status remains 'complete'. Every edge `to`/`from` resolves to an existing container and every via_* resolves to an upstream artifact id. validate_schema.py exits 0 with [OK] (edge endpoint + via_* integrity pass).",
+      "files": [
+        "evals/fixtures/web-app-with-digest-job/docs/PRD.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__task-list.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__task-detail.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__comments-panel.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/UX__digest-settings.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/DATA-MODEL.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API__tasks.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API__comments.yaml",
+        "evals/fixtures/web-app-with-digest-job/docs/API__digest-settings.yaml",
+        "evals/fixtures/web-app-edge-rederive/docs/ARCH.yaml"
+      ]
+    }
+  ]
+}

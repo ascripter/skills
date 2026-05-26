@@ -88,11 +88,26 @@ State writes happen after **every approved item** — not at the end of the
 list. If the user EXITs mid-list, the items already approved are kept; the
 in-progress item is restored on resume.
 
-## Synthesis themes (edge derivation)
+## Synthesis themes
 
-`cross_container_edges` and `internal_and_external_edges` are *synthesis*
-themes — the agent generates a candidate list, presents it as a diff,
-and the user confirms or edits.
+Two distinct kinds of synthesis theme exist in arch:
+
+1. **Scope-defining inventories** — `container_inventory` (system) and
+   `component_inventory` (container) carry `synthesis: true` in
+   `arch-questions.yaml`. They run the full `critical` per-item state
+   machine AND, after the per-item loop closes, a **scope-completeness
+   sweep** that draws on every upstream ID family to catch missed
+   items. See `references/container-discovery.md` /
+   `references/component-discovery.md` for the per-theme sweep spec, and
+   `sdlc/skills/prd/references/importance-flows.md` for the canonical
+   procedure (anti-padding rule, 2-pass cap, defer-to-`WRN-NNN`).
+2. **Edge derivation** — `cross_container_edges` and
+   `internal_and_external_edges` generate a candidate edge list,
+   present it as a diff, and the user confirms or edits. These do NOT
+   run the scope sweep (edges are derived from the already-finalized
+   node set, not a scope decision).
+
+### Edge derivation
 
 The presentation format is:
 

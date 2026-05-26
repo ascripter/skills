@@ -1,0 +1,37 @@
+# 15 — PRD declares FR-001 + FR-002 but only FR-001 is implemented by a
+# container and FR-002 is NOT listed in non_container_features.
+# Expectation: validator exits 1 (feature-coverage failure).
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-05-26T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "15151515-aaaa-1515-1515-151515151515"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Feature-coverage failure test."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "Implements task creation but nothing schedules cleanup."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "FR-001"        # FR-002 is left unimplemented -> coverage failure
+    deployment_unit: container
+    external: false
+    status: confirmed
+
+edges: []
+
+arch_warnings: []

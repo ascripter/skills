@@ -72,6 +72,11 @@ This validates:
    - **DATA-store coverage** — every store in
      `DATA-MODEL.yaml.persistence.*` appears in some container's
      `persistence`.
+   - **PRD feature coverage** — every PRD `must_have_features` FR-NNN
+     appears in some container's `implements_requirements` OR in
+     `ARCH.yaml.non_container_features`. Skipped when `docs/PRD.yaml` is
+     absent. This catches operational features (scheduler/worker work
+     with no API resource) that would otherwise be untraceable.
    - **Edge endpoint integrity** — every `edges[].from / to` (system)
      and `internal_edges[].from / to` / `external_edges[].from / to`
      (container) resolves to an existing node.
@@ -107,13 +112,29 @@ This validates:
    - `traces_ux_surfaces`     ⊆ parent container's `owns_ux_surfaces`
    - `traces_data_entities`   ⊆ entity names in `DATA-MODEL.yaml`
 
-10. Three container-vs-system consistency checks (unchanged):
+10. Three container-vs-system consistency checks:
 
     - `api_surface` resource_ids ⊆ parent `owns_api_resources`.
     - `ux_surface` surface_ids ⊆ parent `owns_ux_surfaces`.
     - `persistence_bindings` store_ids ⊆ parent `persistence`.
 
-11. Upstream-status awareness (warning only, never blocks): the
+11. ID-prefix formats (cross-skill conventions; failure forces draft):
+
+    - `WRN-NNN` on every `arch_warnings` entry (system + each container),
+      matching `^WRN-\d{3,}:\s+.+`.
+    - `FR-NNN` on every `implements_requirements` entry (containers +
+      components) and on `non_container_features`.
+    - `WKF-NNN` on every `traces_prd_workflows` entry.
+
+12. PRD trace integrity (failure forces draft; skipped when PRD declares
+    no such family):
+
+    - every `implements_requirements` (FR-NNN) resolves to a PRD FR id;
+    - every `traces_prd_workflows` (WKF-NNN) resolves to a PRD WKF id;
+    - a component's `implements_requirements` ⊆ its parent container's
+      `implements_requirements`.
+
+13. Upstream-status awareness (warning only, never blocks): the
     validator peeks at `metadata.status` of each upstream artifact
     (PRD, UX, DATA-MODEL, API) and prints a warning if any is not
     `complete`. This catches the case where someone hand-edits
@@ -134,8 +155,12 @@ This validates:
 - `complete` — set only when:
   - all required fields filled;
   - validator returns `[OK]`;
-  - all four cross-checks pass (zero uncovered, zero unresolved edges);
-  - all three container-vs-system consistency checks pass.
+  - all coverage checks pass (API / UX / DATA-store / PRD-feature — zero
+    uncovered);
+  - all edge + trace integrity checks pass (zero unresolved edges, all
+    component traces resolve, all PRD traces resolve);
+  - all container-vs-system consistency checks pass;
+  - all ID-prefix formats are valid (WRN/FR/WKF).
 - `draft` — set on early EXIT, on any missing required field, or on
   any failing check.
 

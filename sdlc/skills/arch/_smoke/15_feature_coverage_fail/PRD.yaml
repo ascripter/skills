@@ -1,0 +1,18 @@
+# Minimal PRD stub for the arch feature-coverage cross-check.
+# Only the fields the arch validator reads are populated.
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-26T12:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "15151515-1515-1515-1515-151515151515"
+  monorepo: false
+  status: "complete"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Create a task in under 3 seconds."
+    - "FR-002: Run a nightly cleanup of stale tasks."
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Capture a task from the dashboard."

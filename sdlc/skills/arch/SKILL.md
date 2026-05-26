@@ -155,6 +155,19 @@ If any validator exits non-zero, or any artifact has `metadata.status !=
 complete`, **stop**. Print a clear message naming the offending file and
 the upstream skill the user should run.
 
+**Read `PRD.conventions` (if present).** The PRD may carry a binding
+`conventions` block. Honour it before writing anything:
+
+- `conventions.artifact_ids` — tells you which ID families exist and
+  what each prefix means. Consult it before emitting or referencing any
+  `FR-NNN` / `WKF-NNN` / `WRN-NNN`; never invent an id in an upstream
+  family, never renumber one.
+- `conventions.nfr_propagation` (or similar) — may map specific NFR
+  fields to the downstream decisions they must drive. If it names
+  arch-level decisions (pattern choice, scaling, deployment shape),
+  treat those mappings as inputs to Phase 4, not as free choices.
+- Any other bucket whose `binding: true` — surface it and respect it.
+
 **Monorepo handling (v1.0):** if `PRD.metadata.monorepo: true` AND
 `PRD.products` is non-empty, the skill stops and warns that
 multi-product mode is deferred to a future version. The user may
@@ -209,7 +222,13 @@ Source candidates, in priority order:
 
 Present the draft. Each `⚠ inferred` candidate gets its own AskUserQuestion
 call. Persist confirmations to `state.sessions[system].defined_containers`.
-See `references/container-discovery.md` for the full algorithm.
+Record the `FR-NNN` that seeded each operational candidate (Pass 4) so it
+becomes the container's `implements_requirements` in Phase 6 — this is the
+only place an API-less feature (e.g. a nightly job) becomes traceable.
+`container_inventory` is a `critical synthesis: true` theme: after the
+per-item loop closes in Phase 6, run the **scope-completeness sweep**
+(seed from ALL upstream ID families). See
+`references/container-discovery.md` for the full algorithm + the sweep.
 
 **Container mode — component inventory:**
 
@@ -229,8 +248,9 @@ Source candidates, in priority order:
    `⚠ inferred`.
 
 Present the draft as in system mode. Persist to
-`state.sessions[container|<id>].defined_components`. See
-`references/component-discovery.md`.
+`state.sessions[container|<id>].defined_components`. `component_inventory`
+is also a `critical synthesis: true` theme — run the scope-completeness
+sweep after the per-item loop. See `references/component-discovery.md`.
 
 ### Phase 4 — Structural questions
 
@@ -288,10 +308,15 @@ mode.
 1. `architecture_pattern` — `high` (asked in Phase 4 as a structural scalar;
    theme adds rationale + tradeoff_notes + ai_builder_notes).
 2. `identity_and_auth` — `high` (same).
-3. `container_inventory` — `critical` per item. For each container: archetype,
-   purpose, `owns_api_resources`, `owns_ux_surfaces`, `persistence`,
-   `deployment_unit`, ownership, change_cadence. Each container's status
-   walks `defined → draft → confirmed`.
+3. `container_inventory` — `critical` per item, `synthesis: true`. For each
+   container: archetype, purpose, `owns_api_resources`, `owns_ux_surfaces`,
+   `persistence`, `implements_requirements` (FR-NNN), `traces_prd_workflows`
+   (WKF-NNN), `deployment_unit`, ownership, change_cadence. Each container's
+   status walks `defined → draft → confirmed`. After the per-item loop,
+   run the scope-completeness sweep (see `references/container-discovery.md`).
+   Every PRD must-have `FR-NNN` must end up in some container's
+   `implements_requirements` or in `non_container_features` — Phase 7's
+   feature-coverage check enforces this.
 4. `cross_container_edges` — `critical` synthesis. The agent derives the edge
    graph from API + DATA + UX (see `references/edge-derivation.md`), then
    presents it for confirmation/edit. **The user is never asked to enumerate
@@ -309,12 +334,17 @@ mode.
 5. `ownership` — `med` (team, change_cadence, on_call_rotation).
 6. `failure_modes` — `high` per item.
 7. `security_concerns` — `med`.
-8. `component_inventory` — `critical` per item.
+8. `component_inventory` — `critical` per item, `synthesis: true`. Run the
+   scope-completeness sweep after the per-item loop (see
+   `references/component-discovery.md`).
 9. `per_component_deepdive` — `critical` per component. Mirrors
    `sdlc:api`'s `per_resource_deepdive`: for each component, an interview
    fills `component_id`, `archetype`, `purpose`, `responsibilities`,
-   `inputs`, `outputs`, `failure_modes`, and `traces_api_resources` /
-   `traces_ux_surfaces` / `traces_data_entities` where applicable.
+   `inputs`, `outputs`, `failure_modes`, `traces_api_resources` /
+   `traces_ux_surfaces` / `traces_data_entities`, and
+   `implements_requirements` (FR-NNN) / `traces_prd_workflows` (WKF-NNN)
+   where applicable. A component's `implements_requirements` must be a
+   subset of its parent container's.
 10. `internal_and_external_edges` — `critical` synthesis (see
     `references/edge-derivation.md`).
 
@@ -353,9 +383,9 @@ python "${CLAUDE_SKILL_DIR}/validate_schema.py" --path docs/ARCH.yaml
 
 The validator validates `docs/ARCH.yaml` plus every sibling
 `docs/ARCH__*.yaml` and runs the cross-check suite below (all enabled
-in both modes). Coverage and trace failures force `metadata.status:
-draft`; the upstream-status and external-container checks emit warnings
-only.
+in both modes). Coverage, trace, and ID-format failures force
+`metadata.status: draft`; the upstream-status and external-container
+checks emit warnings only.
 
 **Coverage** (block complete):
 
@@ -366,6 +396,17 @@ only.
 3. **DATA-store coverage** — every primary/secondary store in
    `DATA-MODEL.yaml.persistence.*` appears in some container's
    `persistence`.
+4. **PRD feature coverage** — every PRD `must_have_features` `FR-NNN`
+   appears in some container's `implements_requirements` OR in
+   `non_container_features`. Skipped if `docs/PRD.yaml` is absent.
+
+**ID-prefix formats** (block complete):
+
+- `WRN-NNN` on every `arch_warnings` entry (system + each container).
+- `FR-NNN` on every `implements_requirements` + `non_container_features`.
+- `WKF-NNN` on every `traces_prd_workflows`.
+- PRD-trace existence: every `FR-NNN` / `WKF-NNN` resolves to a PRD id;
+  a component's `implements_requirements` ⊆ its parent container's.
 
 **Edge integrity** (block complete):
 
@@ -408,7 +449,8 @@ rules → see `references/merge-validate.md`.
 Set `metadata.status`:
 
 - `"complete"` — only when all required fields are filled, the validator
-  passes with `[OK]`, AND all four cross-checks pass.
+  passes with `[OK]`, AND every cross-check passes (coverage, edge/trace
+  integrity, container/system consistency, ID-prefix formats).
 - `"draft"` — on early EXIT, when any required field is null, or when
   any cross-check fails.
 
@@ -475,7 +517,7 @@ file. Each invocation reads or writes one entry under `sessions:`:
 
 ```yaml
 session_file_version: "1"
-skill_version: "1.0"
+skill_version: "1.1"
 last_updated: <iso8601>
 
 sessions:
@@ -486,6 +528,10 @@ sessions:
     status: in_progress         # in_progress | complete | aborted
     mode: system
     pre_fill_confirmed: false
+    last_ids: {}                # writer-managed counters for families this
+                                # sub-session emits, e.g. {WRN: 2}. Increment,
+                                # format as <PREFIX>-{:03d}, then persist.
+                                # ARCH.yaml's arch_warnings own this WRN space.
     completed_themes: []
     skipped_themes: []
     todo_themes: []
@@ -505,6 +551,7 @@ sessions:
     mode: container
     container_id: backend-api
     pre_fill_confirmed: false
+    last_ids: {}                # this container file's arch_warnings WRN space
     completed_themes: []
     skipped_themes: []
     todo_themes: []
@@ -529,6 +576,18 @@ Rules:
   untouched.
 - On Phase 8 completion: set the active sub-session's `status: complete`;
   keep the file.
+- **Warning IDs (`WRN-NNN`):** every `arch_warnings` entry (in `ARCH.yaml`
+  and in each `ARCH__<container>.yaml`) is formatted `"WRN-NNN: <message>"`.
+  The counter is writer-managed in the active sub-session's
+  `last_ids.WRN`. There is no interview question for warnings — append them
+  at write time (uncovered items, `todo` gates, low-confidence notes) and
+  bump the counter. **Reconcile on resume:** if the on-disk file already
+  contains a higher `WRN-NNN` than `last_ids.WRN`, sync the counter to
+  `max(on_disk, state)` before appending the next warning, so EXIT/resume
+  never produces gaps or duplicates.
+- **`metadata.changelog`** is append-only, most-recent first; add one line
+  per write (`"<version> (<YYYY-MM-DD>): <summary>"`). The validator only
+  type-checks it.
 - The validator ignores this file — it validates only `docs/ARCH.yaml`
   and the sibling per-container yamls.
 
@@ -598,5 +657,5 @@ The architecture interview can be long. Keep it humane:
 | `ok` | Batch-accept all `✓ found` pre-fills in the current theme, OR accept the Phase 3 inventory as-is. |
 | `now` | Run the proposed optional theme (gate question). |
 | `skip` | Skip the proposed optional theme (gate question). |
-| `todo` | Defer the proposed optional theme; logs it to `arch_warnings`. |
+| `todo` | Defer the proposed optional theme; logs a `WRN-NNN` entry to `arch_warnings`. |
 | `confirm all` | Accept all derived edges in an edge-confirmation diff. |

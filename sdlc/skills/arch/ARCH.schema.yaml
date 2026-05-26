@@ -21,11 +21,17 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  arch_version: "1.0"                      # REQUIRED — schema version string
+  arch_version: "1.1"                      # REQUIRED — schema version string
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-arch                  # REQUIRED — always this literal
   session_id: <uuid4>                      # REQUIRED — links to state file
   status: draft | complete                 # REQUIRED — see §metadata.status in CLAUDE.md
+  changelog:                               # OPTIONAL — append-only, most-recent first.
+    # Each entry: "<arch_version> (<YYYY-MM-DD>): <one-line summary>".
+    # The validator type-checks Optional[List[str]] only — it does NOT
+    # enforce per-entry format (manual edits are expected here).
+    - "1.1 (2026-05-26): Manual review pass. <one-line summary>."
+    - "1.0 (2026-05-26): Initial spec produced by sdlc-arch."
 
 # ---------------------------------------------------------------------------
 # architecture_pattern — the system's top-level architectural style.
@@ -88,6 +94,22 @@ containers:                                # REQUIRED — non-empty
                                            #            for backend-only containers.
     persistence:                           # REQUIRED — list of DATA store ids; empty
       - primary-postgres                   #            for non-stateful containers.
+    implements_requirements:               # OPTIONAL but strongly recommended — the
+      - FR-001                             #            PRD must-have features (FR-NNN)
+      - FR-014                             #            this container delivers. Validated
+                                           #            for FR-NNN format + existence in
+                                           #            PRD.yaml. Drives the PRD
+                                           #            feature-coverage check (every PRD
+                                           #            must-have FR-NNN must appear here
+                                           #            on some container, or in
+                                           #            non_container_features). This is
+                                           #            the ONLY place operational
+                                           #            containers (scheduler/worker) with
+                                           #            no API resource record which
+                                           #            feature they exist for.
+    traces_prd_workflows:                  # OPTIONAL — PRD core_workflows (WKF-NNN) this
+      - WKF-003                            #            container participates in. Validated
+                                           #            for WKF-NNN format + existence.
     deployment_unit:                       # REQUIRED — one of:
       # long_running_service | scheduled_job | batch_job | static_asset |
       # serverless_function | container | external_managed
@@ -157,13 +179,29 @@ edges:                                     # REQUIRED key (may be `[]`)
                                            #            backend-api writes primary-postgres")
 
 # ---------------------------------------------------------------------------
+# non_container_features — FR-NNN must-have features deliberately NOT owned by
+# any buildable container (delivered by a third-party/external service, or
+# explicitly deferred). This is the escape hatch for the PRD feature-coverage
+# check — a must-have FR-NNN must appear EITHER in some container's
+# implements_requirements OR here. Validated for FR-NNN format. Keep it short
+# and justify each entry in a sibling arch_warnings note.
+# ---------------------------------------------------------------------------
+non_container_features:                    # OPTIONAL — list of FR-NNN ids
+  - FR-022                                 #            (e.g. delivered by external IdP)
+
+# ---------------------------------------------------------------------------
 # arch_warnings — non-fatal issues surfaced during interview or validation.
 # Populated by the validator's cross-checks (uncovered resources/surfaces/
 # stores) and by the user marking themes as `todo`.
+#
+# Every entry uses the universal WRN-NNN family: "WRN-NNN: <message>" with a
+# zero-padded 3-digit number. The counter is writer-managed (state.last_ids.WRN
+# per sub-session — see SKILL.md). The validator enforces the format
+# `^WRN-\d{3,}:\s+.+` on every entry; malformed entries block status: complete.
 # ---------------------------------------------------------------------------
-arch_warnings:                             # OPTIONAL — list of short strings
-  - "Uncovered API resource: payments"
-  - "TODO: address theme cross_container_edges"
+arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..." strings
+  - "WRN-001: Uncovered API resource: payments"
+  - "WRN-002: TODO: address theme cross_container_edges"
 
 # =============================================================================
 # Required cross-checks (validate_schema.py)
@@ -178,18 +216,30 @@ arch_warnings:                             # OPTIONAL — list of short strings
 #    overlay}.
 # 3. DATA-store coverage — every store in DATA-MODEL.persistence appears
 #    in some container's persistence.
-# 4. Edge endpoint integrity — every edges[].from and edges[].to is a valid
+# 4. PRD feature coverage — every PRD must_have_features FR-NNN appears in
+#    some container's implements_requirements OR in non_container_features.
+#    Skipped when PRD.yaml is absent. Blocks status: complete.
+# 5. Edge endpoint integrity — every edges[].from and edges[].to is a valid
 #    container_id.
-# 5. Edge via_resource_id (when set) resolves to an API__*.yaml resource_id.
-# 6. Edge via_channel_id (when set) resolves to API.yaml events.channels[].channel_id.
-# 7. Edge via_entity (when set) resolves to a DATA-MODEL.yaml entity name.
-# 8. file_path integrity — every containers[].file_path that is set points
+# 6. Edge via_resource_id (when set) resolves to an API__*.yaml resource_id.
+# 7. Edge via_channel_id (when set) resolves to API.yaml events.channels[].channel_id.
+# 8. Edge via_entity (when set) resolves to a DATA-MODEL.yaml entity name.
+# 9. file_path integrity — every containers[].file_path that is set points
 #    to a file that exists on disk; every sibling docs/ARCH__*.yaml is
 #    referenced by some container's file_path.
-# 9. Upstream metadata.status warning — if any of PRD/UX/DATA/API has
-#    metadata.status != "complete", emit a warning (not a fail); a downstream
-#    agent reading ARCH should know it was built on a partial chain.
+# 10. ID-prefix formats — WRN-NNN on every arch_warnings entry; FR-NNN on
+#     every implements_requirements entry and on non_container_features;
+#     WKF-NNN on every traces_prd_workflows entry. Malformed ids block
+#     status: complete.
+# 11. PRD trace existence — every implements_requirements (FR-NNN) and
+#     traces_prd_workflows (WKF-NNN) resolves to an id declared in PRD.yaml.
+#     Skipped when PRD.yaml declares no such family.
+# 12. Upstream metadata.status warning — if any of PRD/UX/DATA/API has
+#     metadata.status != "complete", emit a warning (not a fail); a downstream
+#     agent reading ARCH should know it was built on a partial chain.
 #
-# Container-vs-system consistency (see ARCH__CONTAINER.schema.yaml for
-# checks 10–13 — owns/api/ux/persistence containment plus component traces).
+# Container-vs-system consistency (see ARCH__CONTAINER.schema.yaml for the
+# remaining checks — owns/api/ux/persistence containment, component traces,
+# component implements_requirements ⊆ parent container's, deployment
+# compatibility, and the external-container file warning).
 # =============================================================================

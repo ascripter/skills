@@ -19,11 +19,15 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  arch_container_version: "1.0"            # REQUIRED
+  arch_container_version: "1.1"            # REQUIRED
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-arch                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
   status: draft | complete                 # REQUIRED
+  changelog:                               # OPTIONAL — append-only, most-recent first.
+    # Each entry: "<arch_container_version> (<YYYY-MM-DD>): <one-line summary>".
+    # Validator type-checks Optional[List[str]] only.
+    - "1.0 (2026-05-26): Initial container deep-dive."
 
 # ---------------------------------------------------------------------------
 # Identity — must match the parent ARCH.yaml entry verbatim.
@@ -205,6 +209,17 @@ components:                                # REQUIRED — non-empty
       - User                               #            (PascalCase) this component
                                            #            reads/writes. Validated against
                                            #            DATA-MODEL.yaml.entities.
+    implements_requirements:               # OPTIONAL — PRD must-have features (FR-NNN)
+      - FR-001                             #            this component implements.
+                                           #            Validated for FR-NNN format,
+                                           #            existence in PRD.yaml, AND
+                                           #            containment: must be a subset of
+                                           #            the parent container's
+                                           #            implements_requirements.
+    traces_prd_workflows:                  # OPTIONAL — PRD core_workflows (WKF-NNN) this
+      - WKF-003                            #            component participates in.
+                                           #            Validated for WKF-NNN format +
+                                           #            existence in PRD.yaml.
     failure_modes:                         # OPTIONAL — structured per item, same shape
                                            #            as container-level failure_modes.
                                            #            Backwards-compatible: a bare
@@ -267,10 +282,12 @@ external_edges:                            # OPTIONAL
     note: <string>                         # OPTIONAL
 
 # ---------------------------------------------------------------------------
-# arch_warnings — non-fatal issues for THIS container.
+# arch_warnings — non-fatal issues for THIS container. Universal WRN-NNN
+# family: "WRN-NNN: <message>". Counter is writer-managed per sub-session
+# (state.last_ids.WRN). Validator enforces `^WRN-\d{3,}:\s+.+`.
 # ---------------------------------------------------------------------------
-arch_warnings:                             # OPTIONAL — list of short strings
-  - "TODO: address theme observability"
+arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..." strings
+  - "WRN-001: TODO: address theme observability"
 
 # =============================================================================
 # Required cross-checks (run by validate_schema.py on every write)
@@ -286,7 +303,7 @@ arch_warnings:                             # OPTIONAL — list of short strings
 # 13. external_edges resolve — every external_edges[].to that references
 #     "<container_id>" or "<container_id>/<component_id>" must resolve
 #     against the on-disk ARCH.yaml / ARCH__<container>.yaml graph.
-# 14. Component trace integrity (NEW) — for every component:
+# 14. Component trace integrity — for every component:
 #       * traces_api_resources   ⊆ resource_ids in docs/API__*.yaml
 #       * traces_api_operations  ⊆ operation_ids in docs/API__*.yaml endpoints
 #       * traces_ux_surfaces     ⊆ surface_ids in docs/UX__*.yaml
@@ -295,15 +312,20 @@ arch_warnings:                             # OPTIONAL — list of short strings
 #       * traces_api_resources   ⊆ parent container's owns_api_resources
 #       * traces_ux_surfaces     ⊆ parent container's owns_ux_surfaces
 #     Cross-check failures force `metadata.status: draft`.
-# 15. Edge via_* resolution (NEW) — for every edge with a via_* field set:
+# 15. Edge via_* resolution — for every edge with a via_* field set:
 #       * via_resource_id  → must resolve to a resource_id in API__*.yaml
 #       * via_operation_id → must resolve to an operation_id in API__*.yaml
 #       * via_channel_id   → must resolve to API.events.channels[].channel_id
 #       * via_entity       → must resolve to a DATA-MODEL entity name
-# 16. Deployment shape compatibility (NEW) — `deployment.shape` must be
+# 16. Deployment shape compatibility — `deployment.shape` must be
 #     compatible with the parent container's `deployment_unit` per the map
 #     in the `deployment:` block above.
-# 17. External container has no ARCH__*.yaml (NEW) — if the parent container
+# 17. External container has no ARCH__*.yaml — if the parent container
 #     has `external: true`, this file should not exist; if it does, the
 #     validator emits a warning (not a fail).
+# 18. Component PRD-trace integrity — for every component:
+#       * implements_requirements  → FR-NNN format + exists in PRD.yaml AND
+#         ⊆ the parent container's implements_requirements.
+#       * traces_prd_workflows     → WKF-NNN format + exists in PRD.yaml.
+# 19. WRN-NNN format — every arch_warnings entry matches `^WRN-\d{3,}:\s+.+`.
 # =============================================================================

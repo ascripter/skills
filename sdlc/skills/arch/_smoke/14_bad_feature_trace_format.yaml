@@ -1,0 +1,38 @@
+# 14 — container.implements_requirements uses the legacy "F-NNN" format
+# instead of the canonical "FR-NNN". Expectation: validator exits 1.
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-05-26T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "14141414-1414-1414-1414-141414141414"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "FR-NNN trace format test."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "Main application monolith."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "F-001"          # legacy prefix -> error (expected FR-NNN)
+    traces_prd_workflows:
+      - "WKF-1"          # not zero-padded -> error (expected WKF-NNN)
+    deployment_unit: container
+    external: false
+    status: confirmed
+
+edges: []
+
+arch_warnings: []
