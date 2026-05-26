@@ -840,7 +840,10 @@ def validate_all(ux_path: Path) -> int:
         id_errors.extend(check_surface_id_prefixes(surface, name))
 
     # 5) Coverage check (WKF-NNN id-based)
-    prd_path = Path("docs", "PRD.yaml")
+    # PRD.yaml is a sibling of UX.yaml in the same docs/ directory; resolve it
+    # relative to the artifact, not the CWD, so the validator works regardless
+    # of where it is invoked from (fixtures, staged eval test-projects, etc.).
+    prd_path = ux_path.parent / "PRD.yaml"
     prd_ids = load_prd_core_workflow_ids(prd_path)
     traced_ids = collect_traced_workflow_ids(surfaces)
     uncovered = check_coverage(prd_ids, traced_ids) if prd_ids else []
