@@ -8,7 +8,10 @@
       "expected_output": "A docs/DATA-MODEL.yaml with at least 2 entities — the PRD's Project plus the sweep-derived BranchSession-style entity. Every entity has traces_prd_features in FR-NNN format (validator-enforced), traces_ux_surfaces in SCR-NNN format (validator-enforced), and the sweep-derived entity has traces_prd_workflows containing 'WKF-003'. metadata.changelog is present and prepended with at least one entry of the form '<ver> (<YYYY-MM-DD>): ...'. All data_warnings entries (if any) start with WRN-NNN. validate_schema.py exits 0 and emits [OK] with status complete.",
       "files": [
         "evals/fixtures/workflow-implied-entity/docs/PRD.yaml",
-        "evals/fixtures/workflow-implied-entity/docs/UX.yaml"
+        "evals/fixtures/workflow-implied-entity/docs/UX.yaml",
+        "evals/fixtures/workflow-implied-entity/docs/UX__cmd-init.yaml",
+        "evals/fixtures/workflow-implied-entity/docs/UX__cmd-run.yaml",
+        "evals/fixtures/workflow-implied-entity/docs/UX__cmd-switch.yaml"
       ]
     },
     {
@@ -19,6 +22,9 @@
       "files": [
         "evals/fixtures/existing-data-update-flow/docs/PRD.yaml",
         "evals/fixtures/existing-data-update-flow/docs/UX.yaml",
+        "evals/fixtures/existing-data-update-flow/docs/UX__task-list.yaml",
+        "evals/fixtures/existing-data-update-flow/docs/UX__task-detail.yaml",
+        "evals/fixtures/existing-data-update-flow/docs/UX__task-comments.yaml",
         "evals/fixtures/existing-data-update-flow/docs/DATA-MODEL.yaml"
       ]
     }

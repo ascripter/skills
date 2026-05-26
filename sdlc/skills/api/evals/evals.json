@@ -4,11 +4,15 @@
     {
       "id": 1,
       "name": "rest-with-coverage-sweep",
-      "prompt": "Run sdlc-api against the docs/PRD.yaml, docs/UX.yaml, and docs/DATA-MODEL.yaml in this project. For every multiple-choice question, pick the recommended (position-1) option. For free-text questions, give a one-line plausible answer. Skip optional themes during the gate. The PRD declares 4 FR (FR-001..FR-004) + 3 WKF + DATA has 4 entities (Task, Comment, AuditLog, DigestRun). The UX has 4 SCR surfaces (SCR-001..SCR-004). Key canaries: FR-004 / WKF-003 (weekly digest email) is anchored on DigestRun but has NO UX surface, so the inventory should either propose a `digests` cross-cutting resource OR opt FR-004 into non_api_features; AuditLog has no FR trace so the agent should flag it as internal-only via api_warnings rather than creating a public resource for it; SCR-004 (settings) has no FR trace and no entity — surface coverage must either route it to an admin/settings resource or record a WRN deferral. Write API.yaml + per-resource yamls and validate.",
+      "prompt": "Run sdlc-api against the docs/PRD.yaml, docs/UX.yaml, and docs/DATA-MODEL.yaml in this project. For every multiple-choice question, pick the recommended (position-1) option. For free-text questions, give a one-line plausible answer. Skip optional themes during the gate. The PRD declares 4 FR (FR-001..FR-004) + 2 WKF (WKF-001, WKF-002) + DATA has 4 entities (Task, Comment, AuditLog, DigestRun). The UX has 4 SCR surfaces (SCR-001..SCR-004). Key canaries: FR-004 (weekly digest email) is a backend feature anchored on DigestRun with NO UX surface and NO core_workflow, so the inventory should either propose a `digests` cross-cutting resource OR opt FR-004 into non_api_features; AuditLog has no FR trace so the agent should flag it as internal-only via api_warnings rather than creating a public resource for it; SCR-004 (settings) has no FR trace and no entity — surface coverage must either route it to an admin/settings resource or record a WRN deferral. Write API.yaml + per-resource yamls and validate.",
       "expected_output": "A docs/API.yaml with api_kind: rest and a resource_inventory covering Task and Comment at minimum. Every endpoint in every docs/API__<resource>.yaml carries a stable `id: OPR-NNN` (validator-enforced). Every traces_prd_features entry uses FR-NNN format; every traces_ux_surfaces entry uses SCR-NNN format (never kebab slugs); any traces_prd_workflows entries use WKF-NNN format. FR-004 is EITHER traced by a resource (e.g. `digests`) OR listed in non_api_features. Every PRD FR-NNN ends up either traced or in non_api_features (feature-coverage passes). Every data-bearing SCR is traced by ≥1 resource (surface-coverage passes). Every primary_entity matches a DATA entity name (entity-link passes). api_warnings (if any) all start with WRN-NNN. metadata.changelog is initialized. validate_schema.py exits 0 with [OK] and status complete.",
       "files": [
         "evals/fixtures/rest-with-coverage-sweep/docs/PRD.yaml",
         "evals/fixtures/rest-with-coverage-sweep/docs/UX.yaml",
+        "evals/fixtures/rest-with-coverage-sweep/docs/UX__task-list.yaml",
+        "evals/fixtures/rest-with-coverage-sweep/docs/UX__task-detail.yaml",
+        "evals/fixtures/rest-with-coverage-sweep/docs/UX__comments-panel.yaml",
+        "evals/fixtures/rest-with-coverage-sweep/docs/UX__settings.yaml",
         "evals/fixtures/rest-with-coverage-sweep/docs/DATA-MODEL.yaml"
       ]
     },
@@ -20,6 +24,7 @@
       "files": [
         "evals/fixtures/api-kind-none/docs/PRD.yaml",
         "evals/fixtures/api-kind-none/docs/UX.yaml",
+        "evals/fixtures/api-kind-none/docs/UX__cmd-add.yaml",
         "evals/fixtures/api-kind-none/docs/DATA-MODEL.yaml"
       ]
     }
