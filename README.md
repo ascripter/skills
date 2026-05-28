@@ -9,7 +9,7 @@ Execute both commands from the command line:
 ## Skills
 All skills need to be explicitly invoked and will provide an interview mechanic that lets you define your software project step by step.
 
-All skills put their output into **`docs/`** (fixed; can't be configured currently).
+Execute the following skills in order within your project repo. All skills put their output into **`docs/`** in the repo root (fixed; can't be configured currently).
 
 1. **`/sdlc:prd`** → `PRD.yaml`
    
