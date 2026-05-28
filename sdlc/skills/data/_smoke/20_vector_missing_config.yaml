@@ -1,0 +1,29 @@
+# Invalid: vector paradigm with status:complete but NO vector_config block —
+# required for the vector paradigm. Should FAIL (exit 1, missing vector_config).
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-27T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "f11e0000-0000-0000-0000-000000000006"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  paradigm: vector
+  primary_store: qdrant
+
+entities:
+  Chunk:
+    description: "A text chunk."
+    fields:
+      text:
+        type: text
+        embedding: true
+    traces_prd_features: []
+    traces_ux_surfaces: []
+
+data_classification:
+  pii_fields: []

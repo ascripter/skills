@@ -5,6 +5,15 @@ signals. This phase is the most hallucination-prone in the whole skill,
 because entities are nouns and nouns appear in every requirement
 description. Read this before Phase 3.
 
+**Paradigm-independent.** Entity discovery (and the scope-completeness sweep)
+runs the same way regardless of the storage paradigm chosen in Phase 4 — the
+*domain model* is the same set of nouns whether they end up as SQL tables,
+documents, graph nodes, vector collections, or serialized Pydantic models. Only
+the per-entity *field shape* (filled in Phase 6) and the surrounding structural
+themes differ by paradigm. So discover the same entity list either way; just
+note that downstream you may call them "nodes" (graph) or "collections"
+(vector/document) when talking to the user, to match their mental model.
+
 ## Source priority
 
 1. **`PRD.data_model.key_entities`** — the user already named these. Each

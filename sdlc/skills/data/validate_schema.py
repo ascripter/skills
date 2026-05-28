@@ -8,15 +8,29 @@ Run from the project root:
     python sdlc/skills/data/validate_schema.py
     python sdlc/skills/data/validate_schema.py --path docs/DATA-MODEL.yaml
 
+Storage paradigm:
+    `persistence.paradigm` (relational | document | key_value | graph | vector |
+    file_native) is the discriminator that decides which theme blocks are
+    required and which cross-checks run. It defaults to `relational` when absent,
+    so DATA-MODEL.yaml files written before paradigms existed validate unchanged.
+
 Validates:
     1. docs/DATA-MODEL.yaml (or --path) — single-file data model.
     2. Cross-checks (hardness as marked):
-       - Required fields present: REQUIRED_PATHS + ENTITY_REQUIRED_PATHS.
-         Failure -> hard error in status:complete.
-       - Relationship integrity: every from_entity / to_entity / join_table
-         exists in `entities`. Failure -> hard error in status:complete.
-       - Field references: every entities.<E>.fields.<f>.references value
-         resolves to a real Entity.field. Failure -> hard error.
+       - Required fields present: paradigm-gated (required_paths_for +
+         entity_required_paths_for). Failure -> hard error in status:complete.
+         relational: id_strategy.scheme, relationships, indexes_and_queries,
+         integrity_and_constraints; document: id_strategy + indexes; graph:
+         edges; vector: vector_config; key_value: key_value_design; file_native:
+         identity_conventions. `primary_key` is required per-entity only for
+         relational/document.
+       - Relationship integrity (relational): from_entity / to_entity /
+         join_table exist in `entities`. Hard error in status:complete.
+       - Field references: entities.<E>.fields.<f>.references resolves. Hard.
+       - Paradigm structural integrity: edge endpoints (graph), composition
+         parent/child, cross_reference from/to, vector_config completeness,
+         identity_conventions.rules non-empty, key_value_design.key_patterns
+         non-empty + entity resolution. Hard error in status:complete.
        - Classification integrity: every Entity.field in pii_fields /
          regulated_fields / encrypted_at_rest resolves. Failure -> hard error.
        - Bounded-context partition: when bounded_contexts present, every
@@ -29,9 +43,9 @@ Validates:
          status:complete; warning (force draft) otherwise.
        - Feature coverage: every PRD must_have_features FR-NNN appears in some
          entity's traces_prd_features. Failure -> force draft (soft).
-       - Volume-vs-scale gate: if PRD data_volume_estimate in {terabytes,
-         petabytes}, scale_and_retention must be non-null. Failure -> force
-         draft (soft).
+       - Volume-vs-scale gate (relational/document/key_value): if PRD
+         data_volume_estimate in {terabytes, petabytes}, scale_and_retention
+         must be non-null. Failure -> force draft (soft).
 
 Exit codes:
     0 — schema valid; either status='complete' (with all required fields filled
@@ -81,14 +95,49 @@ class Confidence(str, Enum):
     assumption = "assumption"
 
 
+class Paradigm(str, Enum):
+    """Top-level storage paradigm — the discriminator that selects which
+    theme blocks are required and which cross-checks run. Absence defaults
+    to `relational` so pre-paradigm DATA-MODEL.yaml files validate unchanged."""
+
+    relational = "relational"
+    document = "document"
+    key_value = "key_value"
+    graph = "graph"
+    vector = "vector"
+    file_native = "file_native"
+
+
 class PrimaryStore(str, Enum):
+    # relational
     postgres = "postgres"
     mysql = "mysql"
     sqlite = "sqlite"
-    mongodb = "mongodb"
-    dynamodb = "dynamodb"
     sqlserver = "sqlserver"
     oracle = "oracle"
+    # document
+    mongodb = "mongodb"
+    firestore = "firestore"
+    couchbase = "couchbase"
+    # key-value (dynamodb straddles document/key-value)
+    dynamodb = "dynamodb"
+    redis = "redis"
+    etcd = "etcd"
+    # graph
+    neo4j = "neo4j"
+    arangodb = "arangodb"
+    neptune = "neptune"
+    janusgraph = "janusgraph"
+    # vector
+    pinecone = "pinecone"
+    qdrant = "qdrant"
+    weaviate = "weaviate"
+    milvus = "milvus"
+    chroma = "chroma"
+    pgvector = "pgvector"
+    lancedb = "lancedb"
+    # file-native (Pydantic models serialized to disk)
+    filesystem = "filesystem"
     other = "other"
 
 
@@ -281,6 +330,44 @@ class RetentionPolicy(str, Enum):
     anonymize = "anonymize"
 
 
+# --- paradigm-specific enums --------------------------------------------------
+
+
+class SerializationFormat(str, Enum):
+    yaml = "yaml"
+    json = "json"
+    toml = "toml"
+    other = "other"
+
+
+class CompositionKind(str, Enum):
+    embeds = "embeds"  # child serialized inline within the parent (document/file)
+    contains = "contains"  # parent owns child's lifecycle (1:N composition)
+    references = "references"  # parent points at child by id (no containment)
+
+
+class EdgeDirection(str, Enum):
+    directed = "directed"
+    undirected = "undirected"
+
+
+class DistanceMetric(str, Enum):
+    cosine = "cosine"
+    euclidean = "euclidean"
+    dot_product = "dot_product"
+    manhattan = "manhattan"
+
+
+class AnnIndexType(str, Enum):
+    hnsw = "hnsw"
+    ivf = "ivf"
+    ivf_flat = "ivf_flat"
+    ivf_pq = "ivf_pq"
+    flat = "flat"
+    diskann = "diskann"
+    other = "other"
+
+
 # =============================================================================
 # Models — keep nested theme models permissive (extra="allow") so the file can
 # carry forward-compat keys without breaking validation; reject enum values strictly.
@@ -295,6 +382,7 @@ class _Permissive(BaseModel):
 
 
 class FieldSpec(_Permissive):
+    # relational / document attributes
     type: Optional[FieldType] = None
     nullable: Optional[bool] = None
     primary_key: Optional[bool] = None
@@ -304,6 +392,13 @@ class FieldSpec(_Permissive):
     on_delete: Optional[OnDelete] = None
     check: Optional[str] = None
     comment: Optional[str] = None
+    # file-native attribute — a literal Python type expression, e.g.
+    # "Optional[list[FeatureSpec]]". Optionality is encoded in the type itself,
+    # not a `nullable:` flag. Carried alongside `description` instead of `type`.
+    pydantic_type: Optional[str] = None
+    description: Optional[str] = None
+    # vector attribute — marks a field as the source/holder of an embedding.
+    embedding: Optional[bool] = None
 
 
 class Entity(_Permissive):
@@ -313,6 +408,14 @@ class Entity(_Permissive):
     traces_prd_features: Optional[List[str]] = None
     traces_ux_surfaces: Optional[List[str]] = None
     traces_prd_workflows: Optional[List[str]] = None
+    # file-native: discriminator + Pydantic composition + on-disk serialization.
+    category: Optional[str] = None
+    composes: Optional[List[str]] = None
+    serialization: Optional[Any] = None
+    # graph: the node label (defaults to the entity key when omitted).
+    node_label: Optional[str] = None
+    # vector: which fields form the stored payload alongside the vector.
+    payload_fields: Optional[List[str]] = None
 
 
 class SecondaryStore(_Permissive):
@@ -322,9 +425,13 @@ class SecondaryStore(_Permissive):
 
 
 class Persistence(_Permissive):
+    paradigm: Optional[Paradigm] = None  # absent ⇒ treated as relational
+    paradigm_confidence: Optional[Confidence] = None
+    paradigm_rationale: Optional[str] = None
     primary_store: Optional[PrimaryStore] = None
     primary_store_confidence: Optional[Confidence] = None
     primary_store_rationale: Optional[str] = None
+    serialization_format: Optional[SerializationFormat] = None  # file_native
     polyglot: Optional[bool] = None
     secondary_stores: Optional[List[SecondaryStore]] = None
     secondary_stores_confidence: Optional[Confidence] = None
@@ -509,6 +616,110 @@ class ExternalDataSource(_Permissive):
 
 
 # -----------------------------------------------------------------------------
+# Paradigm-specific blocks. All optional at the model level; the per-paradigm
+# required-path table (REQUIRED_PATHS_BY_PARADIGM) decides which are mandatory.
+# -----------------------------------------------------------------------------
+
+
+class IdentityConventions(_Permissive):
+    """file_native (and any non-surrogate-key paradigm): how entity identity is
+    derived when there is no generated primary key. Replaces id_strategy."""
+
+    rules: Optional[List[str]] = None
+
+
+class CompositionItem(_Permissive):
+    parent: Optional[str] = None
+    child: Optional[str] = None
+    kind: Optional[CompositionKind] = None
+    comment: Optional[str] = None
+
+
+class CrossReference(_Permissive):
+    """file_native / document: a string-ID reference relation (e.g.
+    TestSpec.covers → FR-NNN), the input contract for referential-integrity
+    gates. `from_entity` must exist in `entities`; `to_entity` (when given)
+    must too. `references_family` names an upstream ID family (FR/ENT/…) when
+    the reference points outside the local entity set."""
+
+    from_entity: Optional[str] = None
+    field: Optional[str] = None
+    to_entity: Optional[str] = None
+    references_family: Optional[str] = None
+    gate: Optional[str] = None
+    comment: Optional[str] = None
+
+
+class SerializationEntry(_Permissive):
+    entity: Optional[str] = None
+    filename_pattern: Optional[str] = None
+    scope: Optional[str] = None  # per_stage | per_project | nested_in:<E> | runtime_only
+
+
+class SerializationConventions(_Permissive):
+    """file_native: where artifacts live on disk so the tree is human-readable."""
+
+    root_path: Optional[str] = None
+    format: Optional[SerializationFormat] = None
+    entries: Optional[List[SerializationEntry]] = None
+
+
+class Edge(_Permissive):
+    """graph: a first-class relationship. Unlike relational `relationships`,
+    edges carry their own properties and have no join table."""
+
+    type: Optional[str] = None
+    from_entity: Optional[str] = None
+    to_entity: Optional[str] = None
+    cardinality: Optional[Cardinality] = None
+    direction: Optional[EdgeDirection] = None
+    properties: Optional[Dict[str, Any]] = None
+    comment: Optional[str] = None
+
+
+class TraversalPattern(_Permissive):
+    description: Optional[str] = None
+    start_label: Optional[str] = None
+    pattern: Optional[str] = None  # e.g. "(:User)-[:FOLLOWS*1..3]->(:User)"
+
+
+class GraphConfig(_Permissive):
+    node_labels: Optional[List[str]] = None
+    traversal_patterns: Optional[List[TraversalPattern]] = None
+
+
+class VectorConfig(_Permissive):
+    """vector: the embedding + ANN-index configuration for the collection(s)."""
+
+    embedding_model: Optional[str] = None
+    dimensions: Optional[int] = None
+    distance_metric: Optional[DistanceMetric] = None
+    ann_index: Optional[AnnIndexType] = None
+    index_params: Optional[Dict[str, Any]] = None
+
+
+class KeyPattern(_Permissive):
+    entity: Optional[str] = None
+    key_template: Optional[str] = None  # e.g. "user#{user_id}#order#{order_id}"
+    partition_key: Optional[str] = None
+    sort_key: Optional[str] = None
+
+
+class SecondaryKeyIndex(_Permissive):
+    name: Optional[str] = None
+    partition_key: Optional[str] = None
+    sort_key: Optional[str] = None
+    projection: Optional[str] = None
+
+
+class KeyValueDesign(_Permissive):
+    """key_value: access-pattern-first key design (partition/sort keys, GSIs)."""
+
+    key_patterns: Optional[List[KeyPattern]] = None
+    secondary_indexes: Optional[List[SecondaryKeyIndex]] = None
+
+
+# -----------------------------------------------------------------------------
 # Top-level
 # -----------------------------------------------------------------------------
 
@@ -546,6 +757,15 @@ class DataModelProduct(_Permissive):
     search_and_analytics: Optional[SearchAndAnalytics] = None
     seed_and_fixtures: Optional[SeedAndFixtures] = None
     external_data_sources: Optional[List[ExternalDataSource]] = None
+    # paradigm-specific blocks
+    identity_conventions: Optional[IdentityConventions] = None
+    composition: Optional[List[CompositionItem]] = None
+    cross_references: Optional[List[CrossReference]] = None
+    serialization_conventions: Optional[SerializationConventions] = None
+    edges: Optional[List[Edge]] = None
+    graph_config: Optional[GraphConfig] = None
+    vector_config: Optional[VectorConfig] = None
+    key_value_design: Optional[KeyValueDesign] = None
 
 
 class DataModel(BaseModel):
@@ -575,6 +795,15 @@ class DataModel(BaseModel):
     search_and_analytics: Optional[SearchAndAnalytics] = None
     seed_and_fixtures: Optional[SeedAndFixtures] = None
     external_data_sources: Optional[List[ExternalDataSource]] = None
+    # paradigm-specific blocks
+    identity_conventions: Optional[IdentityConventions] = None
+    composition: Optional[List[CompositionItem]] = None
+    cross_references: Optional[List[CrossReference]] = None
+    serialization_conventions: Optional[SerializationConventions] = None
+    edges: Optional[List[Edge]] = None
+    graph_config: Optional[GraphConfig] = None
+    vector_config: Optional[VectorConfig] = None
+    key_value_design: Optional[KeyValueDesign] = None
 
     # Multi-product mode
     products: Optional[Dict[str, DataModelProduct]] = None
@@ -600,6 +829,14 @@ class DataModel(BaseModel):
             self.search_and_analytics,
             self.seed_and_fixtures,
             self.external_data_sources,
+            self.identity_conventions,
+            self.composition,
+            self.cross_references,
+            self.serialization_conventions,
+            self.edges,
+            self.graph_config,
+            self.vector_config,
+            self.key_value_design,
         ]
         any_single = any(t is not None for t in single_themes)
 
@@ -624,31 +861,68 @@ class DataModel(BaseModel):
 # Required-field check — only enforced when metadata.status == "complete"
 # =============================================================================
 
-# Paths required at top level (or under each product in monorepo mode).
-REQUIRED_PATHS: List[str] = [
+# Required fields are paradigm-gated. COMMON_REQUIRED_PATHS hold for every
+# paradigm; PARADIGM_REQUIRED_PATHS add the blocks that only make sense for one
+# storage shape. A DATA-MODEL.yaml with no `persistence.paradigm` defaults to
+# `relational`, so pre-paradigm files keep exactly their old required set.
+COMMON_REQUIRED_PATHS: List[str] = [
     "persistence.primary_store",
-    "id_strategy.scheme",
     "entities",
-    "relationships",
-    "indexes_and_queries.access_patterns",
-    "integrity_and_constraints.default_on_delete",
     "data_classification.pii_fields",
 ]
 
-# Per-entity required fields (checked inside each entry of `entities`).
-ENTITY_REQUIRED_PATHS: List[str] = [
-    "description",
-    "fields",
-    "primary_key",
-    "traces_prd_features",
-]
+PARADIGM_REQUIRED_PATHS: Dict[Paradigm, List[str]] = {
+    Paradigm.relational: [
+        "id_strategy.scheme",
+        "relationships",
+        "indexes_and_queries.access_patterns",
+        "integrity_and_constraints.default_on_delete",
+    ],
+    Paradigm.document: [
+        "id_strategy.scheme",
+        "indexes_and_queries.access_patterns",
+    ],
+    Paradigm.key_value: [
+        "key_value_design",
+    ],
+    Paradigm.graph: [
+        "edges",
+    ],
+    Paradigm.vector: [
+        "vector_config",
+    ],
+    Paradigm.file_native: [
+        "identity_conventions",
+    ],
+}
 
-# Paths where the key must be PRESENT (not None) but an empty list is allowed.
-# Matches the top-level pattern for `relationships`, `pii_fields`, and
-# `access_patterns`: the user has to explicitly answer the question, but
-# "I don't trace any FR-NNN feature" is a valid answer for purely-backend
-# entities like AuditLog. The feature-coverage cross-check enforces global
-# completeness across all entities.
+
+def required_paths_for(paradigm: Paradigm) -> List[str]:
+    return COMMON_REQUIRED_PATHS + PARADIGM_REQUIRED_PATHS.get(paradigm, [])
+
+
+# Paths where the key must be PRESENT (not None) but an empty list is allowed:
+# the agent has to explicitly answer ("no edges / no PII / no listed patterns"),
+# but an empty answer is valid. Feature-coverage is the real scope guard.
+PRESENT_ONLY_PATHS: set = {
+    "relationships",
+    "edges",
+    "data_classification.pii_fields",
+    "indexes_and_queries.access_patterns",
+}
+
+
+def entity_required_paths_for(paradigm: Paradigm) -> List[str]:
+    """Per-entity required fields. `primary_key` is meaningful only where the
+    paradigm has surrogate keys (relational, document); file_native derives
+    identity from path, graph/vector/key_value from their own key design."""
+    base = ["description", "fields", "traces_prd_features"]
+    if paradigm in (Paradigm.relational, Paradigm.document):
+        base.insert(2, "primary_key")
+    return base
+
+
+# Per-entity path where the key must be present (not None) but empty list is OK.
 ENTITY_PRESENT_ONLY_PATHS: set = {"traces_prd_features"}
 
 
@@ -675,45 +949,55 @@ def _is_empty(value: object) -> bool:
     return False
 
 
+def _paradigm_of(root: object) -> Paradigm:
+    """Read persistence.paradigm for a scope, defaulting to relational when
+    absent (so pre-paradigm files behave exactly as before)."""
+    persistence = _get_dotted(root, "persistence")
+    if persistence is None:
+        return Paradigm.relational
+    p = getattr(persistence, "paradigm", None)
+    if p is None:
+        return Paradigm.relational
+    if isinstance(p, Paradigm):
+        return p
+    try:
+        return Paradigm(p)
+    except ValueError:
+        return Paradigm.relational
+
+
 def check_required(dm: DataModel) -> List[str]:
     """Return a flat list of missing required field paths.
 
-    `entities` must be a non-empty dict. `relationships` only requires the key
-    to be present (empty list is allowed — no edges is a valid model).
-    `data_classification.pii_fields` only requires the key present too — an
-    empty list is the user saying "no PII fields", which is a valid answer.
+    The required set is paradigm-gated (see required_paths_for). `entities` must
+    be a non-empty dict for every paradigm. List-typed scope fields in
+    PRESENT_ONLY_PATHS (relationships, edges, pii_fields, access_patterns) only
+    require the key to be present — an explicit empty answer is valid. The
+    feature-coverage cross-check is the real "did you think about scope" guard.
     """
     missing: List[str] = []
 
     def _check(scope_label: str, root: object) -> None:
-        for path in REQUIRED_PATHS:
+        paradigm = _paradigm_of(root)
+        for path in required_paths_for(paradigm):
             val = _get_dotted(root, path)
             if path == "entities":
-                # Must be a non-empty dict.
                 if not isinstance(val, dict) or len(val) == 0:
                     missing.append(f"{scope_label}{path}")
                 continue
-            if path in (
-                "relationships",
-                "data_classification.pii_fields",
-                "indexes_and_queries.access_patterns",
-            ):
-                # Key must be present (not None); empty list is OK.
-                # An explicit "no edges / no PII / no listed patterns" answer
-                # is valid — the agent has thought about it and recorded it.
-                # The feature-coverage cross-check is the real "did you think
-                # about scope" guard.
+            if path in PRESENT_ONLY_PATHS:
                 if val is None:
                     missing.append(f"{scope_label}{path}")
                 continue
             if _is_empty(val):
                 missing.append(f"{scope_label}{path}")
 
-        # Per-entity required fields.
+        # Per-entity required fields (paradigm-gated).
         entities = _get_dotted(root, "entities")
         if isinstance(entities, dict):
+            entity_required = entity_required_paths_for(paradigm)
             for ename, entity in entities.items():
-                for ep in ENTITY_REQUIRED_PATHS:
+                for ep in entity_required:
                     val = _get_dotted(entity, ep)
                     if ep == "fields":
                         if not isinstance(val, dict) or len(val) == 0:
@@ -951,6 +1235,125 @@ def check_bounded_context_partition(root: object) -> List[str]:
     return errs
 
 
+def check_edge_integrity(root: object) -> List[str]:
+    """graph: every edge's from_entity and to_entity must exist in `entities`
+    (matched against the entity key or its node_label)."""
+    errs: List[str] = []
+    edges = _get_dotted(root, "edges")
+    if not isinstance(edges, list):
+        return errs
+    enames = set(_entity_names(root))
+    labels = set()
+    for ename in enames:
+        entity = (_get_dotted(root, "entities") or {}).get(ename)
+        labels.add(ename)
+        nl = getattr(entity, "node_label", None)
+        if nl:
+            labels.add(nl)
+    for i, edge in enumerate(edges):
+        fe = getattr(edge, "from_entity", None)
+        te = getattr(edge, "to_entity", None)
+        if fe and fe not in labels:
+            errs.append(f"edges[{i}].from_entity: '{fe}' not in entities/node_labels")
+        if te and te not in labels:
+            errs.append(f"edges[{i}].to_entity: '{te}' not in entities/node_labels")
+    return errs
+
+
+def check_composition_integrity(root: object) -> List[str]:
+    """document / file_native / graph: every composition parent and child must
+    exist as a key in `entities`."""
+    errs: List[str] = []
+    comp = _get_dotted(root, "composition")
+    if not isinstance(comp, list):
+        return errs
+    enames = set(_entity_names(root))
+    for i, item in enumerate(comp):
+        parent = getattr(item, "parent", None)
+        child = getattr(item, "child", None)
+        if parent and parent not in enames:
+            errs.append(f"composition[{i}].parent: '{parent}' not in entities")
+        if child and child not in enames:
+            errs.append(f"composition[{i}].child: '{child}' not in entities")
+    return errs
+
+
+def check_cross_reference_integrity(root: object) -> List[str]:
+    """file_native / document: every cross_reference's from_entity must exist.
+    `to_entity` (intra-model reference) must exist too; a reference that points
+    at an upstream ID family instead uses `references_family` and is exempt
+    from the entity-existence check."""
+    errs: List[str] = []
+    xrefs = _get_dotted(root, "cross_references")
+    if not isinstance(xrefs, list):
+        return errs
+    enames = set(_entity_names(root))
+    for i, xr in enumerate(xrefs):
+        fe = getattr(xr, "from_entity", None)
+        te = getattr(xr, "to_entity", None)
+        fam = getattr(xr, "references_family", None)
+        if fe and fe not in enames:
+            errs.append(f"cross_references[{i}].from_entity: '{fe}' not in entities")
+        if te and te not in enames:
+            errs.append(f"cross_references[{i}].to_entity: '{te}' not in entities")
+        if not te and not fam:
+            errs.append(
+                f"cross_references[{i}]: needs either `to_entity` (intra-model) "
+                f"or `references_family` (upstream ID family)"
+            )
+    return errs
+
+
+def check_vector_config(root: object) -> List[str]:
+    """vector: vector_config must specify at least an embedding model, a
+    dimension count, and a distance metric — codegen cannot wire up an index
+    without all three."""
+    errs: List[str] = []
+    vc = _get_dotted(root, "vector_config")
+    if vc is None:
+        return errs  # presence is enforced by the required-path check
+    for attr, label in (
+        ("embedding_model", "embedding_model"),
+        ("dimensions", "dimensions"),
+        ("distance_metric", "distance_metric"),
+    ):
+        if getattr(vc, attr, None) is None:
+            errs.append(f"vector_config.{label}: required for the vector paradigm")
+    return errs
+
+
+def check_identity_conventions(root: object) -> List[str]:
+    """file_native: identity_conventions.rules must be a non-empty list — the
+    whole point of the block is to state how identity is derived without keys."""
+    errs: List[str] = []
+    ic = _get_dotted(root, "identity_conventions")
+    if ic is None:
+        return errs  # presence enforced by the required-path check
+    rules = getattr(ic, "rules", None)
+    if not isinstance(rules, list) or len(rules) == 0:
+        errs.append("identity_conventions.rules: must list at least one identity rule")
+    return errs
+
+
+def check_key_value_design(root: object) -> List[str]:
+    """key_value: key_value_design.key_patterns must be non-empty, and each
+    pattern's entity must resolve."""
+    errs: List[str] = []
+    kvd = _get_dotted(root, "key_value_design")
+    if kvd is None:
+        return errs  # presence enforced by the required-path check
+    patterns = getattr(kvd, "key_patterns", None)
+    if not isinstance(patterns, list) or len(patterns) == 0:
+        errs.append("key_value_design.key_patterns: must define at least one key pattern")
+        return errs
+    enames = set(_entity_names(root))
+    for i, kp in enumerate(patterns):
+        ent = getattr(kp, "entity", None)
+        if ent and ent not in enames:
+            errs.append(f"key_value_design.key_patterns[{i}].entity: '{ent}' not in entities")
+    return errs
+
+
 def load_prd_must_have_features(
     prd_path: Path,
 ) -> Dict[Optional[str], List[str]]:
@@ -1137,6 +1540,7 @@ def validate_file(path: Path) -> int:
     classification_errs: List[str] = []
     bounded_ctx_errs: List[str] = []
     trace_id_errs: List[str] = []
+    paradigm_errs: List[str] = []
     uncovered_features: List[str] = []
     volume_errs: List[str] = []
 
@@ -1154,9 +1558,25 @@ def validate_file(path: Path) -> int:
             bounded_ctx_errs.append(f"{scope}{e_}")
         for e_ in check_trace_id_formats(root):
             trace_id_errs.append(f"{scope}{e_}")
-        volume_err = check_volume_scale_gate(prd_volume, root)
-        if volume_err:
-            volume_errs.append(f"{scope}{volume_err}")
+        # Paradigm-specific structural integrity. Each function no-ops when its
+        # block is absent, so running them for every scope is safe.
+        for e_ in check_edge_integrity(root):
+            paradigm_errs.append(f"{scope}{e_}")
+        for e_ in check_composition_integrity(root):
+            paradigm_errs.append(f"{scope}{e_}")
+        for e_ in check_cross_reference_integrity(root):
+            paradigm_errs.append(f"{scope}{e_}")
+        for e_ in check_vector_config(root):
+            paradigm_errs.append(f"{scope}{e_}")
+        for e_ in check_identity_conventions(root):
+            paradigm_errs.append(f"{scope}{e_}")
+        for e_ in check_key_value_design(root):
+            paradigm_errs.append(f"{scope}{e_}")
+        # Volume-vs-scale only applies to paradigms with partitioning/sharding.
+        if _paradigm_of(root) in (Paradigm.relational, Paradigm.document, Paradigm.key_value):
+            volume_err = check_volume_scale_gate(prd_volume, root)
+            if volume_err:
+                volume_errs.append(f"{scope}{volume_err}")
 
         traced = collect_traced_features(root)
         for f in check_feature_coverage(scope_features, traced):
@@ -1186,6 +1606,7 @@ def validate_file(path: Path) -> int:
         or bounded_ctx_errs
         or warning_id_errs
         or trace_id_errs
+        or paradigm_errs
     )
     soft_problems = bool(uncovered_features or volume_errs)
 
@@ -1225,6 +1646,11 @@ def validate_file(path: Path) -> int:
             if bounded_ctx_errs:
                 print(f"{len(bounded_ctx_errs)} bounded-context partition error(s):")
                 for e_ in bounded_ctx_errs:
+                    print(f"  - {e_}")
+                print()
+            if paradigm_errs:
+                print(f"{len(paradigm_errs)} paradigm structural integrity error(s):")
+                for e_ in paradigm_errs:
                     print(f"  - {e_}")
                 print()
             if uncovered_features:
@@ -1294,6 +1720,10 @@ def validate_file(path: Path) -> int:
         print(f"\n{len(bounded_ctx_errs)} bounded-context partition error(s):")
         for e_ in bounded_ctx_errs:
             print(f"  - {e_}")
+    if paradigm_errs:
+        print(f"\n{len(paradigm_errs)} paradigm structural integrity error(s):")
+        for e_ in paradigm_errs:
+            print(f"  - {e_}")
     if uncovered_features:
         print(f"\n{len(uncovered_features)} PRD FR-NNN feature(s) with no entity trace:")
         for f in uncovered_features:
@@ -1310,6 +1740,7 @@ def validate_file(path: Path) -> int:
         or bounded_ctx_errs
         or warning_id_errs
         or trace_id_errs
+        or paradigm_errs
         or uncovered_features
         or volume_errs
     ):

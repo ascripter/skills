@@ -1,0 +1,63 @@
+# Valid key_value paradigm (DynamoDB single-table-ish). status: complete.
+# Access-pattern-first: key_value_design defines the partition/sort key templates
+# and secondary indexes. No relationships/joins/SQL constraints.
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-27T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "f11e0000-0000-0000-0000-000000000004"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  paradigm: key_value
+  paradigm_confidence: confirmed
+  paradigm_rationale: "Predictable single-key access at scale; no ad-hoc queries."
+  primary_store: dynamodb
+
+key_value_design:
+  key_patterns:
+    - entity: Session
+      key_template: "user#{user_id}#session#{session_id}"
+      partition_key: user_id
+      sort_key: session_id
+    - entity: Event
+      key_template: "user#{user_id}#event#{ts}"
+      partition_key: user_id
+      sort_key: ts
+  secondary_indexes:
+    - name: GSI1-by-session
+      partition_key: session_id
+      projection: ALL
+
+entities:
+  Session:
+    description: "An authenticated user session."
+    fields:
+      user_id:
+        type: string
+      session_id:
+        type: string
+      expires_at:
+        type: timestamp
+    traces_prd_features: ["FR-001"]
+    traces_ux_surfaces: []
+  Event:
+    description: "An append-only user activity event."
+    fields:
+      user_id:
+        type: string
+      ts:
+        type: timestamp
+      kind:
+        type: string
+    traces_prd_features: ["FR-001"]
+    traces_ux_surfaces: []
+
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []

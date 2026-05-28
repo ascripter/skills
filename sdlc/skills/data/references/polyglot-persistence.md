@@ -5,6 +5,29 @@ plus a cache, search engine, or queue), the data model has to make that
 explicit. Read this when the user opts into `persistence.polyglot: true`
 in Phase 4, or when PRD storage preferences imply multiple stores.
 
+## Paradigm vs polyglot
+
+`persistence.paradigm` describes the **primary** store's shape — the source of
+truth that the `entities` block and the paradigm-analogue themes model. A
+polyglot setup adds **secondary stores**, and a secondary may be a *different*
+paradigm from the primary. The most common cross-paradigm case:
+
+- **Primary relational/document/file + secondary vector** — the canonical RAG
+  shape. The source of truth is rows/documents/files; a vector store is a
+  derived semantic index, rebuilt from the primary. Pick the primary paradigm
+  for `persistence.paradigm`, model entities there, and record the vector store
+  under `secondary_stores` (role: `search` or `other`) with a one-line note on
+  what gets embedded and how the index is rebuilt. Only choose `vector` as the
+  *primary* paradigm when similarity search dominates and there's little other
+  state (see `references/paradigms/vector.md`).
+- **Primary relational + secondary key_value (cache)** or **+ graph (a
+  recommendation/relationship sidecar)** follow the same rule: primary paradigm
+  models the truth; the secondary is derived and noted, not modeled as a full
+  second `entities` block.
+
+Do NOT set `persistence.paradigm` to two values or run two full paradigm
+interviews. One primary paradigm; secondaries are described, not re-modeled.
+
 ## Why split at all
 
 Most "polyglot" setups are really one primary store plus auxiliary

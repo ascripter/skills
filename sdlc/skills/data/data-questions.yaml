@@ -40,68 +40,107 @@
 # own mini-section.
 # =============================================================================
 
+# Each theme carries `applies_to_paradigms` — the list of storage paradigms for
+# which the theme runs. `[all]` ⇒ universal (every paradigm). A theme whose list
+# omits the selected paradigm is SKIPPED automatically (not even offered as a
+# now/skip/todo gate). This is the coarse routing switch that replaces SQL-only
+# assumptions. The paradigm-SPECIFIC analogue themes (edges, graph_config,
+# vector_config, key_value_design, identity_conventions, composition,
+# cross_references, serialization_conventions) are NOT listed here — they live
+# in references/paradigms/<paradigm>.md and are loaded only when that paradigm
+# is selected. See SKILL.md Phase 4 (paradigm selection) + Phase 6 (routing).
 themes:
   - id: persistence
     title: "Persistence"
     required: true
-    description: "What durable store(s) back this product?"
+    applies_to_paradigms: [all]
+    description: >
+      The storage paradigm (chosen first, with an agent recommendation) plus
+      the concrete primary store and any secondary stores.
 
   - id: id_strategy
     title: "ID Strategy"
     required: true
-    description: "How are primary keys generated, and which entities use natural keys?"
+    applies_to_paradigms: [relational, document]
+    description: >
+      How are primary keys generated, and which entities use natural keys?
+      Relational/document only — file_native derives identity from path
+      (identity_conventions), key_value/graph/vector from their own key design.
 
   - id: entities
     title: "Entities"
     required: true
     synthesis: true
+    applies_to_paradigms: [all]
     description: >
-      The core domain model: each entity, its fields, primary key, and
-      traceability back to PRD features, PRD workflows, and UX surfaces.
-      Critical importance — per-entity drill-down. Because synthesis: true,
-      the agent MUST run the dynamic scope-completeness sweep (drawing on
-      ALL upstream ID families: ENT, FR, WKF, JTB, ENT-name implications,
-      and UX surfaces) before closing the list. See references/entity-
-      discovery.md "Scope-completeness sweep" for the procedure.
+      The core domain model: each entity, its fields, and traceability back to
+      PRD features, PRD workflows, and UX surfaces. The per-field attribute
+      shape is PARADIGM-DEPENDENT (relational: type/nullable/unique/primary_key;
+      file_native: pydantic_type + description; graph: node properties; vector:
+      payload fields + embedding source) — see references/paradigms/<p>.md for
+      the field shape to use. Critical importance — per-entity drill-down.
+      Because synthesis: true, the agent MUST run the dynamic scope-completeness
+      sweep (drawing on ALL upstream ID families: ENT, FR, WKF, JTB, ENT-name
+      implications, and UX surfaces) before closing the list. See
+      references/entity-discovery.md "Scope-completeness sweep".
 
   - id: relationships
     title: "Relationships"
     required: true
-    description: "Edges between entities — cardinality, cascade rules, join tables."
+    applies_to_paradigms: [relational, document]
+    description: >
+      Edges between entities — cardinality, cascade rules, join tables.
+      Relational/document only. graph uses the first-class `edges` block
+      (references/paradigms/graph.md); file_native uses composition +
+      cross_references (references/paradigms/file-native.md).
 
   - id: enums_and_lookups
     title: "Enums & Lookups"
     required: true
+    applies_to_paradigms: [all]
     description: "First-class enums and entities that act as static lookup tables."
 
   - id: indexes_and_queries
     title: "Indexes & Query Patterns"
     required: true
-    description: "Expected access patterns and the indexes that serve them."
+    applies_to_paradigms: [relational, document]
+    description: >
+      Expected access patterns and the indexes that serve them. Relational/
+      document only. graph→traversal_patterns, vector→vector_config,
+      key_value→key_value_design cover the analogue per paradigm.
 
   - id: integrity_and_constraints
     title: "Integrity & Constraints"
     required: true
-    description: "Referential default, unique constraints, check constraints."
+    applies_to_paradigms: [relational]
+    description: >
+      Referential default, unique constraints, check constraints. Relational
+      only — other paradigms enforce invariants in application code.
 
   - id: data_classification
     title: "Data Classification"
     required: true
+    applies_to_paradigms: [all]
     description: "PII / regulated / encrypted-at-rest field tagging."
 
   - id: audit_and_lifecycle
     title: "Audit & Lifecycle"
     required: false
-    description: "Audit columns, soft delete, archival."
+    applies_to_paradigms: [all]
+    description: >
+      Audit columns (created_at/updated_at are universal), soft delete
+      (relational/document), archival.
 
   - id: versioning_and_history
     title: "Versioning & History"
     required: false
-    description: "Row-level versioning, event sourcing, temporal tables."
+    applies_to_paradigms: [all]
+    description: "Row/record versioning, event sourcing, temporal history."
 
   - id: scale_and_retention
     title: "Scale & Retention"
     required: false
+    applies_to_paradigms: [relational, document, key_value]
     description: >
       Partitioning, sharding, retention policies. Promoted to required when
       PRD.data_model.data_volume_estimate ∈ {terabytes, petabytes}.
@@ -109,31 +148,40 @@ themes:
   - id: migrations_and_evolution
     title: "Migrations & Evolution"
     required: false
-    description: "Migration tool, zero-downtime strategy, rollback policy."
+    applies_to_paradigms: [relational, document]
+    description: >
+      Migration tool, zero-downtime strategy, rollback policy. (file_native
+      uses metadata.schema_version + forward-migration scripts — covered in
+      references/paradigms/file-native.md.)
 
   - id: transactions_and_consistency
     title: "Transactions & Consistency"
     required: false
+    applies_to_paradigms: [relational]
     description: "Default isolation level and explicit transaction boundaries."
 
   - id: caching_layer
     title: "Caching Layer"
     required: false
+    applies_to_paradigms: [all]
     description: "What's cached, where, with what invalidation."
 
   - id: search_and_analytics
     title: "Search & Analytics"
     required: false
+    applies_to_paradigms: [all]
     description: "Full-text engine, analytics warehouse, change-data-capture."
 
   - id: seed_and_fixtures
     title: "Seed & Fixtures"
     required: false
+    applies_to_paradigms: [all]
     description: "Seed-data strategy and dev fixture paths."
 
   - id: external_data_sources
     title: "External Data Sources"
     required: false
+    applies_to_paradigms: [all]
     description: "Outside data feeds (third-party APIs) and their sync model."
 
 questions:
@@ -142,18 +190,57 @@ questions:
   # Persistence
   # ---------------------------------------------------------------------------
   - theme: persistence
+    id: paradigm
+    schema_path: persistence.paradigm
+    question: "Which storage paradigm should back this product?"
+    hint: >
+      THE foundational decision — it selects which themes run and which entity
+      shape applies. Asked in Phase 4 (structural). The agent MUST first derive
+      a recommendation from PRD signals (data_volume_estimate, relationship
+      density in key_entities, embedding/semantic-search needs, query shape,
+      simplicity/footprint, single-user vs multi-tenant) and present it at
+      position 1 with a one-line rationale. See references/paradigms/<each>.md
+      "When to recommend" for the heuristics. The user confirms or overrides.
+    suggested_answers:
+      - "relational"
+      - "file_native"
+      - "document"
+      - "key_value"
+      - "graph"
+      - "vector"
+    free_text_allowed: false
+    required: true
+    capture_rationale: true
+    confidence_field: true
+    importance: critical
+
+  - theme: persistence
     id: primary_store
     schema_path: persistence.primary_store
     question: "Primary durable data store?"
-    hint: "Anchors every downstream schema, migration, and infra decision."
+    hint: "Anchors every downstream schema, migration, and infra decision. Constrain suggestions to the chosen paradigm (e.g. neo4j for graph, qdrant for vector, filesystem for file_native)."
     suggested_answers:
+      # relational
       - "postgres"
       - "mysql"
       - "sqlite"
-      - "mongodb"
-      - "dynamodb"
       - "sqlserver"
       - "oracle"
+      # document / key_value
+      - "mongodb"
+      - "firestore"
+      - "dynamodb"
+      - "redis"
+      # graph
+      - "neo4j"
+      - "arangodb"
+      # vector
+      - "qdrant"
+      - "pinecone"
+      - "weaviate"
+      - "pgvector"
+      # file_native
+      - "filesystem"
       - "other"
     free_text_allowed: true
     required: true

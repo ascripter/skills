@@ -230,9 +230,153 @@ def grade_eval_2(tp: Path) -> List[dict]:
     ]
 
 
+def _fr_coverage(entities: dict, required: set[str]) -> tuple[bool, set[str]]:
+    traced: set[str] = set()
+    for ent in entities.values():
+        if isinstance(ent, dict):
+            for f in ent.get("traces_prd_features") or []:
+                traced.add(f)
+    return required.issubset(traced), traced
+
+
+def grade_eval_3(tp: Path) -> List[dict]:
+    """file-native-paradigm: agent recommends file_native and produces a clean
+    file-native model (identity_conventions + pydantic_type fields, no fabricated
+    relational blocks)."""
+    dm = _load_yaml(tp / "docs" / "DATA-MODEL.yaml")
+    rc, vout = _validator_exit(tp / "docs" / "DATA-MODEL.yaml", tp)
+
+    if not isinstance(dm, dict):
+        return [_assert("docs/DATA-MODEL.yaml exists and parses", False, str(tp / "docs" / "DATA-MODEL.yaml"))]
+
+    persistence = dm.get("persistence") or {}
+    paradigm = persistence.get("paradigm")
+    primary = persistence.get("primary_store")
+    metadata = dm.get("metadata") or {}
+    status = metadata.get("status")
+    changelog = metadata.get("changelog") or []
+    entities = dm.get("entities") or {}
+    ic = dm.get("identity_conventions") or {}
+    ic_rules = ic.get("rules") if isinstance(ic, dict) else None
+
+    # No fabricated relational structure.
+    id_strategy = dm.get("id_strategy") or {}
+    id_scheme = id_strategy.get("scheme") if isinstance(id_strategy, dict) else None
+    rels = dm.get("relationships")
+    rel_clean = not rels  # absent or empty list
+    iq = dm.get("indexes_and_queries") or {}
+    iq_clean = not (iq.get("expected_indexes") if isinstance(iq, dict) else None)
+
+    # At least one entity field uses pydantic_type.
+    pydantic_type_used = False
+    for ent in entities.values():
+        if isinstance(ent, dict):
+            for fld in (ent.get("fields") or {}).values():
+                if isinstance(fld, dict) and fld.get("pydantic_type"):
+                    pydantic_type_used = True
+
+    fr_ok, traced = _fr_coverage(entities, {"FR-001", "FR-002", "FR-003"})
+    changelog_ok = isinstance(changelog, list) and len(changelog) >= 1
+
+    return [
+        _assert("docs/DATA-MODEL.yaml exists and parses", True, str(tp / "docs" / "DATA-MODEL.yaml")),
+        _assert("Validator exits 0", rc == 0, f"exit={rc}; {vout[:200]}"),
+        _assert("Status == 'complete'", status == "complete", f"status={status!r}"),
+        _assert("persistence.paradigm == 'file_native'", paradigm == "file_native", f"paradigm={paradigm!r}"),
+        _assert("persistence.primary_store == 'filesystem'", primary == "filesystem", f"primary_store={primary!r}"),
+        _assert(
+            "identity_conventions.rules is non-empty",
+            isinstance(ic_rules, list) and len(ic_rules) >= 1,
+            f"rules={ic_rules!r}",
+        ),
+        _assert(
+            "No fabricated id_strategy.scheme (file_native has no surrogate PK)",
+            id_scheme is None,
+            f"id_strategy.scheme={id_scheme!r}",
+        ),
+        _assert(
+            "No fabricated relationships block",
+            rel_clean,
+            f"relationships={rels!r}",
+        ),
+        _assert(
+            "No fabricated expected_indexes",
+            iq_clean,
+            f"indexes_and_queries={iq!r}",
+        ),
+        _assert(
+            "At least one entity field uses pydantic_type",
+            pydantic_type_used,
+            f"entities={list(entities.keys())}",
+        ),
+        _assert("entities has >= 2 entries (Outline + Section)", len(entities) >= 2, f"names={list(entities.keys())}"),
+        _assert("All PRD must-have FRs (FR-001..003) covered", fr_ok, f"traced={sorted(traced)}"),
+        _assert("metadata.changelog has >= 1 entry", changelog_ok, f"changelog={changelog[:2]}"),
+    ]
+
+
+def grade_eval_4(tp: Path) -> List[dict]:
+    """paradigm-recommendation-relational: agent honors the explicit sqlite
+    storage preference and produces a populated relational model."""
+    dm = _load_yaml(tp / "docs" / "DATA-MODEL.yaml")
+    rc, vout = _validator_exit(tp / "docs" / "DATA-MODEL.yaml", tp)
+
+    if not isinstance(dm, dict):
+        return [_assert("docs/DATA-MODEL.yaml exists and parses", False, str(tp / "docs" / "DATA-MODEL.yaml"))]
+
+    persistence = dm.get("persistence") or {}
+    paradigm = persistence.get("paradigm")
+    primary = persistence.get("primary_store")
+    metadata = dm.get("metadata") or {}
+    status = metadata.get("status")
+    entities = dm.get("entities") or {}
+
+    id_strategy = dm.get("id_strategy") or {}
+    id_scheme = id_strategy.get("scheme") if isinstance(id_strategy, dict) else None
+    rels = dm.get("relationships")
+    iq = dm.get("indexes_and_queries") or {}
+    access_patterns = iq.get("access_patterns") if isinstance(iq, dict) else None
+    ic = dm.get("integrity_and_constraints") or {}
+    default_on_delete = ic.get("default_on_delete") if isinstance(ic, dict) else None
+
+    fr_ok, traced = _fr_coverage(entities, {"FR-001", "FR-002", "FR-003"})
+
+    return [
+        _assert("docs/DATA-MODEL.yaml exists and parses", True, str(tp / "docs" / "DATA-MODEL.yaml")),
+        _assert("Validator exits 0", rc == 0, f"exit={rc}; {vout[:200]}"),
+        _assert("Status == 'complete'", status == "complete", f"status={status!r}"),
+        _assert(
+            "persistence.paradigm == 'relational' (defaults/honored, may be omitted)",
+            paradigm in ("relational", None),
+            f"paradigm={paradigm!r}",
+        ),
+        _assert(
+            "persistence.primary_store == 'sqlite' (honors PRD preference)",
+            primary == "sqlite",
+            f"primary_store={primary!r}",
+        ),
+        _assert("id_strategy.scheme is set", id_scheme is not None, f"scheme={id_scheme!r}"),
+        _assert("relationships block present", rels is not None, f"relationships={rels!r}"),
+        _assert(
+            "indexes_and_queries.access_patterns present",
+            access_patterns is not None,
+            f"access_patterns={access_patterns!r}",
+        ),
+        _assert(
+            "integrity_and_constraints.default_on_delete set",
+            default_on_delete is not None,
+            f"default_on_delete={default_on_delete!r}",
+        ),
+        _assert("entities has >= 2 entries (Project + sweep)", len(entities) >= 2, f"names={list(entities.keys())}"),
+        _assert("All PRD must-have FRs (FR-001..003) covered", fr_ok, f"traced={sorted(traced)}"),
+    ]
+
+
 GRADERS: dict[int, Callable[[Path], List[dict]]] = {
     1: grade_eval_1,
     2: grade_eval_2,
+    3: grade_eval_3,
+    4: grade_eval_4,
 }
 
 

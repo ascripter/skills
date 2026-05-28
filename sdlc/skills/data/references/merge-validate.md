@@ -33,9 +33,11 @@ are tolerated.
 These are where DATA-MODEL merge differs from PRD merge. Entities are
 referenced from many places (relationships, data_classification,
 bounded_contexts, indexes_and_queries, search_and_analytics,
-caching_layer, external_data_sources.maps_to_entity). When the user
-**renames** or **removes** an entity in this session, the merge must
-either propagate the change or warn loudly.
+caching_layer, external_data_sources.maps_to_entity — PLUS, by paradigm,
+edges, composition, cross_references, graph_config.node_labels, and
+key_value_design.key_patterns). When the user **renames** or **removes** an
+entity in this session, the merge must either propagate the change or warn
+loudly.
 
 **Rename `X → Y`**:
 
@@ -58,6 +60,11 @@ either propagate the change or warn loudly.
    - `external_data_sources[*].maps_to_entity`: replace.
    - `entities.*.fields.*.references` strings containing `X.<...>`:
      rewrite to `Y.<...>`.
+   - Paradigm blocks: `edges[*].from_entity / to_entity` and
+     `graph_config.node_labels` (graph); `composition[*].parent / child`
+     and `cross_references[*].from_entity / to_entity` (document/file_native);
+     `key_value_design.key_patterns[*].entity` (key_value);
+     `entities.X.node_label` (graph). Replace `X` with `Y`.
 3. Show the user a summary of the rewrites before saving.
 
 **Remove entity `X`**:
@@ -121,7 +128,7 @@ Exit codes:
 |---|---|---|
 | 0 (`[OK]`) | Complete and valid; all cross-checks pass | ✓ Proceed to Phase 8. |
 | 0 (`[DRAFT]`) | Draft — structurally valid, possibly missing required fields or with soft-check warnings | Inform user and proceed to Phase 8 (pointer still injected). |
-| 1 (`[FAIL]`) | Schema invalid, OR `status: complete` but required fields missing, OR `status: complete` but a hard cross-check failed (relationship integrity, classification integrity, bounded-context partition) | Show field-level errors verbatim. If required fields are missing, offer via `AskUserQuestion`: fill them in now, or accept `status: draft`. If a cross-check failed, walk the user through the offending block (e.g. show the relationship that references a nonexistent entity). Re-run validation after re-entry. |
+| 1 (`[FAIL]`) | Schema invalid, OR `status: complete` but required fields missing, OR `status: complete` but a hard cross-check failed (relationship integrity, paradigm structural integrity, classification integrity, bounded-context partition) | Show field-level errors verbatim. If required fields are missing, offer via `AskUserQuestion`: fill them in now, or accept `status: draft`. If a cross-check failed, walk the user through the offending block (e.g. show the relationship that references a nonexistent entity). Re-run validation after re-entry. |
 | 2 | Cannot read/parse the file | Surface to user (missing file, bad YAML, permission error). Do not retry silently. |
 | 3 | Missing dependency | Validator prints `pip install` instructions. Do **not** auto-install — ask the user to install and re-run. |
 
@@ -140,8 +147,9 @@ different recovery path:
 | Required fields missing           | FAIL                              | Re-enter via AskUserQuestion |
 | `data_warnings` WRN-NNN format    | FAIL                              | The writer is at fault: re-prefix any bare entry with the next `state.last_ids.WRN` id |
 | Entity trace ID-format (FR / SCR / WKF) | FAIL                          | Show the offending field; if a kebab slug snuck into `traces_ux_surfaces`, replace with the matching `UX.surface_inventory[].id` (SCR-NNN) |
-| Relationship integrity            | FAIL                              | Show the relationship, ask user to fix from_entity / to_entity / join_table |
+| Relationship integrity (relational) | FAIL                            | Show the relationship, ask user to fix from_entity / to_entity / join_table |
 | Field references                  | FAIL                              | Show entity.field.references, ask user to correct |
+| Paradigm structural integrity     | FAIL                              | Paradigm-specific: graph→edge endpoint resolves to a node; document/file_native→composition parent/child + cross_reference from/to resolve; vector→vector_config has embedding_model+dimensions+distance_metric; file_native→identity_conventions.rules non-empty; key_value→key_value_design.key_patterns non-empty + entity resolves. Show the offending block, re-enter. |
 | Classification integrity          | FAIL                              | Show offending Entity.field in pii_fields/regulated_fields/encrypted_at_rest |
 | Bounded-context partition         | FAIL                              | Show unassigned/duplicate entities, ask to reassign |
 | Feature coverage                  | Soft — force draft, warn          | Walk uncovered FR-NNN list, ask to assign each to ≥1 entity OR defer with a `WRN-NNN` note + mark out-of-scope-for-data |

@@ -119,15 +119,59 @@ data_warnings: []                          # list[string] of "WRN-NNN: <msg>" it
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# persistence — the primary durable store and any secondary stores
-# (cache, blob, search). Pre-filled from PRD.data_model.storage_preferences.
+# persistence — the storage paradigm, the primary durable store, and any
+# secondary stores (cache, blob, search). Pre-filled from
+# PRD.data_model.storage_preferences.
+#
+# `paradigm` is the DISCRIMINATOR for the whole document. It decides which
+# theme blocks are required and which validator cross-checks run. It is chosen
+# early (Phase 4) — the agent recommends one from PRD signals, the user
+# confirms. Absence defaults to `relational` so pre-paradigm files validate
+# unchanged.
+#
+#   paradigm      required blocks (besides entities + data_classification)   shape of `entities`
+#   ----------    ---------------------------------------------------------  -------------------------------------
+#   relational    id_strategy, relationships, indexes_and_queries,           fields: type/nullable/unique/
+#                 integrity_and_constraints                                  primary_key/references/on_delete
+#   document      id_strategy, indexes_and_queries (+ composition for        fields: type/nullable; embedded
+#                 embedded docs, cross_references for id links)              sub-docs via composition
+#   key_value     key_value_design                                          fields + key design in
+#                                                                           key_value_design.key_patterns
+#   graph         edges (+ graph_config)                                    nodes with node_label + properties;
+#                                                                           edges are first-class (no join table)
+#   vector        vector_config                                             collections: payload_fields +
+#                                                                           one field with embedding: true
+#   file_native   identity_conventions (+ composition, cross_references,    fields: pydantic_type + description;
+#                 serialization_conventions)                                identity is path-derived (no PK)
+#
+# Blocks NOT listed for a paradigm are optional/ignored there. Relational-only
+# blocks (relationships with on_delete, indexes_and_queries, integrity_and_
+# constraints, scale_and_retention, migrations_and_evolution, transactions_and_
+# consistency) carry no meaning for graph/vector/file_native and may be omitted.
 # -----------------------------------------------------------------------------
 persistence:
-  primary_store: null              # REQUIRED — one of:
-                                   #   postgres | mysql | sqlite | mongodb |
-                                   #   dynamodb | sqlserver | oracle | other
+  paradigm: null                   # REQUIRED in practice (defaults to
+                                   # `relational` when absent). One of:
+                                   #   relational | document | key_value |
+                                   #   graph | vector | file_native
+  paradigm_confidence: null        # confirmed | inferred | assumption
+  paradigm_rationale: null         # string — why this paradigm? (agent's
+                                   # recommendation reasoning + user's call)
+  primary_store: null              # REQUIRED — concrete store technology. One of:
+                                   #   relational: postgres | mysql | sqlite |
+                                   #               sqlserver | oracle
+                                   #   document:   mongodb | firestore | couchbase
+                                   #   key_value:  dynamodb | redis | etcd
+                                   #   graph:      neo4j | arangodb | neptune |
+                                   #               janusgraph
+                                   #   vector:     pinecone | qdrant | weaviate |
+                                   #               milvus | chroma | pgvector |
+                                   #               lancedb
+                                   #   file_native: filesystem
+                                   #   (or `other`)
   primary_store_confidence: null   # confirmed | inferred | assumption
   primary_store_rationale: null    # string — why this store?
+  serialization_format: null       # file_native only — yaml | json | toml | other
   polyglot: false                  # bool — true if any secondary_stores present
   secondary_stores: null           # list[SecondaryStore]; each:
                                    #   - kind: redis | memcached | elasticsearch |
@@ -144,7 +188,11 @@ persistence:
   file_blob_store_rationale: null  # string — why this blob store?
 
 # -----------------------------------------------------------------------------
-# id_strategy — primary-key generation scheme + natural-key policy
+# id_strategy — primary-key generation scheme + natural-key policy.
+# PARADIGM: required for relational + document. For file_native, identity is
+# path-derived (see identity_conventions); for key_value/graph/vector the key
+# lives in key_value_design / node identity / point id respectively — omit this
+# block there.
 # -----------------------------------------------------------------------------
 id_strategy:
   scheme: null                     # REQUIRED — one of:
@@ -166,22 +214,42 @@ entities:                          # REQUIRED — dict[<PascalCaseEntityName>, E
                                    # MUST be non-empty in status: complete.
   User:                            # example entity
     description: "Authenticated end-user of the platform."
-    primary_key: id                # string OR list[string] (for composite keys)
+    primary_key: id                # string OR list[string] (composite). REQUIRED
+                                   # for relational/document; omit for
+                                   # file_native (path-derived) / key_value /
+                                   # graph / vector.
+    # --- paradigm-specific entity attributes (all optional) ---
+    # category: stage_artifact     # file_native — discriminator (free string)
+    # composes: [ArtifactBase]     # file_native — Pydantic mixins this extends
+    # serialization:               # file_native — on-disk placement
+    #   scope: per_stage           #   per_stage | per_project | nested_in:<E> | runtime_only
+    #   filename_pattern: "02_product_requirements.yaml"
+    # node_label: User             # graph — node label (defaults to entity key)
+    # payload_fields: [title, body]# vector — fields stored alongside the vector
     fields:                        # REQUIRED — dict[snake_case, Field]
       id:
+        # relational/document: a SQL-ish column type from the enum below.
         type: uuid                 # one of: uuid | string | text | int | bigint |
                                    #         decimal | float | bool | date | time |
                                    #         timestamp | timestamptz | json | jsonb |
                                    #         enum | binary | blob | array | other
-        nullable: false            # bool — default false
+        # file_native: use `pydantic_type` + `description` INSTEAD of `type`.
+        # pydantic_type: str       #   literal Python type expr, e.g.
+                                   #   "Optional[list[FeatureSpec]]". Optionality
+                                   #   is encoded in the type, not `nullable`.
+        # vector: mark the embedding-source field.
+        # embedding: true          #   the vector is computed from this field
+        nullable: false            # bool — default false (relational/document)
         primary_key: true          # bool — default false
         unique: true               # bool — default false
         default: null              # string | null — SQL/codegen default expression
-        references: null           # null OR "<Entity>.<field>" string (FK)
+        references: null           # null OR "<Entity>.<field>" string (FK;
+                                   #   relational/document)
         on_delete: null            # one of: cascade | restrict | set_null |
                                    #         no_action (applies only if references)
         check: null                # string — check constraint expression
         comment: null              # string — human-readable note
+        description: null          # string — preferred note field for file_native
       email:
         type: string
         nullable: false
@@ -219,8 +287,12 @@ entities:                          # REQUIRED — dict[<PascalCaseEntityName>, E
 # field-level (entities.<E>.fields.<f>.references) are still allowed, but
 # this block is the canonical place to express cardinality + cascade rules
 # and any many-to-many join tables.
+# PARADIGM: required for relational. document may use it for id links (but
+# prefer composition/cross_references). For graph use the first-class `edges`
+# block instead (no join tables). Omit for key_value/vector/file_native.
 # -----------------------------------------------------------------------------
-relationships:                     # REQUIRED — list[Relationship]; may be empty
+relationships:                     # relational: REQUIRED (list[Relationship];
+                                   # may be empty). Other paradigms: omit.
                                    # if the model has no cross-entity edges.
                                    # Each:
   - from_entity: null              # PascalCaseEntityName (must exist in `entities`)
@@ -235,9 +307,128 @@ relationships:                     # REQUIRED — list[Relationship]; may be emp
                                    # itself be an entity in `entities`)
     comment: null                  # string — semantics, e.g. "A user has many orders."
 
+# =============================================================================
+# PARADIGM-SPECIFIC STRUCTURAL BLOCKS
+# Each is optional at the schema level; the validator's paradigm-gated required
+# set decides which is mandatory (graph→edges, vector→vector_config,
+# key_value→key_value_design, file_native→identity_conventions). All blocks
+# below are OMITTED for paradigms that don't use them.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# edges — GRAPH paradigm. First-class relationships between nodes. Unlike
+# relational `relationships`, edges carry their own properties and never need a
+# join table. Validator checks every from_entity/to_entity resolves to an
+# entity key or its node_label.
+# -----------------------------------------------------------------------------
+edges:                             # graph: REQUIRED (list[Edge]; may be empty
+  null                             # for a nodes-only graph). Other paradigms: omit.
+  # - type: FOLLOWS                # edge/relationship type (UPPER_SNAKE by convention)
+  #   from_entity: User            # must exist in entities (key or node_label)
+  #   to_entity: User
+  #   cardinality: "N:M"           # "1:1" | "1:N" | "N:M"
+  #   direction: directed          # directed | undirected
+  #   properties: { since: timestamp }  # dict — edge attributes
+
+# -----------------------------------------------------------------------------
+# graph_config — GRAPH paradigm. Node-label inventory + named traversal patterns
+# (the graph analogue of relational access_patterns).
+# -----------------------------------------------------------------------------
+graph_config:                      # graph only
+  null
+  # node_labels: [User, Post]
+  # traversal_patterns:
+  #   - description: "Friends-of-friends up to 3 hops."
+  #     start_label: User
+  #     pattern: "(:User)-[:FOLLOWS*1..3]->(:User)"
+
+# -----------------------------------------------------------------------------
+# vector_config — VECTOR paradigm. Embedding model + ANN index configuration.
+# Validator requires embedding_model + dimensions + distance_metric.
+# -----------------------------------------------------------------------------
+vector_config:                     # vector only — REQUIRED for that paradigm
+  null
+  # embedding_model: "text-embedding-3-large"
+  # dimensions: 3072
+  # distance_metric: cosine        # cosine | euclidean | dot_product | manhattan
+  # ann_index: hnsw                # hnsw | ivf | ivf_flat | ivf_pq | flat | diskann | other
+  # index_params: { m: 16, ef_construct: 200 }
+
+# -----------------------------------------------------------------------------
+# key_value_design — KEY_VALUE paradigm. Access-pattern-first key design:
+# partition/sort key templates and secondary indexes (e.g. DynamoDB GSIs).
+# Validator requires non-empty key_patterns; each pattern's entity must resolve.
+# -----------------------------------------------------------------------------
+key_value_design:                  # key_value only — REQUIRED for that paradigm
+  null
+  # key_patterns:
+  #   - entity: Session
+  #     key_template: "user#{user_id}#session#{session_id}"
+  #     partition_key: user_id
+  #     sort_key: session_id
+  # secondary_indexes:
+  #   - name: GSI1-by-session
+  #     partition_key: session_id
+  #     projection: ALL
+
+# -----------------------------------------------------------------------------
+# identity_conventions — FILE_NATIVE paradigm (and any keyless paradigm).
+# States how entity identity is derived without a generated primary key.
+# Validator requires a non-empty `rules` list. Replaces id_strategy.
+# -----------------------------------------------------------------------------
+identity_conventions:              # file_native — REQUIRED for that paradigm
+  null
+  # rules:
+  #   - "stage_artifact: NO id field; identity is the on-disk path."
+  #   - "sub_model: carries its domain ID string (FR-NNN, ENT-NNN); no UUIDs."
+
+# -----------------------------------------------------------------------------
+# composition — DOCUMENT / FILE_NATIVE / GRAPH. Pydantic/document-level
+# parent→child containment (the demo's Report→Finding nesting). Validator checks
+# parent and child both exist in entities.
+# -----------------------------------------------------------------------------
+composition:                       # optional list[CompositionItem]
+  null
+  # - parent: ProductRequirements
+  #   child: FeatureSpec
+  #   kind: contains               # embeds | contains | references
+  #   comment: "PR owns its feature specs."
+
+# -----------------------------------------------------------------------------
+# cross_references — DOCUMENT / FILE_NATIVE. String-ID reference relations (the
+# input contract for referential-integrity gates). Each entry needs EITHER a
+# `to_entity` (intra-model link) OR a `references_family` (points at an upstream
+# ID family like FR/ENT). Validator checks from_entity/to_entity resolve.
+# -----------------------------------------------------------------------------
+cross_references:                  # optional list[CrossReference]
+  null
+  # - from_entity: FeatureSpec
+  #   field: id
+  #   references_family: FR        # upstream ID family (no local to_entity)
+  #   comment: "FeatureSpec.id is an FR-NNN from the PRD."
+  # - from_entity: TestSpec
+  #   field: covers
+  #   to_entity: FeatureSpec       # intra-model link
+  #   gate: "covers_resolves"      # name of the validator gate that enforces it
+
+# -----------------------------------------------------------------------------
+# serialization_conventions — FILE_NATIVE. Where artifacts live on disk so the
+# tree is human-readable (not "Item001, Item002"). Per-entity placement may also
+# live inline on entities.<E>.serialization.
+# -----------------------------------------------------------------------------
+serialization_conventions:         # file_native only
+  null
+  # root_path: "aicf_artifacts/"
+  # format: yaml                   # yaml | json | toml | other
+  # entries:
+  #   - entity: ProductRequirements
+  #     filename_pattern: "02_product_requirements.yaml"
+  #     scope: per_stage
+
 # -----------------------------------------------------------------------------
 # enums_and_lookups — first-class enum types + entities that act as lookups.
 # Lookup entities are real rows in the DB but conceptually closed sets.
+# (Universal — applies to every paradigm.)
 # -----------------------------------------------------------------------------
 enums_and_lookups:                 # REQUIRED — block may be present-but-empty.
   enums: null                      # dict[<EnumName>, list[string]]; e.g.
@@ -249,8 +440,12 @@ enums_and_lookups:                 # REQUIRED — block may be present-but-empty
 # -----------------------------------------------------------------------------
 # indexes_and_queries — expected query patterns and the indexes that serve them.
 # Drives downstream index DDL, query optimisation, and access-pattern review.
+# PARADIGM: required for relational + document. graph uses
+# graph_config.traversal_patterns, vector uses vector_config, key_value uses
+# key_value_design — omit this block for those.
 # -----------------------------------------------------------------------------
-indexes_and_queries:               # REQUIRED — block may be present-but-empty.
+indexes_and_queries:               # relational/document: REQUIRED (may be
+                                   # present-but-empty). Other paradigms: omit.
   access_patterns: null            # list[AccessPattern]; each:
                                    #   - description: string (e.g. "list orders by user, newest first")
                                    #     entity: PascalCaseEntityName
@@ -268,8 +463,12 @@ indexes_and_queries:               # REQUIRED — block may be present-but-empty
 
 # -----------------------------------------------------------------------------
 # integrity_and_constraints — DB-level invariants beyond per-field constraints.
+# PARADIGM: relational only. Document/file_native enforce invariants in app code
+# (Pydantic validators); graph/vector/key_value have no FK/check semantics. Omit
+# for non-relational paradigms.
 # -----------------------------------------------------------------------------
-integrity_and_constraints:         # REQUIRED — block may be present-but-empty.
+integrity_and_constraints:         # relational: REQUIRED (may be
+                                   # present-but-empty). Other paradigms: omit.
   default_on_delete: null          # one of: cascade | restrict | set_null | no_action
                                    # applied to FKs that don't specify their own
   default_on_delete_rationale: null  # string — why this default? (cascade is dangerous;

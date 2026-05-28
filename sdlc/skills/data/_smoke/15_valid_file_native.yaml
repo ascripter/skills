@@ -1,0 +1,89 @@
+# Valid file_native (Pydantic models serialized to YAML/JSON on disk).
+# status: complete. No id_strategy/relationships/indexes/constraints — those are
+# relational-only. Identity is path-derived (identity_conventions). Fields carry
+# `pydantic_type` + `description` instead of a SQL `type` enum. Cross-model
+# references travel as string IDs (cross_references), parent→child containment
+# is recorded in composition, on-disk layout in serialization_conventions.
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-27T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "f11e0000-0000-0000-0000-000000000001"
+  monorepo: false
+  status: "complete"
+
+data_warnings:
+  - "WRN-001: Sub-models (category: sub_model) are never serialized standalone; codegen emits them as nested Pydantic classes."
+
+persistence:
+  paradigm: file_native
+  paradigm_confidence: confirmed
+  paradigm_rationale: "Single-user CLI tool; diffable, git-friendly artifacts beat a DB server."
+  primary_store: filesystem
+  serialization_format: yaml
+
+identity_conventions:
+  rules:
+    - "stage_artifact: carries NO id field; identity is the on-disk path (stage_ref + project)."
+    - "sub_model: carries its domain ID string (FR-NNN, ENT-NNN); no UUIDs."
+
+bounded_contexts:
+  artifacts:
+    description: "Per-stage serialized artifacts."
+    entities: [ProductRequirements, FeatureSpec]
+
+entities:
+  ProductRequirements:
+    description: "Stage 02 output — the master requirements artifact."
+    category: stage_artifact
+    serialization:
+      scope: per_stage
+      filename_pattern: "02_product_requirements.yaml"
+    fields:
+      product_name:
+        pydantic_type: str
+        description: "Human-readable product name."
+      must_have_features:
+        pydantic_type: list[FeatureSpec]
+        description: "FR-NNN entries; ID-anchored for downstream stages."
+    traces_prd_features: ["FR-001"]
+    traces_ux_surfaces: []
+  FeatureSpec:
+    description: "One must-have feature entry, nested inside ProductRequirements."
+    category: sub_model
+    serialization:
+      scope: "nested_in:ProductRequirements"
+    fields:
+      id:
+        pydantic_type: str
+        description: "FR-NNN stable id."
+      title:
+        pydantic_type: str
+    traces_prd_features: ["FR-001"]
+    traces_ux_surfaces: []
+
+composition:
+  - parent: ProductRequirements
+    child: FeatureSpec
+    kind: contains
+    comment: "PR owns its feature specs."
+
+cross_references:
+  - from_entity: FeatureSpec
+    field: id
+    references_family: FR
+    comment: "FeatureSpec.id is an FR-NNN drawn from the PRD ID family."
+
+serialization_conventions:
+  root_path: "aicf_artifacts/"
+  format: yaml
+  entries:
+    - entity: ProductRequirements
+      filename_pattern: "02_product_requirements.yaml"
+      scope: per_stage
+
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []

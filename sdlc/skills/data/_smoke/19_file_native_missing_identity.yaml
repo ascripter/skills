@@ -1,0 +1,29 @@
+# Invalid: file_native paradigm with status:complete but NO identity_conventions
+# block — required for the file_native paradigm. Should FAIL (exit 1).
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-27T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "f11e0000-0000-0000-0000-000000000005"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  paradigm: file_native
+  primary_store: filesystem
+  serialization_format: yaml
+
+entities:
+  Thing:
+    description: "A serialized thing."
+    fields:
+      name:
+        pydantic_type: str
+    traces_prd_features: []
+    traces_ux_surfaces: []
+
+data_classification:
+  pii_fields: []

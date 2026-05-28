@@ -112,6 +112,39 @@ If the user changes `bounded_contexts_enabled: false` → `true` mid-flow:
    context names now, defer entity assignment to Phase 6's per-entity
    flow.
 
+## Paradigm change
+
+The storage paradigm (`persistence.paradigm`) is chosen in Phase 4 and is
+meant to be **frozen for the project's lifetime** — it determines the entire
+document shape and which themes ran. Two situations:
+
+**Mid-flow change** (before completion). If the user wants to switch paradigm
+partway (e.g. they picked `relational`, then realize the product is really a
+RAG tool → `vector`):
+
+1. Warn loudly: *"Switching paradigm from `relational` to `vector` discards
+   the relational-only answers (id_strategy, relationships, indexes,
+   constraints) and runs a different theme set. The entity list and their
+   traces are preserved. Continue?"*
+2. On confirm: keep `entities` (description + traces), drop the skipped
+   paradigm's structural blocks from `partial_answers`, set
+   `state.storage_paradigm` to the new value, load the new paradigm reference,
+   re-enter Phase 6 routing. Reset `pre_fill_confirmed: false`.
+3. Append a `data_warnings` entry recording the switch.
+
+**Change after the model exists** (update flow). If `docs/DATA-MODEL.yaml`
+already has `status: complete` with one paradigm and the user wants another,
+treat it as a **near-restart of the data model**, not a merge: the two shapes
+share only `entities` (names + descriptions + traces) and `data_classification`.
+Confirm explicitly, carry those shared blocks forward, and re-run the structural
++ paradigm-analogue themes from scratch. Do not try to mechanically translate
+relational relationships into graph edges or vector payloads — re-interview.
+
+**Disputed recommendation.** If the user pushes back on the agent's Phase 4
+recommendation, that's normal — present the trade-off (cite the relevant
+paradigm reference's "When to recommend") and defer to the user's choice. Record
+their pick with `persistence.paradigm_confidence: confirmed` and the rationale.
+
 ## Mass entity import from schema files
 
 If the consumer project has an existing `schema.prisma`, `models.py`,

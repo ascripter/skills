@@ -1,0 +1,51 @@
+# Valid vector paradigm. status: complete. No relationships/indexes/constraints.
+# vector_config carries the embedding model + dimensions + distance metric +
+# ANN index. Entities are collections: payload fields + an embedding-source field.
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-27T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "f11e0000-0000-0000-0000-000000000002"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  paradigm: vector
+  paradigm_confidence: confirmed
+  paradigm_rationale: "Semantic search over documents is the core feature."
+  primary_store: qdrant
+
+vector_config:
+  embedding_model: "text-embedding-3-large"
+  dimensions: 3072
+  distance_metric: cosine
+  ann_index: hnsw
+  index_params:
+    m: 16
+    ef_construct: 200
+
+entities:
+  DocumentChunk:
+    description: "A chunk of source text plus its embedding and retrieval payload."
+    payload_fields: [source_id, chunk_index, text, title]
+    fields:
+      text:
+        type: text
+        embedding: true
+        comment: "Source text; the embedding is computed from this field."
+      source_id:
+        type: string
+      chunk_index:
+        type: int
+      title:
+        type: string
+    traces_prd_features: ["FR-001"]
+    traces_ux_surfaces: []
+
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []

@@ -1,0 +1,64 @@
+# Valid graph paradigm. status: complete. Edges are first-class (no join tables,
+# no on_delete cascade). Nodes are entities; edges reference them by key/label.
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-27T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "f11e0000-0000-0000-0000-000000000003"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  paradigm: graph
+  paradigm_confidence: confirmed
+  paradigm_rationale: "Relationship traversal (who-follows-whom, recommendations) is the dominant query."
+  primary_store: neo4j
+
+graph_config:
+  node_labels: [User, Post]
+  traversal_patterns:
+    - description: "Friends-of-friends up to 3 hops."
+      start_label: User
+      pattern: "(:User)-[:FOLLOWS*1..3]->(:User)"
+
+entities:
+  User:
+    description: "A person in the social graph."
+    node_label: User
+    fields:
+      handle:
+        type: string
+      display_name:
+        type: string
+    traces_prd_features: ["FR-001"]
+    traces_ux_surfaces: []
+  Post:
+    description: "A piece of content authored by a user."
+    node_label: Post
+    fields:
+      body:
+        type: text
+    traces_prd_features: ["FR-001"]
+    traces_ux_surfaces: []
+
+edges:
+  - type: FOLLOWS
+    from_entity: User
+    to_entity: User
+    cardinality: "N:M"
+    direction: directed
+    properties:
+      since: timestamp
+  - type: AUTHORED
+    from_entity: User
+    to_entity: Post
+    cardinality: "1:N"
+    direction: directed
+
+data_classification:
+  pii_fields: ["User.handle"]
+  regulated_fields: []
+  encrypted_at_rest: []

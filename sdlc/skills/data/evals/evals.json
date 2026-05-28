@@ -27,6 +27,29 @@
         "evals/fixtures/existing-data-update-flow/docs/UX__task-comments.yaml",
         "evals/fixtures/existing-data-update-flow/docs/DATA-MODEL.yaml"
       ]
+    },
+    {
+      "id": 3,
+      "name": "file-native-paradigm",
+      "prompt": "Run sdlc-data against the docs/PRD.yaml and docs/UX.yaml in this project. This is a single-user CLI ('outline') whose PRD storage_preferences explicitly want serialized YAML files on the filesystem, no database server, git-friendly and hand-editable, with kilobytes of data. At the Phase 4 paradigm-selection step the agent should recommend the file_native paradigm (Pydantic models serialized to disk). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; skip optional themes at the gate; accept any sweep candidate. Then write DATA-MODEL.yaml and validate.",
+      "expected_output": "A docs/DATA-MODEL.yaml with persistence.paradigm == 'file_native' and persistence.primary_store == 'filesystem'. It has a non-empty identity_conventions.rules list (NOT an id_strategy.scheme), entity fields use pydantic_type (not a SQL type enum), and the relational-only blocks (relationships, indexes_and_queries, integrity_and_constraints) are absent or empty rather than fabricated. Entities Outline and Section are present; every entity has traces_prd_features in FR-NNN format and all PRD must-have FRs (FR-001..FR-003) are covered. metadata.changelog is present. validate_schema.py exits 0 with [OK] and status complete.",
+      "files": [
+        "evals/fixtures/paradigm-file-native/docs/PRD.yaml",
+        "evals/fixtures/paradigm-file-native/docs/UX.yaml"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "paradigm-recommendation-relational",
+      "prompt": "Run sdlc-data against the docs/PRD.yaml and docs/UX.yaml in this project. This is a local CLI pipeline runner; the PRD data_model.storage_preferences explicitly lists 'sqlite'. At the Phase 4 paradigm-selection step the agent should weigh the signals (tiny single-user CLI makes file_native viable) but HONOR the explicit sqlite storage preference and recommend the relational paradigm, surfacing the trade-off rather than silently overriding the user's stated store. For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; skip optional themes; accept any sweep candidate. Then write DATA-MODEL.yaml and validate.",
+      "expected_output": "A docs/DATA-MODEL.yaml with persistence.paradigm == 'relational' and persistence.primary_store == 'sqlite' (honoring the PRD storage preference). The relational structural blocks are populated (id_strategy.scheme set, relationships present, indexes_and_queries.access_patterns present, integrity_and_constraints.default_on_delete set). At least 2 entities (Project plus the WKF-003-implied BranchSession-style entity from the sweep). Every entity traces_prd_features in FR-NNN format; FR-001..FR-003 covered. validate_schema.py exits 0 with [OK] and status complete.",
+      "files": [
+        "evals/fixtures/workflow-implied-entity/docs/PRD.yaml",
+        "evals/fixtures/workflow-implied-entity/docs/UX.yaml",
+        "evals/fixtures/workflow-implied-entity/docs/UX__cmd-init.yaml",
+        "evals/fixtures/workflow-implied-entity/docs/UX__cmd-run.yaml",
+        "evals/fixtures/workflow-implied-entity/docs/UX__cmd-switch.yaml"
+      ]
     }
   ]
 }

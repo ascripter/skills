@@ -107,6 +107,12 @@ on every upstream ID family: PRD `ENT-NNN`, `FR-NNN`, `WKF-NNN`,
 See `references/entity-discovery.md` "Scope-completeness sweep" for
 the procedure, caps, and anti-padding rule.
 
+**The field/key steps (d, e) are paradigm-dependent.** The set of
+entities is the same across paradigms (the domain doesn't change), but the
+per-field attributes and whether a primary key exists differ. Use the field
+shape from `references/paradigms/<selected-paradigm>.md` — summarized in the
+step (d)/(e) notes below.
+
 ### State machine per entity
 
 For each entity in `state.defined_entities` (Phase 3 already drafted the
@@ -127,12 +133,15 @@ list), iterate through the following states:
    │        │                                                            │
    │        ▼                                                            │
    │   (d) FIELDS        Per-field batch (2-4 fields per AskUserQuestion │
-   │        │            call): name, type, nullable, unique, default,   │
-   │        │            references. Auto-add audit columns if           │
-   │        │            audit_and_lifecycle.audit_columns enabled.      │
+   │        │            call). Attributes are PARADIGM-DEPENDENT (see    │
+   │        │            note below). Auto-add audit columns if           │
+   │        │            audit_and_lifecycle.audit_columns enabled        │
+   │        │            (relational/document only).                     │
    │        ▼                                                            │
-   │   (e) PRIMARY KEY   Confirm primary_key (single field or composite).│
-   │        │                                                            │
+   │   (e) KEY / IDENTITY Relational/document: confirm primary_key.       │
+   │        │            file_native: SKIP (path-derived; captured in     │
+   │        │            identity_conventions). graph/vector/key_value:   │
+   │        │            SKIP (identity is store/key-design concern).     │
    │        ▼                                                            │
    │   (f) TRACES        Confirm traces_prd_features (FR-NNN list),      │
    │        │            traces_ux_surfaces (SCR-NNN list), and          │
@@ -150,6 +159,17 @@ list), iterate through the following states:
    │                                                                     │
    └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Step (d) field attributes by paradigm
+
+| paradigm    | per-field attributes to elicit                                          |
+|-------------|-------------------------------------------------------------------------|
+| relational  | `type` (enum), `nullable`, `unique`, `primary_key`, `default`, `references`, `on_delete`, `check` |
+| document    | `type`, `nullable`, `unique`; embedded children via `composition`       |
+| file_native | `pydantic_type` (literal Python type) + `description`; NO nullable/unique/pk |
+| graph       | node properties: `type` (+ `nullable`); edges captured in the `edges` theme |
+| vector      | payload fields (`type`); mark the embedding-source field `embedding: true`; list `payload_fields` |
+| key_value   | `type` per attribute; the key itself is captured in `key_value_design`  |
 
 ### Schema-path rewriting
 

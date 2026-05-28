@@ -2,14 +2,17 @@
 name: data
 description: >
   Launch in empty context. Create or update DATA-MODEL.yaml for a software
-  product. Reads docs/PRD.yaml and any docs/UX*.yaml as upstream inputs,
-  scans pre-fill candidates, asks the structural monorepo/bounded-contexts
-  questions, runs a resume-aware thematic interview (with a per-entity
-  drill-down for the critical `entities` theme), persists session state for
-  resumability, then writes and validates docs/DATA-MODEL.yaml for downstream
-  agent consumption (api, arch, test). Trigger only on /sdlc:data or a direct
-  natural-language request for the data model — do not auto-trigger from
-  generic chat. ONLY stop when no open questions remain or the user types EXIT.
+  product across six storage paradigms (relational, document, key_value, graph,
+  vector, file_native). Reads docs/PRD.yaml and any docs/UX*.yaml as upstream
+  inputs, scans pre-fill candidates, recommends a storage paradigm from PRD
+  signals and asks the structural paradigm/monorepo/bounded-contexts questions,
+  then routes a resume-aware thematic interview down the paradigm-appropriate
+  path (with a per-entity drill-down for the critical `entities` theme),
+  persists session state for resumability, and writes + validates
+  docs/DATA-MODEL.yaml for downstream agent consumption (api, arch, test).
+  Trigger only on /sdlc:data or a direct natural-language request for the data
+  model — do not auto-trigger from generic chat. ONLY stop when no open
+  questions remain or the user types EXIT.
 user-invocable: true
 disable-model-invocation: true
 model: opus
@@ -29,24 +32,29 @@ truth.
 1. **Resume check** → load existing state if any (otherwise scan from scratch).
 2. **Scan inputs** → read `docs/PRD.yaml` (required) and every `docs/UX*.yaml`
    (required); build pre-fill map.
-3. **Structural questions** → monorepo (inherited from PRD)? bounded contexts?
-   polyglot persistence?
-4. **Pre-fill confirmation** → theme by theme, each `⚠ inferred` confirmed
+3. **Entity-candidate discovery** → propose a draft entity list early.
+4. **Structural questions** → **storage paradigm** (agent recommends from PRD
+   signals; user confirms) → monorepo (inherited from PRD)? → bounded contexts?
+   → polyglot persistence? The paradigm decision drives everything downstream.
+5. **Pre-fill confirmation** → theme by theme, each `⚠ inferred` confirmed
    individually (hallucination guard).
-5. **Theme interview** → required themes always run; optional themes are
-   gated now/skip/todo. Importance tiers (`med | high | critical`) control
-   batching. The `entities` theme is the lone `critical` (and the lone
-   `synthesis: true` theme) — full per-entity drill-down followed by a
-   dynamic scope-completeness sweep that draws on ALL upstream ID
-   families (ENT, FR, WKF, JTB, UX surfaces) to surface candidate
-   entities the draft list may have missed.
-6. **Write + validate** → merge into `docs/DATA-MODEL.yaml`, run
-   `validate_schema.py` (Pydantic + cross-checks: required fields,
-   relationship integrity, field references, classification integrity,
-   bounded-context partition, ID-prefix format (WRN/FR/SCR/WKF), feature
-   coverage, volume-vs-scale gate; mode-mismatch is enforced by the
-   Pydantic model itself).
-7. **CLAUDE.md pointer + close** → inject the pointer block, mark state
+6. **Theme interview (paradigm-routed)** → run only the themes whose
+   `applies_to_paradigms` includes the selected paradigm, PLUS the paradigm's
+   own analogue themes from `references/paradigms/<paradigm>.md`. Required
+   themes always run; optional themes are gated now/skip/todo. Importance tiers
+   (`med | high | critical`) control batching. The `entities` theme is the lone
+   `critical` (and lone `synthesis: true`) theme — full per-entity drill-down
+   (with the paradigm-appropriate field shape) followed by a dynamic
+   scope-completeness sweep across ALL upstream ID families (ENT, FR, WKF, JTB,
+   UX surfaces).
+7. **Write + validate** → merge into `docs/DATA-MODEL.yaml`, run
+   `validate_schema.py` (Pydantic + **paradigm-gated** cross-checks: required
+   fields, relationship/edge/composition/cross-reference integrity, field
+   references, vector_config/identity_conventions/key_value_design substance,
+   classification integrity, bounded-context partition, ID-prefix format
+   (WRN/FR/SCR/WKF), feature coverage, volume-vs-scale gate; mode-mismatch is
+   enforced by the Pydantic model itself).
+8. **CLAUDE.md pointer + close** → inject the pointer block, mark state
    `complete`.
 
 State is persisted **after every confirmed batch and after every per-entity
@@ -62,10 +70,11 @@ progress, even mid-entity.
 | `DATA-MODEL.schema.yaml` | Human-readable canonical schema for `docs/DATA-MODEL.yaml`. |
 | `validate_schema.py` | Pydantic v2 validator + cross-checks, called after every write. |
 | `set_claude_md_pointer.py` | Deterministic CLAUDE.md pointer injector, called in Phase 8. |
+| `references/paradigms/<paradigm>.md` | **One file per storage paradigm** (relational, file-native, document, key-value, graph, vector). Each holds: "When to recommend" heuristics (read in Phase 4 to form the recommendation), the paradigm's entity-field shape, and its analogue themes/questions (read on entering Phase 6 once the paradigm is locked). Read ONLY the file for the selected paradigm. |
 | `references/interview-mechanics.md` | AskUserQuestion batch format, EXIT semantics, importance-tier flows. Read on entering Phase 6. |
 | `references/entity-discovery.md` | Heuristics for deriving entity candidates from PRD features + UX surfaces. Read in Phase 3. |
 | `references/pre-fill-sources.md` | Explicit PRD/UX-field → DATA-MODEL-field map. Read in Phase 3 + Phase 5. |
-| `references/polyglot-persistence.md` | Guidance for multi-store designs. Read when the user opts into polyglot in Phase 4. |
+| `references/polyglot-persistence.md` | Guidance for multi-store designs (incl. cross-paradigm secondary stores). Read when the user opts into polyglot in Phase 4. |
 | `references/merge-validate.md` | Merge logic for existing DATA-MODEL.yaml, validator recovery, CLAUDE.md pointer rules. Read on entering Phase 7. |
 | `references/edge-cases.md` | Unusual situations (entity rename, mode switches, mass import, missing upstreams). Read whenever the happy path doesn't fit. |
 
@@ -183,9 +192,33 @@ Two patterns coexist here and the convention matters:
 
 Ask in order:
 
+0. **Storage paradigm** — THE foundational decision; everything downstream
+   routes off it. Six paradigms: `relational | document | key_value | graph |
+   vector | file_native`.
+
+   **The agent recommends first.** Before asking, derive a recommendation
+   from PRD signals and present it at **position 1** with a one-line
+   rationale (the position-1 recommendation pattern, not a silent default —
+   the user still confirms or overrides). The signals (data volume,
+   relationship density, embedding/semantic-search needs, query shape,
+   deployment footprint, and any explicit `PRD.data_model.storage_preferences`)
+   and their mapping to paradigms live in each paradigm reference's
+   **"When to recommend"** section — **read
+   `references/paradigms/<candidate>.md`** for the heuristics before forming
+   the recommendation. Run this as a `critical`-style mini-decision:
+   propose → one-line rationale → user picks. Persist
+   `state.storage_paradigm`; write `persistence.paradigm`,
+   `persistence.paradigm_confidence`, `persistence.paradigm_rationale`.
+   Frozen for the project's lifetime once chosen (a later change is an
+   explicit restart of the data model — see `references/edge-cases.md`).
+
+   Once locked, **load `references/paradigms/<paradigm>.md`** — it defines the
+   entity-field shape and the analogue themes you'll run in Phase 6.
+
 1. **Monorepo mode** — inherited from `PRD.metadata.monorepo`. Show as
    pre-filled and ask the user to confirm only if PRD signals conflict
-   (rare).
+   (rare). (In monorepo mode each product may pick its own paradigm —
+   ask the paradigm question per product.)
 2. **Bounded contexts** — opt-in. Ask:
    > "Do you want to group entities under DDD-style bounded contexts (e.g.
    > `auth: { entities: [...] }`, `billing: { entities: [...] }`)? Default:
@@ -253,10 +286,41 @@ Write the confirmed values into the state file. Set
 `<field>_confidence: confirmed` for explicitly confirmed items,
 `<field>_confidence: inferred` for accepted-as-is inferences.
 
-### Phase 6 — Theme interview
+### Phase 6 — Theme interview (paradigm-routed)
 
 Walk the themes in the order defined by `data-questions.yaml`. Use
 `AskUserQuestion` as the canonical asking channel.
+
+#### Paradigm routing (do this first)
+
+The selected `state.storage_paradigm` decides which themes run:
+
+1. **Universal + applicable `data-questions.yaml` themes** — run a theme only
+   if its `applies_to_paradigms` list contains the selected paradigm (or is
+   `[all]`). Themes whose list omits the paradigm are **skipped silently** —
+   do NOT offer them as a now/skip/todo gate. (E.g. for `vector` you skip
+   `relationships`, `indexes_and_queries`, `integrity_and_constraints`,
+   `id_strategy`, `migrations_and_evolution`, `transactions_and_consistency`.)
+
+2. **Paradigm analogue themes** — read `references/paradigms/<paradigm>.md` and
+   run the analogue themes it defines. These replace the skipped relational
+   themes with the paradigm's own structural questions:
+
+   | paradigm     | analogue themes (from the reference file)                          |
+   |--------------|--------------------------------------------------------------------|
+   | relational   | (none — uses the data-questions.yaml relational themes directly)   |
+   | document     | `composition`, `cross_references` (id links between documents)     |
+   | key_value    | `key_value_design` (partition/sort keys, GSIs)                     |
+   | graph        | `edges`, `graph_config` (traversal patterns)                       |
+   | vector       | `vector_config` (embedding model, dims, distance, ANN index)       |
+   | file_native  | `identity_conventions`, `composition`, `cross_references`, `serialization_conventions` |
+
+3. **Entity field shape** — when drilling each entity in the `entities` theme,
+   use the field-attribute shape the paradigm reference specifies (relational:
+   `type/nullable/unique/primary_key/references/on_delete`; file_native:
+   `pydantic_type` + `description`, no primary_key; graph: node properties;
+   vector: `payload_fields` + one `embedding: true` field; key_value: fields +
+   key design captured in `key_value_design`).
 
 #### Required vs optional themes
 
@@ -273,9 +337,13 @@ Walk the themes in the order defined by `data-questions.yaml`. Use
 
 #### Conditional promotion
 
-If `PRD.data_model.data_volume_estimate ∈ {terabytes, petabytes}`, the
+If `PRD.data_model.data_volume_estimate ∈ {terabytes, petabytes}` AND the
+selected paradigm includes `scale_and_retention` in its
+`applies_to_paradigms` (relational/document/key_value), the
 `scale_and_retention` theme is promoted to required regardless of its
 default. The agent re-evaluates promotion rules at every theme boundary.
+(For graph/vector/file_native the volume gate does not apply — the validator
+skips it for those paradigms.)
 
 #### Tiered question flow (within a theme)
 
@@ -375,6 +443,10 @@ skill_version: "1.1"
 started_at: <iso8601>
 last_updated: <iso8601>
 status: in_progress  # in_progress | complete | aborted
+storage_paradigm: null  # relational | document | key_value | graph | vector |
+                        # file_native. Chosen in Phase 4; frozen for the
+                        # project. In monorepo mode use storage_paradigm_by_product.
+storage_paradigm_by_product: {}  # slug → paradigm (monorepo mode only)
 monorepo: false      # mirrors DATA-MODEL metadata; inherited from PRD
 products: []         # populated only when monorepo: true; list of product slugs
 bounded_contexts_enabled: false
