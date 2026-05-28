@@ -10,9 +10,10 @@ description: >
   without re-running the interview. Trigger only on /sdlc:arch or a direct
   natural-language request to start the architecture skill — never
   auto-trigger from generic architecture chatter. Reads docs/PRD.yaml,
-  docs/UX.yaml (+ UX__*), docs/DATA-MODEL.yaml, docs/API.yaml (+ API__*)
-  as preconditions and refuses to run if any upstream artifact is missing
-  or its metadata.status != complete.
+  docs/UX.yaml (+ UX__*), docs/DATA-MODEL.yaml as required preconditions
+  and refuses to run if any of these is missing or its metadata.status !=
+  complete. docs/API.yaml (+ API__*) is optional — absent means a warning
+  is shown before anything else and the user confirms whether to continue.
 user-invocable: true
 disable-model-invocation: true
 model: opus
@@ -113,6 +114,24 @@ will not touch `docs/ARCH.yaml`; system mode will not touch any
 `docs/ARCH__*.yaml`. Cross-references go through the state file plus the
 already-on-disk artifacts read at Phase 2.
 
+## Pre-flight API check (runs before everything else)
+
+Before the resume check (Phase 1), do one filesystem lookup:
+
+```bash
+ls docs/API.yaml 2>/dev/null
+```
+
+**If `docs/API.yaml` is absent**, immediately show this message via `AskUserQuestion` before reading any other input:
+
+> ⚠ No API spec found (`docs/API.yaml` is missing). Is this a project without an API layer? If not, please abort and run `/sdlc:api` first.
+
+Options: `"Yes, this project has no API — continue"` / `"No — I need to abort and run /sdlc:api first"`.
+
+If the user chooses to abort, stop immediately. If they confirm no API, record `api_present: false` in the active sub-session state and continue to Phase 1.
+
+**If `docs/API.yaml` is present**, record `api_present: true` and proceed directly to Phase 1 with no message.
+
 ## The 8-phase flow (interview modes)
 
 The phases are the same for both system mode and container mode, but the
@@ -143,17 +162,20 @@ The architecture skill never re-asks anything already in the upstream
 artifacts. Read them once at startup and validate each via its upstream
 skill's validator.
 
-Required upstream artifacts (all four MUST exist with `metadata.status:
+Required upstream artifacts (all three MUST exist with `metadata.status:
 complete`):
 
 1. `docs/PRD.yaml` — validated via `python sdlc/skills/prd/validate_schema.py --path docs/PRD.yaml`.
 2. `docs/UX.yaml` + every `docs/UX__*.yaml` — validated via `python sdlc/skills/ux/validate_schema.py --path docs/UX.yaml`.
 3. `docs/DATA-MODEL.yaml` — validated via `python sdlc/skills/data/validate_schema.py --path docs/DATA-MODEL.yaml`.
-4. `docs/API.yaml` + every `docs/API__*.yaml` — validated via `python sdlc/skills/api/validate_schema.py --path docs/API.yaml`.
 
 If any validator exits non-zero, or any artifact has `metadata.status !=
 complete`, **stop**. Print a clear message naming the offending file and
 the upstream skill the user should run.
+
+Optional upstream artifact:
+
+4. `docs/API.yaml` + every `docs/API__*.yaml` — validated via `python sdlc/skills/api/validate_schema.py --path docs/API.yaml`. Only read and validate if `api_present: true` (set in the pre-flight check). If absent, API-sourced pre-fills are simply skipped; note the absence in `arch_warnings` (WRN-NNN).
 
 **Read `PRD.conventions` (if present).** The PRD may carry a binding
 `conventions` block. Honour it before writing anything:
@@ -207,7 +229,8 @@ Source candidates, in priority order:
 
 1. **API.yaml + API__*.yaml** — every `api_kind != none` API implies a
    backend container. Resources grouped by `tags` or by `bounded_context`
-   hint at multiple backend services. Tag `✓ found`.
+   hint at multiple backend services. Tag `✓ found`. **Skip if
+   `api_present: false`** (no API layer confirmed in pre-flight check).
 2. **UX.yaml.surface_family** — `web | mobile | desktop | cli |
    browser_extension | mixed` → frontend container(s). Tag `✓ found`.
 3. **DATA-MODEL.yaml.persistence.*_stores** — every store ≈ a candidate
