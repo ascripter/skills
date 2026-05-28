@@ -1,6 +1,5 @@
 # Skill Repo for Claude Code
-Providing some plugins and skills for software dev.
-Repo acts as a marketplace for skills
+Providing skills for software dev. Repo acts as a marketplace for skills
 
 ## Install
 Execute both commands from the command line:
@@ -8,13 +7,13 @@ Execute both commands from the command line:
 - Install the plugin: `claude plugin install sdlc@ascripter-skills`
 
 ## Skills
-All skills need to be explicitly invoked are will provide an interview mechanic that lets you define your software project step by step.
+All skills need to be explicitly invoked and will provide an interview mechanic that lets you define your software project step by step.
 
 All skills put their output into **`docs/`** (fixed; can't be configured currently).
 
 1. **`/sdlc:prd`** → `PRD.yaml`
    
-   Product requirements. The skill scans everything already present in the repo, so if you have already a README or other project docs that's beneficial at this stage. 
+   Product requirements. The skill scans everything already present in the repo, so having already a README or other project docs is beneficial at this stage. 
 
 2. **`/sdlc:ux`** → `UX.yaml` and `UX__<surface>.yaml`
    
@@ -22,7 +21,7 @@ All skills put their output into **`docs/`** (fixed; can't be configured current
 
 3. **`/sdlc:data`** → `DATA-MODEL.yaml`
     
-   Define data storage (SQL, graph, document, key-value or vector databse, or simple filesystem storage), then all data entities and their relations. 
+   Define data storage (SQL, graph, document, key-value or vector database, or simple filesystem storage), then all data entities and their relations. 
 
 4. **`/sdlc:api`** (optional) → `API.yaml` and `API__<resource>.yaml` 
 
