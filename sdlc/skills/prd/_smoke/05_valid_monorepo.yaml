@@ -19,9 +19,9 @@ products:
       primary_users: ["PER-001: Internal services", "PER-002: End users via SSO"]
     use_cases:
       core_workflows:
-        - "WKFR-001: Sign in"
-        - "WKFR-002: Sign out"
-        - "WKFR-003: Refresh token"
+        - "WKF-001: Sign in"
+        - "WKF-002: Sign out"
+        - "WKF-003: Refresh token"
     functional_requirements:
       must_have_features:
         - "FR-001: OIDC — OpenID Connect login for tenant users."
@@ -41,8 +41,8 @@ products:
       primary_users: ["PER-001: Tenant admins", "PER-002: Finance team"]
     use_cases:
       core_workflows:
-        - "WKFR-001: View invoice"
-        - "WKFR-002: Pay invoice"
+        - "WKF-001: View invoice"
+        - "WKF-002: Pay invoice"
     functional_requirements:
       must_have_features:
         - "FR-001: Invoice generation — monthly invoices with line items."

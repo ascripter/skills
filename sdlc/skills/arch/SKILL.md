@@ -162,6 +162,17 @@ The architecture skill never re-asks anything already in the upstream
 artifacts. Read them once at startup and validate each via its upstream
 skill's validator.
 
+**Slice large docs, don't slurp.** `arch` reads the most upstream context of
+any skill — `PRD.yaml` (1000+ lines) and especially `DATA-MODEL.yaml` (commonly
+several thousand). If `docs/INDEX.yaml` exists (the project ran `/sdlc:setup`),
+read these by slice: look an entity/FR/section up in `INDEX.yaml` (or
+`python .claude/sdlc/docs_index.py --show <symbol>`) and `Read` only its
+`[start, end]` range; resolve a whole block via its `sections.<file>.<key>`
+range. Validate each upstream file with its validator (below), then pull only
+the slices you actually need — do not load `DATA-MODEL.yaml` whole to find a few
+store ids or entity names. Fall back to whole-file reads when `INDEX.yaml` is
+absent. Protocol: `.claude/rules/sdlc-docs-access.md`.
+
 Required upstream artifacts (all three MUST exist with `metadata.status:
 complete`):
 
@@ -333,7 +344,8 @@ mode.
 2. `identity_and_auth` — `high` (same).
 3. `container_inventory` — `critical` per item, `synthesis: true`. For each
    container: archetype, purpose, `owns_api_resources`, `owns_ux_surfaces`,
-   `persistence`, `implements_requirements` (FR-NNN), `traces_prd_workflows`
+   `persistence`, `implements_requirements` (FR-NNN features **and** NFR-NNN
+   non-functionals the container is the home of), `traces_prd_workflows`
    (WKF-NNN), `deployment_unit`, ownership, change_cadence. Each container's
    status walks `defined → draft → confirmed`. After the per-item loop,
    run the scope-completeness sweep (see `references/container-discovery.md`).
@@ -365,9 +377,9 @@ mode.
    fills `component_id`, `archetype`, `purpose`, `responsibilities`,
    `inputs`, `outputs`, `failure_modes`, `traces_api_resources` /
    `traces_ux_surfaces` / `traces_data_entities`, and
-   `implements_requirements` (FR-NNN) / `traces_prd_workflows` (WKF-NNN)
-   where applicable. A component's `implements_requirements` must be a
-   subset of its parent container's.
+   `implements_requirements` (FR-NNN / NFR-NNN) / `traces_prd_workflows`
+   (WKF-NNN) where applicable. A component's `implements_requirements` must
+   be a subset of its parent container's.
 10. `internal_and_external_edges` — `critical` synthesis (see
     `references/edge-derivation.md`).
 
@@ -426,9 +438,11 @@ checks emit warnings only.
 **ID-prefix formats** (block complete):
 
 - `WRN-NNN` on every `arch_warnings` entry (system + each container).
-- `FR-NNN` on every `implements_requirements` + `non_container_features`.
+- `FR-NNN` or `NFR-NNN` on every `implements_requirements`; `FR-NNN` on
+  `non_container_features`.
 - `WKF-NNN` on every `traces_prd_workflows`.
-- PRD-trace existence: every `FR-NNN` / `WKF-NNN` resolves to a PRD id;
+- PRD-trace existence: every `FR-NNN`/`NFR-NNN` / `WKF-NNN` resolves to a
+  PRD id (FR→functional_requirements, NFR→non_functional_requirements);
   a component's `implements_requirements` ⊆ its parent container's.
 
 **Edge integrity** (block complete):
@@ -526,6 +540,12 @@ Bullet format (the pointer script produces this text):
 
 For bullet detection and append behavior, see
 `references/merge-validate.md`.
+
+**Refresh the navigation index.** If `.claude/sdlc/docs_index.py` exists (the
+project ran `/sdlc:setup`), run `python .claude/sdlc/docs_index.py` after
+writing `docs/ARCH.yaml` and its per-container files so `docs/INDEX.yaml`
+reflects the new content right away (the setup hook also does this, but a hook
+added mid-session only activates next session). Harmless no-op if not installed.
 
 After the CLAUDE.md write succeeds: set the active session's `status:
 complete` in the state file (keep the file as audit trail) and tell the

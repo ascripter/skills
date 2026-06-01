@@ -209,13 +209,14 @@ components:                                # REQUIRED — non-empty
       - User                               #            (PascalCase) this component
                                            #            reads/writes. Validated against
                                            #            DATA-MODEL.yaml.entities.
-    implements_requirements:               # OPTIONAL — PRD must-have features (FR-NNN)
-      - FR-001                             #            this component implements.
-                                           #            Validated for FR-NNN format,
-                                           #            existence in PRD.yaml, AND
-                                           #            containment: must be a subset of
-                                           #            the parent container's
-                                           #            implements_requirements.
+    implements_requirements:               # OPTIONAL — PRD requirements this component
+      - FR-001                             #            implements. Accepts FR-NNN
+      - NFR-011                            #            (features) and NFR-NNN
+                                           #            (non-functional). Validated for
+                                           #            FR-NNN/NFR-NNN format, existence
+                                           #            in PRD.yaml, AND containment: must
+                                           #            be a subset of the parent
+                                           #            container's implements_requirements.
     traces_prd_workflows:                  # OPTIONAL — PRD core_workflows (WKF-NNN) this
       - WKF-003                            #            component participates in.
                                            #            Validated for WKF-NNN format +
@@ -324,8 +325,10 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     has `external: true`, this file should not exist; if it does, the
 #     validator emits a warning (not a fail).
 # 18. Component PRD-trace integrity — for every component:
-#       * implements_requirements  → FR-NNN format + exists in PRD.yaml AND
-#         ⊆ the parent container's implements_requirements.
+#       * implements_requirements  → FR-NNN/NFR-NNN format + exists in PRD.yaml
+#         (FR resolves against functional_requirements, NFR against
+#         non_functional_requirements) AND ⊆ the parent container's
+#         implements_requirements.
 #       * traces_prd_workflows     → WKF-NNN format + exists in PRD.yaml.
 # 19. WRN-NNN format — every arch_warnings entry matches `^WRN-\d{3,}:\s+.+`.
 # =============================================================================

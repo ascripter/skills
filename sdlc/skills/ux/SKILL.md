@@ -104,6 +104,14 @@ Before doing anything else, check for
 ### Phase 2 — Scan inputs
 
 `sdlc:ux` does NOT re-interview anything that already lives in `docs/PRD.yaml`.
+
+**Slice large docs, don't slurp.** If `docs/INDEX.yaml` exists (the project ran
+`/sdlc:setup`), read `PRD.yaml` (often 1000+ lines) by slice: look an `FR-###`
+or a top-level section up in `INDEX.yaml` (or `python .claude/sdlc/docs_index.py
+--show <symbol>`) and `Read` only its `[start, end]` range, rather than loading
+the whole PRD to pull a handful of workflows/features. Fall back to whole-file
+reads when `INDEX.yaml` is absent. Protocol: `.claude/rules/sdlc-docs-access.md`.
+
 Read these files at startup:
 
 1. **`docs/PRD.yaml`** — required. Run the PRD validator first:
@@ -344,6 +352,12 @@ Bullet format (the pointer script produces this exact text):
 
 For the bullet detection rule and append behavior, see
 `references/merge-validate.md`.
+
+**Refresh the navigation index.** If `.claude/sdlc/docs_index.py` exists (the
+project ran `/sdlc:setup`), run `python .claude/sdlc/docs_index.py` after
+writing `docs/UX.yaml` and its per-surface files so `docs/INDEX.yaml` reflects
+the new content right away (the setup hook also does this, but a hook added
+mid-session only activates next session). Harmless no-op if not installed.
 
 After the CLAUDE.md write succeeds: set `status: complete` in the state
 file (keep the file — audit trail), tell the user where the artifacts live.

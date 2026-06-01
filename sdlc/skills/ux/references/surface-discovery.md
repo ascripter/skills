@@ -13,6 +13,30 @@ products that's typically one `cli_command` per verb+noun, plus one
 exit conditions, layout, states, and a `traces_workflows` list (may be
 empty for chrome/diagnostic surfaces).
 
+## Headless surface families (service, library — and cli)
+
+Three families are **headless** — they expose no visual screens:
+
+- **`cli`** — surfaces are `cli_command` / `flow_step` entries (the common
+  case, covered throughout this file and `cli-ux.md`).
+- **`service`** — a network service with no human UI. Its "surfaces" are the
+  endpoints/operations it serves (owned by the API stage, not UX). Emit a
+  **minimal** UX spec: enumerate at most a thin operational surface inventory
+  (or none), set `accessibility.wcag_target: not_applicable_cli`, and leave
+  `component_library`/theming null. Most of the interview's visual themes are
+  gated `skip`.
+- **`library`** — a code library / SDK with no UI at all. Its "surfaces" are its
+  public API symbols (owned by the API stage). Emit the minimum: typically an
+  empty or near-empty `surface_inventory`, `accessibility.wcag_target:
+  not_applicable_cli`, null `component_library`. Record a `ux_warnings` note that
+  the surface contract lives in the API spec.
+
+For all three, do **not** manufacture screen surfaces. When `surface_family`
+is `mixed` and includes a headless member, run the visual sub-interview for the
+visual members and the minimal path for the headless ones. `tui` (full-screen
+terminal UI) and `voice` (turn-based) are **not** headless — `tui` enumerates
+screen-like surfaces; `voice` enumerates `flow_step` turns.
+
 ## ID conventions for surfaces
 
 - **`id: SCR-NNN`** is the stable cross-stage handle. Once assigned (in

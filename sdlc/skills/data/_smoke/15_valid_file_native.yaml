@@ -20,6 +20,9 @@ persistence:
   paradigm: file_native
   paradigm_confidence: confirmed
   paradigm_rationale: "Single-user CLI tool; diffable, git-friendly artifacts beat a DB server."
+  topology: local_embedded
+  topology_confidence: confirmed
+  topology_rationale: "On-disk files in-process; no DB server, no concurrent writers."
   primary_store: filesystem
   serialization_format: yaml
 

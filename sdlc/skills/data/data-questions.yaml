@@ -215,6 +215,35 @@ questions:
     importance: critical
 
   - theme: persistence
+    id: topology
+    schema_path: persistence.topology
+    question: "Where/how does the primary store run?"
+    hint: >
+      The axis ORTHOGONAL to paradigm (the family). The same family spans
+      several topologies — a relational family may run embedded (SQLite),
+      self-hosted (Postgres server), managed (RDS), or serverless (Aurora
+      Serverless). Asked in Phase 4 right after the paradigm. Derive a
+      recommendation from PRD signals: single-user/CLI/desktop + bounded volume
+      + no concurrent writers ⇒ local_embedded; multi-tenant SaaS / server
+      runtime ⇒ networked_server or cloud_managed; spiky/low-ops ⇒ serverless;
+      cache/ephemeral-only ⇒ in_memory. Present the recommendation at position 1
+      with a one-line rationale; the user confirms or overrides. Optional — skip
+      only when genuinely undecided (record a WRN-NNN). Concrete provider (RDS
+      vs Cloud SQL vs self-managed) is finalized later at the deploy stage.
+    suggested_answers:
+      - "local_embedded"
+      - "networked_server"
+      - "cloud_managed"
+      - "serverless"
+      - "in_memory"
+      - "other"
+    free_text_allowed: false
+    required: false
+    capture_rationale: true
+    confidence_field: true
+    importance: high
+
+  - theme: persistence
     id: primary_store
     schema_path: persistence.primary_store
     question: "Primary durable data store?"

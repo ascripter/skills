@@ -45,6 +45,11 @@
 #           `nice_to_have_features` — referenced from
 #           `implements_requirements` and from `cli.exit_codes[code].
 #           implements_requirements`.
+#     NFR — `PRD.non_functional_requirements.performance_targets` / `.other`
+#           — may ALSO appear in `implements_requirements` when a surface is
+#           the place an NFR is realized (e.g. a per-call timeout, an
+#           input-containment boundary). The validator accepts FR-NNN or
+#           NFR-NNN in `implements_requirements`.
 #     ENT — `PRD.data_model.key_entities` — referenced from
 #           `references_entities`. Catches surfaces implied by entities
 #           (e.g. a `ProjectRegistry` entity implies a `list` command).
@@ -118,10 +123,19 @@ ux_warnings: []                            # list[string] of "WRN-NNN: <msg>" it
 # -----------------------------------------------------------------------------
 # platform_and_shell — surface family, device targets, viewport breakpoints
 # -----------------------------------------------------------------------------
-surface_family: null            # one of: cli | web | mobile | desktop | mixed (enum)
+surface_family: null            # one of: cli | web | mobile | desktop | tui |
+                                #         voice | service | library | mixed (enum)
+                                #   HEADLESS families (cli, service, library) have
+                                #   no visual screens — their "surfaces" are
+                                #   commands / endpoints / public API symbols, and
+                                #   the interview emits a minimal spec (see
+                                #   references/surface-discovery.md). tui is
+                                #   screen-like (full-screen terminal UI); voice is
+                                #   turn-based conversational.
 surface_family_confidence: null # confirmed | inferred | assumption (enum)
 surface_family_members: null    # list[surface_family]; populated only when
-                                # surface_family == 'mixed'; e.g. ["web","cli"]
+                                # surface_family == 'mixed'; e.g. ["web","cli"],
+                                # ["service","cli"]
 device_targets: null            # list[string] — e.g. ["desktop","tablet","mobile"]
 device_targets_confidence: null
 viewport_breakpoints: null      # list[string] — e.g. ["sm=640","md=768","lg=1024"]
@@ -164,7 +178,9 @@ navigation_model:
 #                              coverage check.
 #   implements_requirements  — list of FR-NNN ids from PRD.functional_requirements
 #                              (must_have + nice_to_have) that this surface
-#                              implements. Optional; absent for navigation-only
+#                              implements, and/or NFR-NNN ids from
+#                              PRD.non_functional_requirements that this surface
+#                              realizes. Optional; absent for navigation-only
 #                              or chrome surfaces.
 #   references_entities      — list of ENT-NNN ids from PRD.data_model.key_entities
 #                              that this surface displays, edits, or directly
@@ -178,14 +194,17 @@ surface_inventory:                # list[SurfaceInventoryItem]
                                   #         cli_command | flow_step |
                                   #         empty_state | toast | overlay |
                                   #         tab | page | dialog | other (enum)
-    status: defined               # one of: defined | draft | confirmed (enum)
+    status: defined               # one of: defined | draft | confirmed | proposed (enum)
                                   #   defined  = id + type known, no deep-dive yet
                                   #   draft    = deep-dive started, not approved
                                   #   confirmed= deep-dive complete + user-approved
+                                  #   proposed = fully specced but deferred — targets a
+                                  #              nice-to-have / post-MVP FR; kept in the
+                                  #              inventory so the contract isn't lost
     file_path: null               # always docs/UX__<surface_id>.yaml (string)
     traces_workflows: null        # list[string] of "WKF-NNN" ids (no verbatim text).
                                   # Drives the coverage check at validation.
-    implements_requirements: null # list[string] of "FR-NNN" ids (optional)
+    implements_requirements: null # list[string] of "FR-NNN" / "NFR-NNN" ids (optional)
     references_entities: null     # list[string] of "ENT-NNN" ids (optional)
 
 # -----------------------------------------------------------------------------

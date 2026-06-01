@@ -26,8 +26,8 @@ users_personas:
 
 use_cases:
   core_workflows:
-    - "WKFR-001: Add a task in under 3 seconds"
-    - "WKFR-002: Mark tasks done from the keyboard"
+    - "WKF-001: Add a task in under 3 seconds"
+    - "WKF-002: Mark tasks done from the keyboard"
 
 functional_requirements:
   must_have_features:

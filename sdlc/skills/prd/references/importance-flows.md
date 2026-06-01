@@ -535,35 +535,45 @@ ID". That shape is wrong for conventions, where each bucket has its
 own free-form nested body (scalars, lists, maps — whatever the project
 needs) and has no ID.
 
-### Run as the LAST mini-section of its theme
+### Run as the LAST mini-section of its theme — a synthesis pass
 
 `conventions` lives in its own theme at the end of `prd-questions.yaml`,
 after `open_questions`. By the time this question runs, the agent has
 seen every other answer and can spot cross-cutting patterns that
-downstream stages must honor verbatim.
+downstream stages must honor verbatim. Treat it as a **synthesis pass**,
+not a single fill-in question: it is the conventions analogue of the
+`critical` scope-completeness sweep, and it is where the most manual
+rework lands when done thinly.
+
+**Before step a, read `references/conventions-catalog.md`.** It carries
+~12 project-agnostic bucket archetypes (artifact_ids, schema_versioning,
+nfr_propagation, code_style, testing_policy, severity rubrics,
+dependency/supply-chain policy, directory_layout, data_conventions,
+api_conventions, observability, domain_glossary, stage_contracts), each
+with a "propose when" trigger and a skeletal body. It is the menu you
+reason *from* — not a checklist to fill.
 
 ### Per-bucket state machine
 
-#### Step a — propose convention bucket names
+#### Step a — reflect, then propose convention bucket names
 
-Reflect on everything answered so far. What cross-cutting rules have
-emerged that downstream stages will need to honor identically? Common
-sources of bucket candidates:
+First do the **structured reflection** (same discipline as the `critical`
+sweep), across three lenses:
 
-- The user mentioned an ID/naming scheme that spans multiple lists
-  (FR-### referenced across stages, ENT-### feeding API, etc.) →
-  candidate bucket `artifact_ids` or similarly named.
-- The user mentioned schema/artifact versioning → candidate bucket
-  `schema_versioning`.
-- A list of NFRs references downstream stages by name → candidate
-  bucket `nfr_propagation` (which downstream stage must read which
-  PRD field).
-- A code-style or testing rule keeps surfacing → candidate bucket
-  `code_style` or `testing_policy`.
+1. **The answers themselves** — an ID/naming scheme spanning lists, a term
+   recurring with a precise meaning, NFRs naming downstream stages, a
+   code-style/testing rule that kept surfacing.
+2. **Every upstream ID family** (FR/NFR/ENT/WKF/INT/AIF) — a rule about how
+   a family is referenced by later stages is a convention, not a feature.
+3. **The project type** — CLI tool, SaaS app, library/SDK, data pipeline,
+   AI-orchestration framework, regulated app: each carries different
+   "rules everyone forgets to write down". Match the catalogue archetypes
+   against this project's profile.
 
-Surface 2–4 candidate bucket names via one `AskUserQuestion` (multi-
-select). Always include "Done — no conventions / no more conventions"
-as an explicit option:
+Then surface the candidate bucket names you actually see via one
+`AskUserQuestion` (multi-select) — typically 2–4 per pass, drawn from the
+catalogue plus anything project-specific. Always include "Done — no
+conventions / no more conventions" as an explicit option:
 
 ```
 header: "Conventions"
@@ -641,13 +651,17 @@ trigger.
 
 ### Caps (per `conventions` block)
 
-- **Sweep-pass cap**: 2 passes through step a maximum. After two passes
+- **Sweep-pass cap**: 3 passes through step a maximum. After three passes
   even if you still see candidates, defer them to `prd_warnings`:
   `"conventions: sweep suggested but not added — <bucket>, <bucket>"`
-  and close the block.
-- **Bucket count cap**: 8 buckets maximum. Beyond that, refuse politely
-  and suggest the user collapses related buckets or accepts the rest
-  as `prd_warnings`.
+  and close the block. (Raised from 2: conventions-rich projects surface
+  buckets in waves as the agent works through the catalogue lenses.)
+- **Bucket count cap**: soft cap 15 buckets. A conventions-rich project
+  (a multi-stage pipeline, a regulated app, a framework) legitimately
+  needs a dozen-plus buckets — do NOT let the cap force you to drop a
+  real cross-cutting rule (the demo PRD this skill was tuned against
+  carries 13). Only past 15 should you pause and ask the user whether to
+  collapse related buckets or accept the remainder as `prd_warnings`.
 - **Empty conventions**: writing `conventions: null` (or omitting the
   key entirely) is fine — most simple projects have no binding
   cross-cutting rules. Don't push.

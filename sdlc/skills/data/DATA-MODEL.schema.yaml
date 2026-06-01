@@ -119,14 +119,21 @@ data_warnings: []                          # list[string] of "WRN-NNN: <msg>" it
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# persistence — the storage paradigm, the primary durable store, and any
-# secondary stores (cache, blob, search). Pre-filled from
+# persistence — modelled as TWO ORTHOGONAL AXES plus the primary durable store
+# and any secondary stores (cache, blob, search). Pre-filled from
 # PRD.data_model.storage_preferences.
 #
-# `paradigm` is the DISCRIMINATOR for the whole document. It decides which
-# theme blocks are required and which validator cross-checks run. It is chosen
-# early (Phase 4) — the agent recommends one from PRD signals, the user
-# confirms. Absence defaults to `relational` so pre-paradigm files validate
+#   AXIS 1 — `paradigm` (the FAMILY: the data shape). THE DISCRIMINATOR for the
+#     whole document; decides which theme blocks are required and which validator
+#     cross-checks run.
+#   AXIS 2 — `topology` (WHERE/HOW the store runs). Orthogonal to the family — a
+#     `relational` family may run self-hosted (networked_server), managed
+#     (cloud_managed), or embedded (local_embedded). Captured independently;
+#     NOT a discriminator (never changes the required set). Optional + back-compat.
+#
+# `paradigm` is chosen early (Phase 4) — the agent recommends one from PRD
+# signals, the user confirms; `topology` is recommended in the same step.
+# Absence of `paradigm` defaults to `relational` so pre-paradigm files validate
 # unchanged.
 #
 #   paradigm      required blocks (besides entities + data_classification)   shape of `entities`
@@ -157,6 +164,17 @@ persistence:
   paradigm_confidence: null        # confirmed | inferred | assumption
   paradigm_rationale: null         # string — why this paradigm? (agent's
                                    # recommendation reasoning + user's call)
+  topology: null                   # RECOMMENDED — the orthogonal axis: where/how
+                                   # the primary store runs. One of:
+                                   #   local_embedded   | networked_server |
+                                   #   cloud_managed    | serverless       |
+                                   #   in_memory        | other
+                                   # Optional (back-compat); absence = "not yet
+                                   # decided". Concrete provider is finalized at
+                                   # the deploy stage — this is the shape the
+                                   # data model assumes.
+  topology_confidence: null        # confirmed | inferred | assumption
+  topology_rationale: null         # string — why this topology?
   primary_store: null              # REQUIRED — concrete store technology. One of:
                                    #   relational: postgres | mysql | sqlite |
                                    #               sqlserver | oracle

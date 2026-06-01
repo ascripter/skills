@@ -45,10 +45,16 @@ metadata:
   last_updated: "2026-05-21T12:00:00Z"     # ISO-8601 UTC timestamp of last write
   generated_by: sdlc-ux
   session_id: "00000000-0000-0000-0000-000000000000"
-  status: "draft"                          # "draft" | "complete"
+  status: "draft"                          # "draft" | "complete" | "proposed"
                                            # writer sets to "complete" only when
                                            # all required fields below are filled
                                            # and the surface is user-confirmed.
+                                           # "proposed" = fully specced but its
+                                           # owning FR is nice-to-have / post-MVP,
+                                           # so the surface is intentionally
+                                           # deferred (terminal, non-draft). The
+                                           # parent UX.yaml stays draft|complete;
+                                           # only per-surface files may be proposed.
   changelog: null                          # Optional[list[string]]. Append-only.
                                            # Same format as UX.yaml.metadata.changelog:
                                            #   "<version> (<YYYY-MM-DD>): <one-line summary>"

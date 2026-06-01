@@ -10,7 +10,7 @@ Validates:
     1. docs/UX.yaml (or --path) — global UX contract.
     2. Every docs/UX__*.yaml sibling — one per surface.
     3. ID-family prefix formats: SCR-NNN on surface ids, WRN-NNN on
-       ux_warnings, WKF-NNN in traces_workflows, FR-NNN in
+       ux_warnings, WKF-NNN in traces_workflows, FR-NNN or NFR-NNN in
        implements_requirements, ENT-NNN in references_entities.
     4. Coverage: every WKF-NNN id in PRD use_cases.core_workflows must be
        referenced by at least one UX__*.yaml via `traces_workflows`.
@@ -66,6 +66,10 @@ WRN_ITEM_RE = re.compile(rf"^WRN{ID_PATTERN}:\s+.+", re.DOTALL)  # WRN items car
 WKF_ID_RE = re.compile(rf"^WKF{ID_PATTERN}$")
 FR_ID_RE = re.compile(rf"^FR{ID_PATTERN}$")
 ENT_ID_RE = re.compile(rf"^ENT{ID_PATTERN}$")
+# implements_requirements may trace BOTH functional (FR-NNN) and non-functional
+# (NFR-NNN) requirements — a surface can deliver a feature and also be the place
+# an NFR is realized (a per-call timeout cap, an input-containment boundary).
+FR_OR_NFR_ID_RE = re.compile(rf"^(?:FR|NFR){ID_PATTERN}$")
 
 # Extract the leading WKF-NNN id from a PRD core_workflows entry of the form
 # "WKF-001: <verbatim description>". The PRD writes the verbatim form; UX
@@ -89,7 +93,18 @@ class SurfaceFamily(str, Enum):
     web = "web"
     mobile = "mobile"
     desktop = "desktop"
+    tui = "tui"          # full-screen terminal UI (curses/textual) — screen-like
+    voice = "voice"      # voice / conversational, turn-based (no visual screens)
+    service = "service"  # headless network service (no human UI surface)
+    library = "library"  # headless code library / SDK (no human UI surface)
     mixed = "mixed"
+
+
+# Headless families have no traditional visual screens: their "surfaces" are
+# commands (cli), components/endpoints (service), or public API symbols
+# (library). The interview emits a minimal spec for these — see
+# references/surface-discovery.md.
+HEADLESS_FAMILIES = {SurfaceFamily.cli, SurfaceFamily.service, SurfaceFamily.library}
 
 
 class NavigationModelType(str, Enum):
@@ -100,9 +115,12 @@ class NavigationModelType(str, Enum):
 
 
 class SurfaceStatus(str, Enum):
-    defined = "defined"
-    draft = "draft"
-    confirmed = "confirmed"
+    defined = "defined"      # id + type known, no deep-dive yet
+    draft = "draft"          # deep-dive started, not approved
+    confirmed = "confirmed"  # deep-dive complete + user-approved
+    proposed = "proposed"    # fully specced but deferred — targets a
+                             # nice-to-have / post-MVP FR; kept in the inventory
+                             # so the surface contract isn't lost
 
 
 class SurfaceType(str, Enum):
@@ -396,7 +414,12 @@ class SurfaceMetadata(BaseModel):
     last_updated: str
     generated_by: str = "sdlc-ux"
     session_id: str
-    status: Literal["draft", "complete"] = "draft"
+    # "proposed" = the surface is fully specced but its owning FR is
+    # nice-to-have / post-MVP, so it is intentionally deferred (a terminal,
+    # non-draft state). Downstream consumers that gate on `complete` will skip
+    # a `proposed` surface — which is the intent. The top-level UX.yaml stays
+    # draft|complete; only per-surface artifacts may be `proposed`.
+    status: Literal["draft", "complete", "proposed"] = "draft"
     changelog: Optional[List[str]] = None
 
 
@@ -619,8 +642,8 @@ def check_ux_id_prefixes(ux: UX) -> List[str]:
                 errors.extend(
                     _check_list_prefix(
                         item.implements_requirements,
-                        FR_ID_RE,
-                        "'FR-NNN'",
+                        FR_OR_NFR_ID_RE,
+                        "'FR-NNN' or 'NFR-NNN'",
                         f"{where}.implements_requirements",
                     )
                 )
@@ -640,8 +663,8 @@ def check_ux_id_prefixes(ux: UX) -> List[str]:
                     errors.extend(
                         _check_list_prefix(
                             fr_refs if isinstance(fr_refs, list) else None,
-                            FR_ID_RE,
-                            "'FR-NNN'",
+                            FR_OR_NFR_ID_RE,
+                            "'FR-NNN' or 'NFR-NNN'",
                             f"{scope}cli.exit_codes['{code}'].implements_requirements",
                         )
                     )
@@ -672,8 +695,8 @@ def check_surface_id_prefixes(surface: UXSurface, file_label: str) -> List[str]:
     errors.extend(
         _check_list_prefix(
             surface.implements_requirements,
-            FR_ID_RE,
-            "'FR-NNN'",
+            FR_OR_NFR_ID_RE,
+            "'FR-NNN' or 'NFR-NNN'",
             f"{file_label}: implements_requirements",
         )
     )

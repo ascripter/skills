@@ -1,7 +1,7 @@
 {
   "name": "sdlc",
-  "description": "SDLC pipeline: prd → ux → data → api → arch <system> → arch <container> → test → task → deploy",
-  "version": "0.1.14",
+  "description": "SDLC pipeline: setup → prd → ux → data → api → arch <system> → arch <container> → test → task → deploy",
+  "version": "0.1.15",
   "skills": "./skills/",
   "agents": []
 }

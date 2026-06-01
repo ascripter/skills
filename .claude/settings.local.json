@@ -16,7 +16,8 @@
       "WebFetch(domain:learn.openapis.org)",
       "Bash(ls *)",
       "Bash(.venv/Scripts/python.exe -m pip install 'ruamel.yaml>=0.18')",
-      "Bash(findstr /i \"PRD.yaml UX.yaml eval-3\")"
+      "Bash(findstr /i \"PRD.yaml UX.yaml eval-3\")",
+      "Bash(grep -niA12 'PersistenceTopology' DATA-MODEL.yaml)"
     ]
   },
   "enableAllProjectMcpServers": true,

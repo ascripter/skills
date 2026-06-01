@@ -44,7 +44,8 @@ at any time without losing progress.
 | `set_claude_md_pointer.py` | Deterministic CLAUDE.md pointer injector, called in Phase 8. |
 | `migrate_ids.py` | One-shot migration helper: renames legacy `F-NNN` to `FR-NNN` and applies the v1.1 ID-prefix convention (PER, WKF, JTB, etc.) to any unprefixed list items. Round-trips through `ruamel.yaml`, so comments, key order, and original quoting are preserved; new/renamed items are written as double-quoted scalars. Idempotent; not called by the skill itself — run manually when upgrading an existing PRD.yaml. |
 | `references/interview-mechanics.md` | AskUserQuestion batch format, inferred-option pattern, conditional promotions. Read on entering Phase 6. |
-| `references/importance-flows.md` | The `med` / `high` / `critical` interview flows, including the per-item state machine for critical lists and the `product_identity` synthesis batch. Read alongside `interview-mechanics.md` on entering Phase 6 — required whenever a question with `importance: high` or `critical` is up next. |
+| `references/importance-flows.md` | The `med` / `high` / `critical` / `nested_freeform` interview flows, including the per-item state machine for critical lists, the conventions synthesis pass, and the `product_identity` synthesis batch. Read alongside `interview-mechanics.md` on entering Phase 6 — required whenever a question with `importance: high`, `critical`, or `nested_freeform` is up next. |
+| `references/conventions-catalog.md` | ~12 project-agnostic convention-bucket archetypes (artifact_ids, schema_versioning, nfr_propagation, code_style, testing_policy, severity rubrics, supply-chain policy, …) the agent reasons from during the `conventions` synthesis pass. Read on entering the `conventions` mini-section. |
 | `references/merge-validate.md` | Merge logic for existing PRD.yaml, validator exit-code recovery, CLAUDE.md pointer rules. Read on entering Phase 7. |
 | `references/edge-cases.md` | Unusual situations and their handling. Read whenever the happy path doesn't fit. |
 
@@ -80,6 +81,13 @@ Before doing anything else, check for `.claude/skills-state/sdlc-prd.state.yaml`
 - If no state file, continue to Phase 2.
 
 ### Phase 2 — Scan
+
+On the **update/merge** flow (an existing `docs/PRD.yaml`), if `docs/INDEX.yaml`
+is present (the project ran `/sdlc:setup`) and the PRD is large, read it by
+slice rather than whole: look an `FR-###` or a top-level section up in
+`INDEX.yaml` (or `python .claude/sdlc/docs_index.py --show <symbol>`) and `Read`
+only its range. A fresh PRD is small, so this matters mainly on re-runs of a
+mature spec. Protocol: `.claude/rules/sdlc-docs-access.md`.
 
 Recursively read discoverable files in (in priority order):
 
@@ -258,10 +266,15 @@ runs it:
   agent) may have forgotten — derived per project, not from a canned
   category list.
 - **`nested_freeform`** (currently only `conventions`): per-bucket flow
-  for a `Dict[str, Any]` field whose shape is project-defined. Agent
-  proposes named buckets inferred from prior answers; for each accepted
-  bucket it drafts a free-form nested YAML body the user approves or
-  iterates on. Validator only type-checks the top-level mapping.
+  for a `Dict[str, Any]` field whose shape is project-defined. Runs LAST,
+  as a deliberate **synthesis pass** over the whole project — the
+  conventions analogue of the `critical` scope sweep, and the block where
+  the most manual rework lands when done thinly. Agent reflects across all
+  answers + every upstream ID family + the project type, proposes named
+  buckets, and drafts a free-form nested YAML body per bucket the user
+  approves or iterates on. Validator only type-checks the top-level
+  mapping. **Read `references/conventions-catalog.md` before this pass** —
+  it holds ~12 bucket archetypes to reason from.
 
 Order within a theme: run all `med` questions first (in 2–4-question
 batches), then each `high`/`critical`/`nested_freeform` question as
@@ -318,6 +331,13 @@ inside the shared `## SDLC Documents` section of the project root
 
 For the bullet format, detection rule, and append behavior → see
 `references/merge-validate.md`.
+
+**Refresh the navigation index.** If `.claude/sdlc/docs_index.py` exists (the
+project ran `/sdlc:setup`), run `python .claude/sdlc/docs_index.py` after
+writing `docs/PRD.yaml` so `docs/INDEX.yaml` reflects the new content right
+away. The setup hook also regenerates it on every `docs/*.yaml` write, but a
+hook added during the current session only activates next session — running it
+here closes that gap. Harmless no-op if the generator isn't installed.
 
 After the CLAUDE.md write succeeds: set `status: complete` in the state
 file (do not delete it — it's an audit trail), and tell the user where

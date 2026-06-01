@@ -8,11 +8,20 @@ Run from the project root:
     python sdlc/skills/data/validate_schema.py
     python sdlc/skills/data/validate_schema.py --path docs/DATA-MODEL.yaml
 
-Storage paradigm:
+Persistence — two orthogonal axes:
     `persistence.paradigm` (relational | document | key_value | graph | vector |
-    file_native) is the discriminator that decides which theme blocks are
-    required and which cross-checks run. It defaults to `relational` when absent,
-    so DATA-MODEL.yaml files written before paradigms existed validate unchanged.
+    file_native) is the FAMILY axis — the data shape. It is the discriminator
+    that decides which theme blocks are required and which cross-checks run. It
+    defaults to `relational` when absent, so DATA-MODEL.yaml files written before
+    paradigms existed validate unchanged.
+
+    `persistence.topology` (local_embedded | networked_server | cloud_managed |
+    serverless | in_memory | other) is the orthogonal TOPOLOGY axis — where/how
+    the store runs. A single family spans several topologies (a relational
+    family may run self-hosted, managed, or embedded), so the two are captured
+    independently. `topology` is optional (back-compat) and is NOT a
+    discriminator — it never changes the required set; the skill recommends it
+    in Phase 4 alongside the paradigm.
 
 Validates:
     1. docs/DATA-MODEL.yaml (or --path) — single-file data model.
@@ -41,8 +50,11 @@ Validates:
          every traces_prd_features entry; SCR-NNN on every traces_ux_surfaces
          entry; WKF-NNN on every traces_prd_workflows entry. Hard error in
          status:complete; warning (force draft) otherwise.
-       - Feature coverage: every PRD must_have_features FR-NNN appears in some
-         entity's traces_prd_features. Failure -> force draft (soft).
+       - Feature coverage: every PRD must_have_features FR-NNN is either traced
+         by some entity's traces_prd_features OR explicitly deferred by being
+         named in a data_warnings entry (the documented trace-or-defer
+         contract — a process/behaviour feature with no data entity is deferred
+         there). Failure -> force draft (soft).
        - Volume-vs-scale gate (relational/document/key_value): if PRD
          data_volume_estimate in {terabytes, petabytes}, scale_and_retention
          must be non-null. Failure -> force draft (soft).
@@ -96,9 +108,17 @@ class Confidence(str, Enum):
 
 
 class Paradigm(str, Enum):
-    """Top-level storage paradigm — the discriminator that selects which
-    theme blocks are required and which cross-checks run. Absence defaults
-    to `relational` so pre-paradigm DATA-MODEL.yaml files validate unchanged."""
+    """Top-level storage paradigm — the *family* axis (the data shape). This is
+    the discriminator that selects which theme blocks are required and which
+    cross-checks run. Absence defaults to `relational` so pre-paradigm
+    DATA-MODEL.yaml files validate unchanged.
+
+    Persistence is modelled as two ORTHOGONAL axes: `paradigm` (family — the
+    data shape, here) × `topology` (where/how the store runs — see
+    PersistenceTopology). A `relational` family can run `networked_server`
+    (self-hosted Postgres), `cloud_managed` (RDS), or `local_embedded`
+    (SQLite); the same family spans several topologies, so the two are captured
+    independently."""
 
     relational = "relational"
     document = "document"
@@ -106,6 +126,21 @@ class Paradigm(str, Enum):
     graph = "graph"
     vector = "vector"
     file_native = "file_native"
+
+
+class PersistenceTopology(str, Enum):
+    """Where/how the primary store runs — the axis orthogonal to `paradigm`
+    (the family). Concrete provider (RDS vs Cloud SQL vs self-managed) is
+    finalized downstream at the deploy stage; this captures the deployment
+    shape that the data model assumes. Optional + back-compat: absence means
+    "not yet decided", and never changes a pre-topology file's required set."""
+
+    local_embedded = "local_embedded"      # in-process store (SQLite, embedded KV, on-disk files)
+    networked_server = "networked_server"  # self-hosted DB server (Postgres/MySQL/Mongo/Neo4j…)
+    cloud_managed = "cloud_managed"         # managed DB service (RDS, Cloud SQL, Atlas, DynamoDB…)
+    serverless = "serverless"               # serverless data tier (Aurora Serverless, D1, Upstash…)
+    in_memory = "in_memory"                  # ephemeral, process-lifetime only (no durable store)
+    other = "other"
 
 
 class PrimaryStore(str, Enum):
@@ -425,9 +460,12 @@ class SecondaryStore(_Permissive):
 
 
 class Persistence(_Permissive):
-    paradigm: Optional[Paradigm] = None  # absent ⇒ treated as relational
+    paradigm: Optional[Paradigm] = None  # absent ⇒ treated as relational (the FAMILY axis)
     paradigm_confidence: Optional[Confidence] = None
     paradigm_rationale: Optional[str] = None
+    topology: Optional[PersistenceTopology] = None  # orthogonal axis: where/how it runs
+    topology_confidence: Optional[Confidence] = None
+    topology_rationale: Optional[str] = None
     primary_store: Optional[PrimaryStore] = None
     primary_store_confidence: Optional[Confidence] = None
     primary_store_rationale: Optional[str] = None
@@ -1448,10 +1486,36 @@ def collect_traced_features(root: object) -> List[str]:
     return feats
 
 
-def check_feature_coverage(prd_features: List[str], traced: List[str]) -> List[str]:
-    """Return list of PRD FR-NNN IDs that no entity traces."""
-    traced_set = {f.upper() for f in traced}
-    return [f for f in prd_features if f.upper() not in traced_set]
+_FR_TOKEN_RE = re.compile(r"FR-\d+", re.IGNORECASE)
+
+
+def collect_deferred_features(warnings: Optional[List[str]]) -> set:
+    """FR-NNN ids explicitly named in a `data_warnings` entry.
+
+    The documented coverage contract (see DATA-MODEL.schema.yaml header) is:
+    every PRD must-have FR-NNN must be traced by >=1 entity OR land in a
+    `data_warnings` deferral. A process/behaviour feature (a recovery path, a
+    codegen heal-loop, a gate) introduces no entity; naming it in a warning is
+    the sanctioned way to record "intentionally not modelled as data". Any
+    FR-NNN token appearing in a warning string counts as deferred."""
+    deferred: set = set()
+    for w in warnings or []:
+        if isinstance(w, str):
+            for m in _FR_TOKEN_RE.findall(w):
+                deferred.add(m.upper())
+    return deferred
+
+
+def check_feature_coverage(
+    prd_features: List[str],
+    traced: List[str],
+    deferred: Optional[set] = None,
+) -> List[str]:
+    """Return PRD FR-NNN IDs that no entity traces AND no warning defers."""
+    covered = {f.upper() for f in traced}
+    if deferred:
+        covered |= deferred
+    return [f for f in prd_features if f.upper() not in covered]
 
 
 def check_volume_scale_gate(volume: Optional[str], root: object) -> Optional[str]:
@@ -1547,6 +1611,12 @@ def validate_file(path: Path) -> int:
     warning_id_errs = check_warning_ids(dm.data_warnings or [])
 
     def _per_scope(scope_label: str, root: object, scope_features: List[str]) -> None:
+        # FRs explicitly deferred via a data_warnings entry count as covered
+        # (the documented "trace OR defer" contract). Draw from the scope's own
+        # warnings plus the top-level list.
+        deferred = collect_deferred_features(
+            (getattr(root, "data_warnings", None) or []) + (dm.data_warnings or [])
+        )
         scope = scope_label if scope_label else ""
         for e_ in check_relationship_integrity(root):
             relationship_errs.append(f"{scope}{e_}")
@@ -1579,7 +1649,7 @@ def validate_file(path: Path) -> int:
                 volume_errs.append(f"{scope}{volume_err}")
 
         traced = collect_traced_features(root)
-        for f in check_feature_coverage(scope_features, traced):
+        for f in check_feature_coverage(scope_features, traced, deferred):
             uncovered_features.append(f"{scope}{f}")
 
     if dm.metadata.monorepo and dm.products:

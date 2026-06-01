@@ -12,6 +12,7 @@ project from a structured chain of artifacts. Skills are invoked as
 
 | Skill        | Folder              | Inputs                                                                                       | Output(s)                                            |
 |--------------|---------------------|----------------------------------------------------------------------------------------------|------------------------------------------------------|
+| `setup`      | `sdlc/skills/setup` | run ONCE before `prd`; current project root                                                  | `.claude/sdlc/docs_index.py`, `docs/*.yaml` PostToolUse hook in `.claude/settings.json`, `.claude/rules/sdlc-docs-access.md`, `docs/INDEX.yaml` |
 | `prd`        | `sdlc/skills/prd`   | repo scan + ideation + interview                                                             | `docs/PRD.yaml`                                      |
 | `ux`         | `sdlc/skills/ux`    | `docs/PRD.yaml` + interview                                                                  | `docs/UX.yaml`, `docs/UX__<surface>.yaml`            |
 | `data`       | `sdlc/skills/data`  | `docs/PRD.yaml` + `docs/UX.yaml` + interview                                                 | `docs/DATA-MODEL.yaml`                               |
@@ -23,6 +24,15 @@ project from a structured chain of artifacts. Skills are invoked as
 
 **Downstream consumers of every output are AI agents, not humans.** Optimize artifacts for unambiguous machine consumption (typed enums, no prose blobs, explicit `null` for unanswered fields).
 Inputs in round brackets `()` are optional to each skill and taken if present.
+
+`setup` is infrastructure, not an artifact producer. It runs once before `prd`
+and wires a **generated `docs/INDEX.yaml`** — a pure line-range location map over
+the large specs (`PRD.yaml`, `DATA-MODEL.yaml`) — plus a `Write|Edit` PostToolUse
+hook that refreshes it on every `docs/*.yaml` edit, and the
+`.claude/rules/sdlc-docs-access.md` slice-don't-slurp protocol. Each artifact
+skill reads large upstream docs **by slice** via the index (Phase 2) and
+refreshes it after writing (Phase 8). The generator (`docs_index.py`) is
+stdlib-only and copied into the consumer project at `.claude/sdlc/docs_index.py`.
 
 
 ## Canonical naming
@@ -270,6 +280,16 @@ When a skill consumes IDs from an upstream artifact:
   `traces_workflows`, `implements_requirements`, `references_entities`
   in UX; analogous fields downstream). Validator enforces per-field
   family prefix (WKF/FR/ENT/...).
+- **Requirement-trace fields accept FR *and* NFR.** A field that traces
+  to PRD *requirements* (e.g. `implements_requirements`) admits both
+  `FR-NNN` (functional, from `functional_requirements`) and `NFR-NNN`
+  (non-functional, from PRD `performance_targets` + `other`). Do not
+  build a validator that only admits `FR-`: UX and ARCH both legitimately
+  trace surfaces/containers to non-functional requirements, and
+  `test`/`deploy` will lean on NFRs heavily (latency budgets, availability
+  targets). Resolve such refs against the union of the PRD FR and NFR id
+  sets. (Surfaced this session — the gold UX/ARCH docs referenced
+  `NFR-010/011` and the FR-only validators wrongly rejected them.)
 
 #### 5. ID families a skill emits get `state.last_ids.<PREFIX>` counters
 
@@ -287,6 +307,33 @@ carries an independent id space per family.
 Counters persist after every accepted item (including sweep
 acceptances). EXIT/resume must not produce gaps or duplicates.
 
+#### 6. Coverage contract: trace every upstream item OR defer it
+
+When a skill's validator enforces that its artifact *covers* an upstream
+family — `data` must account for every PRD `FR-NNN`; `test` must cover
+every requirement/risk; `task` must realize every container's
+responsibilities — the contract is **trace OR defer**, never silent
+omission:
+
+- **Trace** — the item is referenced by at least one output element
+  (an entity's `traces_prd_features`, a test case's `covers`, a task's
+  `implements`, …).
+- **Defer** — the item is intentionally out of scope for *this*
+  artifact (e.g. a process-only FR with no persisted state belongs in
+  ARCH/TASK, not DATA-MODEL). Record it in the artifact's `*_warnings`
+  as a `WRN-NNN` deferral that names the id range and the reason:
+  `"WRN-007: FR-031..FR-042 are orchestration requirements with no
+  persisted entity; deferred to ARCH/TASK."`
+
+The coverage check counts a deferred id as covered. This keeps coverage
+honest at 100%: every upstream item is either traced or explicitly,
+reviewably waived — none silently dropped. Implement the deferral path
+in the validator (don't just document it): a skill whose header promises
+"trace-or-defer" but whose validator only counts traces will reject
+legitimate artifacts. (Surfaced this session — the gold DATA-MODEL left
+12 PRD process-FRs with neither an entity nor a deferral, and the
+validator had never implemented the defer half of its own contract.)
+
 #### Implications for downstream skills
 
 Any new skill that consumes the PRD (directly or indirectly via UX,
@@ -303,6 +350,22 @@ DATA-MODEL, API, etc.) should:
   family.
 - Inherit the upstream's `conventions.artifact_ids` block verbatim
   where applicable; consult it before writing IDs.
+- **Read large upstream docs by slice via `docs/INDEX.yaml`** (Phase 2)
+  and **refresh `INDEX.yaml` after writing** (Phase 8) — both are now
+  part of the canonical 8-phase flow.
+- **Accept `FR-NNN` and `NFR-NNN` in any requirement-trace field** and
+  resolve against the union of the PRD FR + NFR id sets (§4).
+- **Enforce coverage as trace-or-defer, not trace-only** — implement
+  the `WRN-NNN` deferral path in the validator wherever the artifact
+  claims to cover an upstream family (§6).
+- **Decompose, don't skim.** Where a skill emits structured models or
+  nested items (entities/sub-models in `data`, test cases in `test`,
+  task graphs in `task`), recurse to first-class definitions rather
+  than leaving shallow stubs — and run a reconciliation/completeness
+  sweep before declaring `complete`. (Surfaced this session: the gold
+  DATA-MODEL had 33 inlined sub-models and 38 entities unassigned to a
+  bounded context; `data` now ships `references/submodel-and-context-sweep.md`
+  for exactly this.)
 
 ### Schema validation contract
 
@@ -405,7 +468,13 @@ Every skill implements these phases, in order:
 1. **Resume check** — load state if present, offer resume/restart/discard.
 2. **Scan inputs** — read all dependency artifacts and ad-hoc context.
    Exit early with a clear warning if a required input is missing or
-   corrupted (e.g. PRD.yaml absent for sdlc:ux).
+   corrupted (e.g. PRD.yaml absent for sdlc:ux). **Slice, don't slurp:**
+   the large specs (`PRD.yaml`, `DATA-MODEL.yaml`, …) are read **by line
+   range via `docs/INDEX.yaml`** — the location map `setup` wires. Look up
+   the section/symbol you need (or `python .claude/sdlc/docs_index.py
+   --show <symbol>`) and `Read` only that slice. Fall back to a whole-file
+   read only when `INDEX.yaml` is absent (the project never ran `setup`)
+   or the doc is genuinely small. See `.claude/rules/sdlc-docs-access.md`.
 3. **Pre-fill** — build a map of values that can be derived from inputs.
    Mark each as `✓ found` (direct quote) or `⚠ inferred` (derived).
    *Recommended:* `⚠ inferred` items must never be batch-accepted; each
@@ -421,7 +490,13 @@ Every skill implements these phases, in order:
    `validate_schema.py`. On validation failure, show field-level errors
    and offer interactive re-entry, then re-validate.
 8. **CLAUDE.md pointer + close** — call `set_claude_md_pointer.py`, set
-   state `status: complete`.
+   state `status: complete`, then **refresh the navigation index** by
+   regenerating `docs/INDEX.yaml` (`python .claude/sdlc/docs_index.py`).
+   The `setup` PostToolUse hook normally refreshes the index automatically
+   on every `docs/*.yaml` write, but do it explicitly here too: a
+   freshly-installed hook isn't active until the next session, and a write
+   path the matcher missed would otherwise leave a stale index. No-op if
+   the project never ran `setup`.
 
 ### Merge behavior (Phase 7)
 

@@ -1250,15 +1250,20 @@ questions:
     schema_path: conventions
     question: "Any binding cross-cutting conventions downstream stages must honor — naming/ID rules, schema-versioning policy, NFR-propagation maps, code-style invariants, etc.?"
     hint: >
-      One question for the whole `conventions` block. Run as
-      `nested_freeform`: agent proposes named buckets it inferred from
-      prior answers (e.g. `artifact_ids` if cross-stage IDs were named,
-      `schema_versioning` if versioning came up, `nfr_propagation` if NFRs
-      reference downstream stages). For each accepted bucket the agent
-      drafts a free-form nested YAML body and the user approves or iterates.
-      Each project defines its own bucket names and sub-structure — the
-      validator only type-checks the top-level mapping. Skip entirely for
-      simple projects with no cross-cutting rules.
+      The whole `conventions` block, run as `nested_freeform` — but treat it
+      as a deliberate SYNTHESIS PASS, not a single question. It runs last, once
+      the agent has read the entire project, so it can spot the cross-cutting
+      rules every downstream stage must honor verbatim (the biggest source of
+      PRD-intent drift when left implicit). BEFORE proposing buckets, read
+      `references/conventions-catalog.md` and reflect across all prior answers,
+      every upstream ID family, and the project type — the same discipline as
+      the FR scope-completeness sweep. Propose the buckets the project actually
+      needs (artifact_ids, schema_versioning, nfr_propagation, code_style,
+      testing_policy, severity rubrics, supply-chain policy, … — see the
+      catalogue), draft each free-form body, user approves/iterates. The
+      validator only type-checks the top-level mapping. Anti-padding holds:
+      simple projects may have zero conventions. Conventions-rich projects
+      legitimately run to a dozen-plus buckets — don't under-deliver here.
     suggested_answers: []
     free_text_allowed: true
     required: false

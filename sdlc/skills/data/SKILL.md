@@ -73,6 +73,7 @@ progress, even mid-entity.
 | `references/paradigms/<paradigm>.md` | **One file per storage paradigm** (relational, file-native, document, key-value, graph, vector). Each holds: "When to recommend" heuristics (read in Phase 4 to form the recommendation), the paradigm's entity-field shape, and its analogue themes/questions (read on entering Phase 6 once the paradigm is locked). Read ONLY the file for the selected paradigm. |
 | `references/interview-mechanics.md` | AskUserQuestion batch format, EXIT semantics, importance-tier flows. Read on entering Phase 6. |
 | `references/entity-discovery.md` | Heuristics for deriving entity candidates from PRD features + UX surfaces. Read in Phase 3. |
+| `references/submodel-and-context-sweep.md` | Exhaustive sub-model decomposition (recurse every entity's field types into first-class `sub_model` entries — the cure for shallow models) + the bounded-context partition reconciliation run before `status: complete`. Read on entering the `entities` theme (Phase 6) and again in Phase 7. |
 | `references/pre-fill-sources.md` | Explicit PRD/UX-field → DATA-MODEL-field map. Read in Phase 3 + Phase 5. |
 | `references/polyglot-persistence.md` | Guidance for multi-store designs (incl. cross-paradigm secondary stores). Read when the user opts into polyglot in Phase 4. |
 | `references/merge-validate.md` | Merge logic for existing DATA-MODEL.yaml, validator recovery, CLAUDE.md pointer rules. Read on entering Phase 7. |
@@ -110,6 +111,16 @@ Before doing anything else, check for `.claude/skills-state/sdlc-data.state.yaml
 - If no state file, continue to Phase 2.
 
 ### Phase 2 — Scan inputs
+
+**Slice large docs, don't slurp.** If `docs/INDEX.yaml` exists, the project was
+bootstrapped by `/sdlc:setup`. Use it to read large upstream docs by slice:
+`PRD.yaml` is routinely 1000+ lines, and on the merge flow your own
+`DATA-MODEL.yaml` is the largest artifact in the tree. Look a symbol up in
+`INDEX.yaml` (or run `python .claude/sdlc/docs_index.py --show <symbol>`) and
+`Read` only its `[start, end]` range; resolve a whole top-level block via its
+`sections.<file>.<key>` range. This keeps the scan within budget on big
+projects — exactly the case this skill produces. Fall back to whole-file reads
+when `INDEX.yaml` is absent. Protocol: `.claude/rules/sdlc-docs-access.md`.
 
 Required upstream artifacts:
 
@@ -214,6 +225,23 @@ Ask in order:
 
    Once locked, **load `references/paradigms/<paradigm>.md`** — it defines the
    entity-field shape and the analogue themes you'll run in Phase 6.
+
+0b. **Storage topology** — the axis ORTHOGONAL to the paradigm (the family).
+   Right after the paradigm is locked, recommend `persistence.topology` —
+   *where/how* the store runs: `local_embedded | networked_server |
+   cloud_managed | serverless | in_memory | other`. The same family runs
+   across topologies, so this is a separate decision, not implied by the
+   paradigm. Derive the recommendation from PRD signals: single-user / CLI /
+   desktop + bounded volume + no concurrent writers ⇒ `local_embedded`;
+   multi-tenant SaaS or a server runtime ⇒ `networked_server` /
+   `cloud_managed`; spiky load + low-ops ⇒ `serverless`; cache/ephemeral-only
+   ⇒ `in_memory`. Present at position 1 with a one-line rationale; the user
+   confirms or overrides. Write `persistence.topology`,
+   `persistence.topology_confidence`, `persistence.topology_rationale`. It's
+   optional — if the user is genuinely undecided, leave it null and append a
+   `WRN-NNN`. The concrete provider (RDS vs Cloud SQL vs self-managed) is
+   finalized later at the deploy stage; topology only pins the deployment
+   shape the data model assumes.
 
 1. **Monorepo mode** — inherited from `PRD.metadata.monorepo`. Show as
    pre-filled and ask the user to confirm only if PRD signals conflict
@@ -322,6 +350,17 @@ The selected `state.storage_paradigm` decides which themes run:
    vector: `payload_fields` + one `embedding: true` field; key_value: fields +
    key design captured in `key_value_design`).
 
+   **Decompose, don't skim.** For every entity, recurse into its field types:
+   any field whose type is a custom model (directly, in a `list[...]`/`dict[...]`,
+   or `Optional[...]`) names a **sub-model that must exist as its own
+   `entities.<Name>` entry** — define it and recurse into *its* fields, until
+   every leaf is a scalar, an enum, or a reference to another first-class entity.
+   This is the cure for shallow models (a `features: list[FeatureSpec]` whose
+   `FeatureSpec` is never defined). After the entity scope-completeness sweep,
+   run the dedicated **sub-model pass** described in
+   `references/submodel-and-context-sweep.md` (Part A) so no referenced model is
+   left undefined.
+
 #### Required vs optional themes
 
 - **Required themes** (`required: true`): run the theme's questions until
@@ -392,6 +431,17 @@ The two non-negotiable rules in this phase:
 
 ### Phase 7 — Write & validate
 
+**Before writing, when bounded contexts are enabled, run the bounded-context
+reconciliation** (`references/submodel-and-context-sweep.md`, Part B): every
+entity — including every `sub_model` promoted in Phase 6 — must appear in
+exactly one `bounded_contexts.<family>.entities` list, and every name listed
+there must be a real entity. Compute orphans / phantoms / duplicates, resolve
+each with the user (orphans default to their `category`-implied context, usually
+a one-click batch), and repeat until the partition is clean. This is the same
+check `validate_schema.py` runs — doing it here means the validator never reports
+"entity X is not assigned to any context" at write time (the failure mode that
+piled up dozens of orphans in manual runs).
+
 Write or merge `docs/DATA-MODEL.yaml` at the project root, then run:
 
 ```bash
@@ -426,6 +476,13 @@ Create `CLAUDE.md` with the section if missing.
 
 For the bullet format, detection rule, and append behavior → see
 `references/merge-validate.md`.
+
+**Refresh the navigation index.** `DATA-MODEL.yaml` is the largest artifact in
+the tree, so a current `docs/INDEX.yaml` matters most here. If
+`.claude/sdlc/docs_index.py` exists (the project ran `/sdlc:setup`), run
+`python .claude/sdlc/docs_index.py` after writing the file so downstream
+`api`/`arch` can slice it immediately. The setup hook also does this, but a hook
+added mid-session only activates next session. Harmless no-op if not installed.
 
 After the CLAUDE.md write succeeds: set `status: complete` in the state
 file (do not delete it — it's an audit trail), and tell the user where the

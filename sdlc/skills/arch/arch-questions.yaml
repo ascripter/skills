@@ -349,14 +349,19 @@ questions:
   - theme: container_inventory
     id: implements_requirements
     schema_path: container.implements_requirements
-    question: "Which PRD must-have features (FR-NNN) does this container deliver?"
+    question: "Which PRD requirements (FR-NNN features, NFR-NNN non-functionals) does this container deliver?"
     hint: >
-      Reference PRD must_have_features by stable FR-NNN id (never verbatim
-      text). EVERY PRD must-have FR-NNN must be claimed by some container (or
-      listed in non_container_features) — this is the feature-coverage check.
-      Operational containers (scheduler/worker) seeded from an FR keyword in
-      Phase 3 record that FR here; it's the only place those API-less features
-      become traceable. Validated for FR-NNN format + existence in PRD.yaml.
+      Reference PRD requirements by stable id (never verbatim text). List the
+      FR-NNN must-have features this container delivers AND any NFR-NNN this
+      container is the architectural home of (a wall-clock timeout cap, an
+      input-containment boundary, a residency constraint). EVERY PRD must-have
+      FR-NNN must be claimed by some container (or listed in
+      non_container_features) — that's the feature-coverage check; NFR-NNN
+      entries are advisory traces, not coverage-gated. Operational containers
+      (scheduler/worker) seeded from an FR keyword in Phase 3 record that FR
+      here; it's the only place those API-less features become traceable.
+      Validated for FR-NNN/NFR-NNN format + existence in PRD.yaml (FR resolves
+      against functional_requirements, NFR against non_functional_requirements).
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -938,13 +943,14 @@ questions:
   - theme: per_component_deepdive
     id: implements_requirements
     schema_path: component.implements_requirements
-    question: "Which PRD must-have features (FR-NNN) does this component implement?"
+    question: "Which PRD requirements (FR-NNN / NFR-NNN) does this component implement?"
     hint: >
-      Reference FR-NNN by stable id. Must be a SUBSET of the parent
-      container's implements_requirements (a component can't implement a
-      feature its container doesn't own). Validated for FR-NNN format,
-      existence in PRD.yaml, and parent containment. Empty for plumbing
-      components (config-loader, serializer, etc.).
+      Reference FR-NNN features (and any NFR-NNN this component realizes) by
+      stable id. Must be a SUBSET of the parent container's
+      implements_requirements (a component can't implement a requirement its
+      container doesn't own). Validated for FR-NNN/NFR-NNN format, existence in
+      PRD.yaml, and parent containment. Empty for plumbing components
+      (config-loader, serializer, etc.).
     suggested_answers: []
     free_text_allowed: true
     required: false

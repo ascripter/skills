@@ -95,10 +95,19 @@ containers:                                # REQUIRED — non-empty
     persistence:                           # REQUIRED — list of DATA store ids; empty
       - primary-postgres                   #            for non-stateful containers.
     implements_requirements:               # OPTIONAL but strongly recommended — the
-      - FR-001                             #            PRD must-have features (FR-NNN)
-      - FR-014                             #            this container delivers. Validated
-                                           #            for FR-NNN format + existence in
-                                           #            PRD.yaml. Drives the PRD
+      - FR-001                             #            PRD requirements this container
+      - FR-014                             #            delivers. Accepts BOTH FR-NNN
+      - NFR-011                            #            (must-have/nice-to-have features)
+                                           #            and NFR-NNN (non-functional
+                                           #            requirements a container is the
+                                           #            home of — a timeout cap, an
+                                           #            input-containment boundary).
+                                           #            Each entry is validated for
+                                           #            FR-NNN/NFR-NNN format + existence
+                                           #            in PRD.yaml (FR resolves against
+                                           #            functional_requirements, NFR
+                                           #            against non_functional_requirements).
+                                           #            Only the FR-NNN entries drive the
                                            #            feature-coverage check (every PRD
                                            #            must-have FR-NNN must appear here
                                            #            on some container, or in
@@ -106,7 +115,7 @@ containers:                                # REQUIRED — non-empty
                                            #            the ONLY place operational
                                            #            containers (scheduler/worker) with
                                            #            no API resource record which
-                                           #            feature they exist for.
+                                           #            requirement they exist for.
     traces_prd_workflows:                  # OPTIONAL — PRD core_workflows (WKF-NNN) this
       - WKF-003                            #            container participates in. Validated
                                            #            for WKF-NNN format + existence.

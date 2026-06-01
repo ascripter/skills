@@ -127,14 +127,27 @@ questions:
     id: surface_family
     schema_path: surface_family
     question: "What surface family does this product target?"
-    hint: "Derived from PRD runtime_platform; confirms how every later question is shaped."
+    hint: >
+      Derived from PRD runtime_platform; confirms how every later question is
+      shaped. Nine valid values — more than one AskUserQuestion call can show —
+      so present the PRD-derived candidate first plus the 2–3 next most likely,
+      and let the user type any other via "Other". HEADLESS families
+      (cli, service, library) have no visual screens: the interview emits a
+      minimal spec (no SCR-### screens; commands/components/API symbols
+      instead — see references/surface-discovery.md), accessibility is
+      not_applicable_cli, and no component_library/theming applies. tui is
+      screen-like (full-screen terminal UI); voice is turn-based conversational.
     suggested_answers:
       - "cli"
       - "web"
       - "mobile"
       - "desktop"
+      - "tui"
+      - "voice"
+      - "service"
+      - "library"
       - "mixed"
-    free_text_allowed: false
+    free_text_allowed: true
     required: true
     capture_rationale: false
     confidence_field: true
@@ -144,13 +157,17 @@ questions:
     id: surface_family_members
     schema_path: surface_family_members
     question: "Which surface families are included? (Pick all that apply.)"
-    hint: "Only asked when surface_family == 'mixed'. Each member family runs its own sub-interview later."
+    hint: "Only asked when surface_family == 'mixed'. Each member family runs its own sub-interview later. Members may include headless families (cli/service/library) alongside visual ones (web/mobile/desktop/tui/voice)."
     suggested_answers:
       - "cli"
       - "web"
       - "mobile"
       - "desktop"
-    free_text_allowed: false
+      - "tui"
+      - "voice"
+      - "service"
+      - "library"
+    free_text_allowed: true
     required: false
     required_if: "surface_family == 'mixed'"
     capture_rationale: false
@@ -1032,8 +1049,10 @@ questions:
       coverage check. Empty list [] is allowed for non-flow surfaces
       (chrome, settings, diagnostic helpers) — record a ux_warnings entry
       via the writer when this happens so downstream agents know it's
-      intentional. The sibling fields `implements_requirements` (FR-###)
-      and `references_entities` (ENT-###) are inferred by the agent from
+      intentional. The sibling fields `implements_requirements` (FR-### the
+      surface delivers and/or NFR-### the surface realizes — e.g. a per-call
+      timeout, an input-containment boundary) and `references_entities`
+      (ENT-###) are inferred by the agent from
       the surface's purpose + the deep-dive answers, presented in the
       final-approval draft, and corrected by the user there — they are
       not asked here to keep the interview tight.
