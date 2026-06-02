@@ -1,0 +1,161 @@
+# =============================================================================
+# TEST-STRATEGY.schema.yaml — canonical schema for docs/TEST-STRATEGY.yaml
+# =============================================================================
+# Produced by /sdlc:test (system mode). Holds the GLOBAL test policy every
+# container inherits (test-pyramid targets, coverage thresholds, mock/fixture
+# strategy) plus the CROSS-CONTAINER test suite — end-to-end and contract
+# tests, and any system-level load / security / accessibility test.
+#
+# Downstream agents read this directly:
+#   * `task`  turns each TST-NNN into a test task (TaskKind: test).
+#   * the code-generation stage authors the test from `directives`.
+#   * the verification stage runs it and keys pass/fail to `tst_id`.
+#
+# Per-container unit + integration tests live in the sibling
+# docs/TEST-STRATEGY__<container>.yaml files (see TEST-STRATEGY__CONTAINER.schema.yaml).
+#
+# ID families this artifact OWNS (writer-managed counters in state.last_ids):
+#   * TST-NNN — one per test in `tests`. Independent counter from each
+#               container file's TST space.
+#   * WRN-NNN — one per `test_strategy_warnings` entry.
+# Upstream ids it REFERENCES (never invents/renumbers): FR/NFR/ACR/WKF (PRD),
+#   container_id (ARCH.yaml).
+# =============================================================================
+
+metadata:                                  # REQUIRED
+  test_strategy_version: "1.0"             # REQUIRED
+  last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
+  generated_by: sdlc-test                  # REQUIRED
+  session_id: <uuid4>                      # REQUIRED — sub-session id from state file
+  status: draft | complete                 # REQUIRED
+  changelog:                               # OPTIONAL — append-only, most-recent first.
+    # Each entry: "<test_strategy_version> (<YYYY-MM-DD>): <one-line summary>".
+    # Validator type-checks Optional[List[str]] only.
+    - "1.0 (2026-06-02): Initial system test strategy."
+  upstream_provenance:                     # OPTIONAL — one entry per upstream artifact
+    # consumed this run, each {file, session_id, last_updated, sha256}. Lets a
+    # later /sdlc:test detect upstream drift. Validator type-checks
+    # list-of-mappings only. See CLAUDE.md §7 "Upstream-change re-invocation".
+    - {file: docs/ARCH.yaml, session_id: <uuid4>, last_updated: <iso8601>, sha256: <16-hex>}
+
+# ---------------------------------------------------------------------------
+# test_approach — the testing philosophy. pyramid_targets is a tier→proportion
+# mapping the codegen agent uses to budget test effort.
+# ---------------------------------------------------------------------------
+test_approach:                             # REQUIRED
+  pyramid_targets:                         # REQUIRED — mapping tier → proportion string
+    unit: "~70%"
+    integration: "~20%"
+    e2e: "~10%"
+  pyramid_targets_confidence: confirmed | inferred | assumption   # OPTIONAL
+  pyramid_rationale: <string>              # OPTIONAL — why these proportions
+  ai_builder_notes: <string>               # OPTIONAL — rules for the agent that
+                                           #   writes the tests (determinism,
+                                           #   flake avoidance, what not to mock)
+
+# ---------------------------------------------------------------------------
+# coverage_threshold — the floor the verification stage enforces. Treat
+# coverage as a signal, not a target (references/tiering-guidance.md).
+# ---------------------------------------------------------------------------
+coverage_threshold:                        # REQUIRED
+  line_pct: <float>                        # REQUIRED — e.g. 80.0
+  line_pct_confidence: confirmed | inferred | assumption   # OPTIONAL
+  branch_pct: <float>                      # OPTIONAL — null ⇒ branches not gated
+  rationale: <string>                      # OPTIONAL
+  per_container_overrides:                 # OPTIONAL — container_id → override
+    payment-service: {line_pct: 95.0, branch_pct: 90.0}
+
+# ---------------------------------------------------------------------------
+# Global mock / fixture / data policy — inherited by every container file
+# unless that file overrides it.
+# ---------------------------------------------------------------------------
+mock_policy: <string>                      # REQUIRED — default mocking policy
+mock_policy_confidence: confirmed | inferred | assumption   # OPTIONAL
+fixture_strategy: <string>                 # REQUIRED — how fixtures/test data are produced
+fixture_strategy_confidence: confirmed | inferred | assumption  # OPTIONAL
+test_data_strategy: <string>              # OPTIONAL — sensitive/large-volume data handling
+
+# ---------------------------------------------------------------------------
+# ci_integration / environments — how the tiers run and where. Light here;
+# detailed pipeline config belongs in /sdlc:deploy.
+# ---------------------------------------------------------------------------
+ci_integration: <string>                   # OPTIONAL — runner + which tiers gate a merge
+environments:                              # OPTIONAL — test environments beyond local
+  - name: <string>                         # REQUIRED when present
+    purpose: <string>                      # REQUIRED when present
+
+# ---------------------------------------------------------------------------
+# tests — the CROSS-CONTAINER suite. Each is a TST-NNN item. `critical` per
+# item in the interview; the agent derives candidates from PRD workflows +
+# ARCH edges + NFRs, then confirms each.
+#
+# Recommended tiers here: e2e, contract, and system-level load / security /
+# accessibility. (unit/integration/property belong in container files.) The
+# validator does not hard-block on tier placement, but a system test MUST name
+# the container(s) it exercises in `involves_containers`.
+# ---------------------------------------------------------------------------
+tests:                                      # REQUIRED — list[SystemTest] (may be empty
+                                            #   only if every workflow is deferred)
+  - tst_id: TST-001                         # REQUIRED — unique within THIS file
+    name: <string>                          # REQUIRED — the behaviour proved
+    tier:                                   # REQUIRED — one of:
+      # unit | integration | e2e | contract | property | load | security | accessibility
+    description: <string>                   # REQUIRED — what it verifies + why
+                                            #   (for the codegen agent)
+    directives:                             # REQUIRED — non-empty. Arrange/act/assert
+      - <string>                            #   sketch, what to mock, edge cases.
+    covers:                                 # REQUIRED — upstream ids this verifies.
+      - WKF-002                             #   FR-NNN | NFR-NNN | ACR-NNN | WKF-NNN.
+      - FR-008                              #   Validated for format + existence in PRD.
+    involves_containers:                    # REQUIRED — non-empty. container_ids this
+      - backend-api                         #   test exercises. Validated against ARCH.
+      - web-frontend
+    priority: must | should | could         # REQUIRED
+    setup: <string>                         # OPTIONAL — non-obvious setup/teardown
+    acceptance: <string>                    # REQUIRED — one machine-checkable pass condition
+    status: draft | confirmed               # REQUIRED — interview progress
+
+# ---------------------------------------------------------------------------
+# container_strategies — registry of per-container files. Container mode
+# appends an entry here on first completion of a container (the only field
+# container mode mutates in this file, besides metadata.last_updated).
+# ---------------------------------------------------------------------------
+container_strategies:                       # OPTIONAL — list, grows as containers are drilled
+  - container_id: backend-api               # REQUIRED when present — exists in ARCH.yaml
+    file_path: docs/TEST-STRATEGY__backend-api.yaml   # REQUIRED when present
+
+# ---------------------------------------------------------------------------
+# test_strategy_warnings — non-fatal issues + the DEFERRAL half of the
+# trace-or-defer coverage contract. Universal WRN-NNN family:
+# "WRN-NNN: <message>". A WKF/FR/NFR id named in a warning counts as
+# intentionally-not-tested-here and satisfies the coverage gate for that id
+# (see references/coverage-and-defer.md). Validator enforces `^WRN-\d{3,}:\s+.+`.
+# ---------------------------------------------------------------------------
+test_strategy_warnings:                     # OPTIONAL — list of "WRN-NNN: ..." strings
+  - "WRN-001: WKF-007 is a manual operator workflow with no automatable path; deferred."
+
+# =============================================================================
+# Required cross-checks (run by validate_schema.py on every write)
+# =============================================================================
+# 1.  Required-field completeness — status:complete requires every REQUIRED
+#     field above to be non-null.
+# 2.  TST-NNN format + uniqueness — every tests[].tst_id matches `^TST-\d{3,}$`
+#     and is unique within this file.
+# 3.  WRN-NNN format — every test_strategy_warnings entry matches
+#     `^WRN-\d{3,}:\s+.+`.
+# 4.  covers existence — every covers entry is FR/NFR/ACR/WKF format AND
+#     resolves to a PRD id (FR→functional_requirements, NFR→
+#     non_functional_requirements, ACR/WKF→PRD token scan). Blocks complete.
+# 5.  involves_containers integrity — every entry resolves to an
+#     ARCH.yaml.containers[].container_id. Blocks complete.
+# 6.  Workflow coverage (trace-or-defer) — every PRD core_workflow WKF-NNN that
+#     is cross-container (spans >1 container per ARCH.yaml.edges) appears in
+#     some test's `covers` OR is deferred via a test_strategy_warnings WRN-NNN.
+#     Blocks complete. (A single-container workflow may instead be covered in
+#     that container's file; it is not counted as a system-level gap.)
+# 7.  container_strategies integrity — every file_path resolves to a file on
+#     disk, and every container_id resolves to ARCH.yaml. Non-blocking warning.
+# 8.  Upstream status awareness — if PRD/DATA/ARCH metadata.status != complete,
+#     emit a warning (non-blocking; the skill itself refuses to run in that
+#     case).
+# =============================================================================

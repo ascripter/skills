@@ -1,0 +1,45 @@
+# INVALID: status complete but NFR-001 (implemented by the backend container)
+# is covered by no test and deferred by no WRN-NNN. Expect: [FAIL] on the
+# requirement-coverage gate. (FR-001 / acceptance / both risks ARE covered, to
+# prove the failure is isolated to NFR-001.)
+metadata:
+  test_strategy_container_version: "1.0"
+  last_updated: "2026-06-02T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 88888888-8888-8888-8888-888888888888
+  status: complete
+container_id: backend
+overview: "Unit + integration tests for the backend (intentionally missing the NFR-001 load test)."
+coverage_target:
+  line_pct: 85.0
+tests:
+  - tst_id: TST-001
+    name: "users-service creates a user"
+    tier: unit
+    description: "Happy-path create."
+    component_ref: users-service
+    directives: ["Arrange payload; act create(); assert persisted user."]
+    covers: [FR-001]
+    priority: must
+    acceptance: "create() returns the new user id."
+    status: confirmed
+  - tst_id: TST-002
+    name: "db timeout is retried"
+    tier: integration
+    description: "Negative case for db-timeout."
+    component_ref: users-service
+    directives: ["Inject one timeout; assert retry then success."]
+    targets_failure_mode: db-timeout
+    priority: must
+    acceptance: "Transient timeout recovers after one retry."
+    status: confirmed
+  - tst_id: TST-003
+    name: "no PII in logs"
+    tier: security
+    description: "Abuse case for pii-leak."
+    directives: ["Create a user; scan logs for email."]
+    targets_security_concern: pii-leak
+    priority: must
+    acceptance: "No log line contains the raw email."
+    status: confirmed
+test_strategy_warnings: []

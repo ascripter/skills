@@ -1,0 +1,116 @@
+# Coverage & defer — the trace-or-defer contract (sdlc-test)
+
+This is the heart of what makes a `test` artifact trustworthy: **nothing the
+upstream declared important goes silently untested.** Every gated item is
+either covered by a `TST-NNN` test or explicitly, reviewably deferred. Read
+this when closing each suite in Phase 6 and at Phase 7.
+
+It implements CLAUDE.md §6 ("Coverage contract: trace every upstream item OR
+defer it"). The validator enforces both halves — a strategy that omits an item
+without deferring it cannot reach `status: complete`.
+
+---
+
+## What is gated
+
+### System file (`TEST-STRATEGY.yaml`)
+
+- **Cross-container workflows.** Every PRD `WKF-NNN` that spans more than one
+  container (≥2 containers list it in `ARCH.yaml.containers[].traces_prd_workflows`)
+  must be in some system test's `covers` OR deferred.
+
+### Container file (`TEST-STRATEGY__<container>.yaml`)
+
+Drawn from `ARCH.yaml.containers[<id>]` and `docs/ARCH__<id>.yaml`:
+
+- **Requirements.** Every `FR-NNN`/`NFR-NNN` in the container's (and its
+  components') `implements_requirements` must be in some test's `covers` OR
+  deferred.
+- **Acceptance.** Every component that declares `acceptance_criteria` must be
+  targeted by ≥1 test (a test whose `component_ref` is that component) OR
+  deferred.
+- **Risks.** Every `failure_modes[].id` and `security_concerns[].id`
+  (container- and component-level, structured entries only) must be exercised
+  by a test (`targets_failure_mode` / `targets_security_concern`) OR deferred.
+
+(Container-level `acceptance_criteria` in `ARCH.yaml` and bare-string
+failure-modes/concerns without a stable id are surfaced as seeds but are
+non-blocking — they have no id to key a gate on.)
+
+---
+
+## How to TRACE (the normal path)
+
+Reference the item from a test:
+
+- requirements & workflows → the test's `covers` list (by stable id).
+- a component's acceptance → a test with `component_ref: <that component>`.
+- a failure mode → a test with `targets_failure_mode: <id>`.
+- a security concern → a test with `targets_security_concern: <id>`.
+
+The validator counts the item as covered.
+
+## How to DEFER (the escape hatch)
+
+Some items genuinely warrant no automated test in *this* artifact:
+
+- a process FR with no observable behaviour to assert (pure config loading);
+- a workflow that is manual/operator-driven with no automatable path;
+- an NFR verified by a tool outside the test suite (a license scan, a SAST
+  pass) rather than a `TST-NNN`;
+- a risk mitigated structurally (a type makes the failure unrepresentable).
+
+Record the deferral by **naming the id in a `test_strategy_warnings` entry**:
+
+```yaml
+test_strategy_warnings:
+  - "WRN-014: FR-029 is config loading with no behaviour to assert beyond startup; covered by the startup smoke test in the e2e suite, not a unit test here."
+  - "WRN-015: failure_mode db-pool-exhausted is mitigated by a connection-pool config invariant; no runtime test — deferred."
+```
+
+The validator scans warnings for the id token (FR/NFR/ACR/WKF tokens, or the
+literal kebab-case failure-mode / security-concern / component id) and counts
+a named id as covered. **Always give a reason** — a bare "WRN-016: FR-031" is
+valid to the regex but useless to a reviewer. Don't defer to dodge work; defer
+when a test would be noise.
+
+The user can trigger a deferral mid-interview by typing `defer <id>` — log the
+WRN-NNN with the reason they give.
+
+---
+
+## The scope-completeness sweep (before closing each suite)
+
+`system_suite` and `container_suite` are `critical synthesis: true`. After the
+per-item loop closes, run the **dynamic scope-completeness sweep** exactly as
+specified in `sdlc/skills/prd/references/importance-flows.md` (§ "The
+`critical` flow → dynamic scope-completeness sweep"). For `test`, reflect on:
+
+- the **draft suite** itself (are whole tiers missing — e.g. zero negative
+  tests for a container that has failure modes?);
+- **every upstream ID family**, not just the most direct one — PRD FR/NFR/WKF,
+  ARCH `failure_modes`/`security_concerns`/`acceptance_criteria`, API
+  operations (contract tests), UX surfaces (a11y), DATA entities (round-trips);
+- **project-type heuristics** (`tiering-guidance.md` §10) — e.g. an
+  event-driven system with no idempotency/replay test, a parser with no
+  malformed-input test, an auth boundary with no unauthenticated-request test.
+
+Surface concrete candidate tests (not category labels) via one multi-select
+`AskUserQuestion`. Caps: at most 2 sweep passes per suite; honour the
+anti-padding rule (surface 0 candidates rather than manufacture filler); defer
+any leftover gaps to a `WRN-NNN`.
+
+The sweep is the safety net for synthesis gaps — the case where an item implied
+by an upstream id (a failure mode whose description names a race condition)
+never made it into the draft because seeding only looked at the most obvious
+signal. **Skip it at your peril.**
+
+---
+
+## At Phase 7
+
+Run `validate_schema.py`. If a coverage gate fails while `status: complete`,
+the validator prints the exact uncovered ids and forces a FAIL. Either add the
+missing test or defer the id with a reasoned WRN-NNN, then re-validate. A
+`status: draft` artifact lists the same gaps as advisory notes but still exits
+0 — so you can always save partial progress.

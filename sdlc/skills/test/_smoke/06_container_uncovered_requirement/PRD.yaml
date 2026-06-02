@@ -1,0 +1,12 @@
+metadata:
+  status: complete
+functional_requirements:
+  must_have_features:
+    - "FR-001: create users"
+    - "FR-002: render dashboard"
+non_functional_requirements:
+  performance_targets:
+    - "NFR-001: p95 latency < 200ms"
+use_cases:
+  core_workflows:
+    - "WKF-001: user signs up and lands on dashboard"

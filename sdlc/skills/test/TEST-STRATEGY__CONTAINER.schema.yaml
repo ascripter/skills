@@ -1,0 +1,144 @@
+# =============================================================================
+# TEST-STRATEGY__CONTAINER.schema.yaml — canonical schema for one
+#   docs/TEST-STRATEGY__<container>.yaml
+# =============================================================================
+# Produced by /sdlc:test <container> (container mode). Holds the tests scoped
+# to ONE container — unit, integration (within the container), property, and
+# any container-specific load / security / accessibility case — plus this
+# container's coverage target and optional policy overrides.
+#
+# Global policy (pyramid_targets, the coverage floor, mock/fixture defaults)
+# is INHERITED from docs/TEST-STRATEGY.yaml. Fields left null below inherit it.
+#
+# This file is the source of truth for the agents that implement, generate, and
+# run this container's tests. It is NEVER authored for a non-testable container
+# (external, or a storage/infra archetype) — container mode refuses those.
+#
+# ID families this artifact OWNS (writer-managed counters in state.last_ids):
+#   * TST-NNN — one per test in `tests`. INDEPENDENT counter per container file;
+#               TST-001 here is unrelated to TST-001 in any other file.
+#   * WRN-NNN — one per `test_strategy_warnings` entry.
+# Upstream ids it REFERENCES: FR/NFR/ACR (PRD); component_id, failure_modes[].id,
+#   security_concerns[].id (the matching ARCH__<container>.yaml).
+# =============================================================================
+
+metadata:                                  # REQUIRED
+  test_strategy_container_version: "1.0"   # REQUIRED
+  last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
+  generated_by: sdlc-test                  # REQUIRED
+  session_id: <uuid4>                      # REQUIRED — sub-session id from state file
+  status: draft | complete                 # REQUIRED
+  changelog:                               # OPTIONAL — append-only, most-recent first.
+    - "1.0 (2026-06-02): Initial container test strategy."
+  upstream_provenance:                     # OPTIONAL — list of {file, session_id,
+    - {file: docs/ARCH__backend-api.yaml, session_id: <uuid4>, last_updated: <iso8601>, sha256: <16-hex>}
+
+# ---------------------------------------------------------------------------
+# Identity — must match a testable container in ARCH.yaml.
+# ---------------------------------------------------------------------------
+container_id: <kebab-case>                  # REQUIRED — matches ARCH.yaml.containers[]
+overview: <two or three sentences>          # REQUIRED — what testing this container needs
+inherits_from: docs/TEST-STRATEGY.yaml      # OPTIONAL — pointer to the system policy file
+
+# ---------------------------------------------------------------------------
+# coverage_target — this container's coverage goal. line_pct/branch_pct null
+# ⇒ inherit docs/TEST-STRATEGY.yaml.coverage_threshold (or any
+# per_container_overrides entry for this container).
+# ---------------------------------------------------------------------------
+coverage_target:                           # REQUIRED (block may carry only nulls = inherit)
+  line_pct: <float>                        # OPTIONAL — null ⇒ inherit system floor
+  line_pct_confidence: confirmed | inferred | assumption   # OPTIONAL
+  branch_pct: <float>                      # OPTIONAL — null ⇒ inherit
+  rationale: <string>                      # OPTIONAL — required-ish when deviating from system
+
+# ---------------------------------------------------------------------------
+# Policy overrides — null ⇒ inherit the global policy from TEST-STRATEGY.yaml.
+# ---------------------------------------------------------------------------
+mock_policy: <string>                       # OPTIONAL — null ⇒ inherit
+fixture_strategy: <string>                  # OPTIONAL — null ⇒ inherit
+test_environment: <string>                  # OPTIONAL — e.g. "testcontainers postgres",
+                                            #   "in-memory sqlite", "localstack"
+
+# ---------------------------------------------------------------------------
+# tests — the container's unit + integration (+ property/negative) suite.
+# Each is a TST-NNN item. `critical` per item in the interview: the agent
+# derives candidates from the container's components, internal edges,
+# implements_requirements, acceptance_criteria, failure_modes, and
+# security_concerns, then confirms each.
+# ---------------------------------------------------------------------------
+tests:                                      # REQUIRED — list[ContainerTest], non-empty
+  - tst_id: TST-001                         # REQUIRED — unique within THIS file
+    name: <string>                          # REQUIRED — the behaviour proved
+    tier:                                   # REQUIRED — one of:
+      # unit | integration | e2e | contract | property | load | security | accessibility
+    description: <string>                   # REQUIRED — what it verifies + why
+    component_ref: <component_id>           # OPTIONAL (REQUIRED for unit tier) — a
+                                            #   components[].component_id in the matching
+                                            #   ARCH__<container>.yaml. Validated.
+    directives:                             # REQUIRED — non-empty. Arrange/act/assert,
+      - <string>                            #   what to mock, edge cases. For property
+                                            #   tests: the invariant + input space.
+    covers:                                 # OPTIONAL — FR/NFR/ACR ids this test verifies.
+      - FR-008                              #   Subset of the targeted component/container's
+                                            #   implements_requirements. Validated for
+                                            #   format + existence in PRD.
+    targets_failure_mode: <kebab-id>        # OPTIONAL — a failure_modes[].id from the
+                                            #   ARCH__<container>.yaml this negative case
+                                            #   exercises. Validated against the ARCH file.
+    targets_security_concern: <kebab-id>    # OPTIONAL — a security_concerns[].id from the
+                                            #   ARCH__<container>.yaml this abuse case
+                                            #   exercises. Validated against the ARCH file.
+    priority: must | should | could          # REQUIRED
+    setup: <string>                         # OPTIONAL
+    fixtures:                               # OPTIONAL — specific fixtures/builders used
+      - <string>
+    mocks:                                  # OPTIONAL — what this test mocks/stubs
+      - <string>
+    acceptance: <string>                    # REQUIRED — one machine-checkable pass condition
+    status: draft | confirmed               # REQUIRED — interview progress
+
+# ---------------------------------------------------------------------------
+# test_strategy_warnings — non-fatal issues + the DEFERRAL half of the
+# trace-or-defer coverage contract. A requirement (FR/NFR/ACR), a component_id,
+# a failure_modes[].id, or a security_concerns[].id named in a warning counts
+# as intentionally-not-tested and satisfies the coverage gate for that item
+# (see references/coverage-and-defer.md). Validator enforces `^WRN-\d{3,}:\s+.+`.
+# ---------------------------------------------------------------------------
+test_strategy_warnings:                     # OPTIONAL — list of "WRN-NNN: ..." strings
+  - "WRN-001: FR-029 is config loading with no observable behaviour to assert beyond startup; deferred."
+
+# =============================================================================
+# Required cross-checks (run by validate_schema.py on every write)
+# =============================================================================
+# In addition to the system-file checks, for each TEST-STRATEGY__<container>.yaml:
+#
+# 1.  Required-field completeness — status:complete requires every REQUIRED
+#     field non-null, and `tests` non-empty.
+# 2.  TST-NNN format + uniqueness within this file; WRN-NNN format.
+# 3.  Identity — container_id resolves to a testable ARCH.yaml container, and a
+#     sibling docs/ARCH__<container_id>.yaml exists on disk.
+# 4.  component_ref integrity — every component_ref resolves to a
+#     components[].component_id in docs/ARCH__<container_id>.yaml. unit-tier
+#     tests MUST set component_ref. Blocks complete.
+# 5.  covers integrity — every covers entry is FR/NFR/ACR format, resolves to a
+#     PRD id, AND (for FR/NFR) is a subset of the union of implements_requirements
+#     across the container + the targeted component in ARCH__<container>.yaml.
+#     Blocks complete.
+# 6.  risk-target integrity — every targets_failure_mode / targets_security_concern
+#     resolves to an id in docs/ARCH__<container_id>.yaml (container- or
+#     component-level). Blocks complete.
+# 7.  Requirement coverage (trace-or-defer) — every FR-NNN/NFR-NNN in the
+#     container's + its components' implements_requirements appears in some
+#     test's `covers` OR is deferred via a WRN-NNN. Blocks complete.
+# 8.  Acceptance coverage (trace-or-defer) — every component that declares
+#     acceptance_criteria (and the container, if it declares any) is targeted by
+#     ≥1 test (component_ref == that component; container-level acceptance by any
+#     integration/e2e test) OR deferred (the component_id named in a WRN-NNN).
+#     Blocks complete.
+# 9.  Risk coverage (trace-or-defer) — every failure_modes[].id and
+#     security_concerns[].id (container + component level) in
+#     ARCH__<container>.yaml is targeted by some test (targets_failure_mode /
+#     targets_security_concern / covers) OR deferred via a WRN-NNN. Blocks complete.
+# 10. Coverage failures force metadata.status: draft (they do not crash the
+#     validator) so partial strategies remain saveable as drafts.
+# =============================================================================

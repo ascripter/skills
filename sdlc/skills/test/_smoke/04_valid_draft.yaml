@@ -1,0 +1,12 @@
+# VALID DRAFT: status draft with holes (no tests yet, no mock/fixture policy).
+# Drafts are valid even with missing required fields. Expect: [OK] DRAFT (exit 0).
+metadata:
+  test_strategy_version: "1.0"
+  last_updated: "2026-06-02T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 44444444-4444-4444-4444-444444444444
+  status: draft
+test_approach:
+  pyramid_targets: {unit: "~70%", integration: "~20%", e2e: "~10%"}
+coverage_threshold:
+  line_pct: 80.0
