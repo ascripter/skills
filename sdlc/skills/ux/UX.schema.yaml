@@ -100,6 +100,15 @@ metadata:
                                            # Most-recent entry first. Used to record
                                            # post-generation manual edits or skill
                                            # re-runs that materially changed the file.
+  upstream_provenance: null                # Optional[list[mapping]]. One entry per
+                                           # upstream artifact consumed, each a mapping:
+                                           #   {file, session_id, last_updated, sha256}
+                                           # sha256 = the 16-hex prefix from
+                                           # docs/INDEX.yaml.generated_from[<file>].
+                                           # Re-runs compare this to detect upstream
+                                           # drift. Validator type-checks list-of-
+                                           # mappings only. See CLAUDE.md §7
+                                           # "Upstream-change re-invocation".
 
 # ux_warnings — informational notes carried into downstream agent context.
 # Each entry MUST start with a stable ID: "WRN-NNN: <message>".

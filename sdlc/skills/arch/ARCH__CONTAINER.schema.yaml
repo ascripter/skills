@@ -28,6 +28,12 @@ metadata:                                  # REQUIRED
     # Each entry: "<arch_container_version> (<YYYY-MM-DD>): <one-line summary>".
     # Validator type-checks Optional[List[str]] only.
     - "1.0 (2026-05-26): Initial container deep-dive."
+  upstream_provenance:                     # OPTIONAL — one entry per upstream artifact
+    # consumed when this container was drilled, each a mapping
+    # {file, session_id, last_updated, sha256}. Lets a later /sdlc:arch <container>
+    # detect upstream drift since the last drill. Validator type-checks
+    # list-of-mappings only. See CLAUDE.md §7 "Upstream-change re-invocation".
+    - {file: docs/DATA-MODEL.yaml, session_id: <uuid4>, last_updated: <iso8601>, sha256: <16-hex>}
 
 # ---------------------------------------------------------------------------
 # Identity — must match the parent ARCH.yaml entry verbatim.

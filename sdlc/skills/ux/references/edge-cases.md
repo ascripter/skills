@@ -168,6 +168,19 @@ If new ids were added (a new WKF/FR/ENT in PRD), also offer to extend
 the inventory: re-run theme 4 step a only for the new ids, then re-run
 the scope-completeness sweep over the union.
 
+## Upstream changes between sessions (re-invocation, §7)
+
+The section above handles an upstream edited *mid-session* (the resume path).
+When the user instead re-invokes `/sdlc:ux` in a *new* session after
+`docs/UX.yaml` already exists, Phase 2 runs **upstream-change detection**
+against `metadata.upstream_provenance`: it compares the recorded `sha256` of
+`docs/PRD.yaml` to its current hash and, if PRD moved, runs the consolidated
+delta-review (added / removed / modified PRD ids) *before* the interview. This
+is the cross-skill §7 contract; the stale-ref prompt above is the "removed"
+branch of it, and the "added" offer is the "added" branch. A content hash also
+catches hand-edits that no `session_id` check would. Full mechanics:
+`sdlc/skills/ux/references/upstream-reconciliation.md`.
+
 ## Validation failures
 
 Same flow as `sdlc:prd`. Show field-level errors verbatim, list

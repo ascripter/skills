@@ -158,6 +158,17 @@ Read these files at startup:
 Build the pre-fill map exactly as `sdlc:prd` does, classifying each
 candidate as `✓ found` (direct PRD/file value) or `⚠ inferred` (derived).
 
+**Upstream-change detection (re-runs).** If `docs/UX.yaml` already exists and
+carries `metadata.upstream_provenance`, this is a re-run: check whether
+`docs/PRD.yaml` moved since the last write by comparing the recorded `sha256`
+to PRD's current hash (from `docs/INDEX.yaml.generated_from[docs/PRD.yaml]`,
+else compute `sha256(bytes)[:16]`). If PRD changed, classify the delta
+(added / removed / modified PRD ids) and run the **delta-review pass before
+the theme interview** per
+`sdlc/skills/ux/references/upstream-reconciliation.md` (CLAUDE.md §7). If PRD
+is unchanged, this is an ordinary refine — proceed to the merge flow without a
+delta-review. Fresh runs (no prior `docs/UX.yaml`) skip this step.
+
 ### Phase 3 — Idea capture (lightweight)
 
 Unlike `sdlc:prd`, this skill does NOT need to capture a free-text idea
@@ -310,6 +321,12 @@ Writer responsibilities for the new ID conventions:
   disk), prepend one entry describing the material change, format
   `"<version> (<YYYY-MM-DD>): <one-line summary>"`. Append-only — never
   rewrite existing entries.
+- `metadata.upstream_provenance`: (re)write the snapshot of every upstream
+  artifact consumed this run — for ux, one entry for `docs/PRD.yaml`
+  (`{file, session_id, last_updated, sha256}`; `sha256` from
+  `docs/INDEX.yaml.generated_from`, else `sha256(bytes)[:16]`).
+  Replace-on-write (not append-only), so it always reflects the latest write.
+  See CLAUDE.md §7.
 
 Then run:
 

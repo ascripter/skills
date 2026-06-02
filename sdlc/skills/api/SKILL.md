@@ -206,6 +206,17 @@ Build the pre-fill map exactly as `sdlc:prd` and `sdlc:ux` do,
 classifying each candidate as `✓ found` (direct quote from PRD/UX/DATA
 or local file) or `⚠ inferred` (derived).
 
+**Upstream-change detection (re-runs).** If `docs/API.yaml` already exists and
+carries `metadata.upstream_provenance`, this is a re-run: for each upstream
+artifact (`docs/PRD.yaml`, `docs/UX.yaml`, `docs/DATA-MODEL.yaml`), compare the
+recorded `sha256` to its current hash (from
+`docs/INDEX.yaml.generated_from[<file>]`, else `sha256(bytes)[:16]`). For every
+changed upstream, classify the delta (added / removed / modified ids) and run
+the **delta-review pass before the theme interview** per
+`sdlc/skills/ux/references/upstream-reconciliation.md` (CLAUDE.md §7). If every
+upstream is unchanged, proceed to the merge flow without a delta-review. Fresh
+runs (no prior `docs/API.yaml`) skip this step.
+
 ### Phase 3 — Idea capture (lightweight)
 
 Unlike `sdlc:prd`, this skill does NOT need to capture a free-text idea
@@ -345,6 +356,12 @@ Re-evaluate at the start of each new theme batch.
 Write or merge `docs/API.yaml` and write every
 `docs/API__<resource>.yaml` in one consistent batch (so that the
 resource inventory and the per-resource files always agree).
+
+When writing, (re)write `metadata.upstream_provenance`: one entry per upstream
+artifact consumed this run (`docs/PRD.yaml`, `docs/UX.yaml`,
+`docs/DATA-MODEL.yaml`), each `{file, session_id, last_updated, sha256}` with
+`sha256` from `docs/INDEX.yaml.generated_from` (else `sha256(bytes)[:16]`).
+Replace-on-write (not append-only). See CLAUDE.md §7.
 
 Then run:
 

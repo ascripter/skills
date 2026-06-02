@@ -334,6 +334,62 @@ legitimate artifacts. (Surfaced this session — the gold DATA-MODEL left
 12 PRD process-FRs with neither an entity nor a deferral, and the
 validator had never implemented the defer half of its own contract.)
 
+#### 7. Upstream-change re-invocation contract
+
+Re-invoking a skill whose output already exists means one of three
+things, handled by three different mechanisms:
+
+- **Resume** an interrupted session (`status: in_progress`) → the
+  state-file resume prompt (Phase 1).
+- **Refine/extend** deliberately, upstream *unchanged* → the merge/update
+  flow (`references/merge-validate.md`).
+- **Reconcile** because an upstream artifact changed → the contract below.
+
+The first two are already uniform across skills. The third — the case
+users most often re-invoke for ("the PRD/UX/DATA/API moved under me") —
+must be uniform too. Every skill *after* `prd` (every artifact skill that
+consumes an upstream artifact) MUST:
+
+1. **Record provenance at write time.** Carry
+   `metadata.upstream_provenance`: a replace-on-write snapshot, one entry
+   per upstream artifact consumed, each a mapping
+   `{file, session_id, last_updated, sha256}`. The `sha256` is the 16-hex
+   content-hash prefix `setup`'s `docs_index.py` already computes — read it
+   from `docs/INDEX.yaml.generated_from[<file>].sha256`, or compute
+   `sha256(bytes)[:16]` when `INDEX.yaml` is absent. A content hash (not
+   just `session_id`) is required because it catches **hand-edits** to an
+   upstream yaml, which `session_id` does not. The validator type-checks
+   `Optional[List[<mapping>]]` only — like `changelog`, manual edits are
+   expected, so do not over-validate field shape.
+
+2. **Detect & classify on re-run (Phase 2).** When the output exists and
+   carries provenance, compare each upstream's current hash to the
+   recorded one. For each *changed* upstream, diff its ID families against
+   what the output references → **added** (new upstream ids; already caught
+   by coverage but named up front), **removed** (stale-ref, §4), and
+   **modified** (id stable, body changed — the case nothing caught before).
+
+3. **Reconcile via one delta-review pass** *before* the theme interview:
+   one consolidated `AskUserQuestion` sweep across all changed upstreams;
+   per item the user picks incorporate / ignore+`WRN` / defer. This
+   unifies the previously-scattered signals (coverage = adds, stale-ref =
+   removes, + new modified-body detection) into a single reviewable step,
+   then falls through to the normal merge.
+
+If every upstream is unchanged, skip the delta-review — it's a refine, not
+a reconcile.
+
+Canonical mechanics (provenance shape, hash sourcing, the delta
+classification, the delta-review state machine, edge cases):
+`sdlc/skills/ux/references/upstream-reconciliation.md`. Reference it
+instead of duplicating. `prd` is exempt — it consumes no upstream
+artifact.
+
+Before this convention, only `data` tracked anything (a shallow
+`session_id` match that missed hand-edits and never surfaced modified
+bodies); `arch` had no upstream-change handling at all. §7 generalizes and
+hardens what `data` started.
+
 #### Implications for downstream skills
 
 Any new skill that consumes the PRD (directly or indirectly via UX,
@@ -358,6 +414,11 @@ DATA-MODEL, API, etc.) should:
 - **Enforce coverage as trace-or-defer, not trace-only** — implement
   the `WRN-NNN` deferral path in the validator wherever the artifact
   claims to cover an upstream family (§6).
+- **Record `metadata.upstream_provenance` and run the delta-review on
+  re-invocation** — snapshot every upstream's content hash at write time,
+  and on re-run detect/classify/reconcile upstream drift before the
+  interview (§7; mechanics in
+  `sdlc/skills/ux/references/upstream-reconciliation.md`).
 - **Decompose, don't skim.** Where a skill emits structured models or
   nested items (entities/sub-models in `data`, test cases in `test`,
   task graphs in `task`), recurse to first-class definitions rather

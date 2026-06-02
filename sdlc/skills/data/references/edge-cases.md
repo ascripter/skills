@@ -198,21 +198,23 @@ For projects with hundreds of files in `models/` or `migrations/`:
 - Tell the user: *"Scanned a sample of 50 model files from `models/`.
   If important entities were missed, add them manually during Phase 3."*
 
-## When the PRD changes after DATA-MODEL exists
+## When an upstream changes after DATA-MODEL exists (re-invocation, §7)
 
-The user updates PRD (new features), then re-runs `/sdlc:data`. The
-existing DATA-MODEL is now stale:
+The user updates `docs/PRD.yaml` or `docs/UX.yaml` (re-run or hand-edit), then
+re-runs `/sdlc:data`. The existing DATA-MODEL is now stale. Phase 2's
+**upstream-change detection** drives the reconciliation per the cross-skill §7
+contract (`sdlc/skills/ux/references/upstream-reconciliation.md`):
 
-1. The validator's feature-coverage check will flag the new FR-NNNs as
-   uncovered.
-2. The interview pre-fill will surface them as ⚠ inferred entity
-   candidates.
-3. The merge in Phase 7 will preserve existing entities and add new ones
-   based on user confirmation.
-
-If `PRD.metadata.session_id` doesn't match what was recorded last time,
-flag *"PRD was updated since the last data-model session. Reviewing
-deltas:"* and list the new FR-NNN features.
+1. Compare each upstream's recorded `sha256` (in
+   `metadata.upstream_provenance`) to its current hash. A content hash catches
+   hand-edits that the old `session_id`-only check missed.
+2. For every changed upstream, classify added / removed / modified ids and run
+   the **consolidated delta-review before the entity interview**.
+3. The familiar pieces are the branches of that review: the validator's
+   feature-coverage check flags new FR-NNNs as uncovered (the "added" branch);
+   pre-fill surfaces them as ⚠ inferred entity candidates; stale refs are the
+   "removed" branch; and the Phase 7 merge preserves existing entities while
+   adding confirmed new ones. Refresh `upstream_provenance` on write.
 
 ## Empty entities dict at status:complete
 

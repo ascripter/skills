@@ -9,6 +9,11 @@ Execute both commands from the command line:
 ## Skills
 All skills need to be explicitly invoked and will provide an interview mechanic that lets you define your software project step by step.
 
+In general, if a skill is invoked, three things are checked:
+- Is it first time invocation? → generate initial output
+- Consecutive invocation → revise output
+- Consecutive invocation AND upstream documents have changed → incorporate changes
+
 Execute the following skills in order within your project repo. All skills put their output into **`docs/`** in the repo root (fixed; can't be configured currently).
 
 0. **`/sdlc:setup`**
@@ -19,7 +24,7 @@ Execute the following skills in order within your project repo. All skills put t
    
    Product requirements. The skill scans everything already present in the repo, so having already a README or other project docs is beneficial at this stage. 
 
-2. **`/sdlc:ux`** → `UX.yaml` and `UX__<surface>.yaml`
+2. **`/sdlc:ux`** → `UX.yaml` + `UX__<surface>.yaml`
    
    Define frontend type (desktop, mobile, web, cli) and UX surfaces for it.
 
@@ -27,17 +32,30 @@ Execute the following skills in order within your project repo. All skills put t
     
    Define data storage (SQL, graph, document, key-value or vector database, or simple filesystem storage), then all data entities and their relations. 
 
-4. **`/sdlc:api`** (optional) → `API.yaml` and `API__<resource>.yaml` 
+4. **`/sdlc:api`** (optional) → `API.yaml` + `API__<resource>.yaml` 
 
    If the app has an api, use this skill next. 
 
-5. **`/sdlc:arch`** → `ARCH.yaml`
+5. **`/sdlc:arch --next`** → `ARCH.yaml` or `ARCH__<container>.yaml` (context sensitive)
 
-   Define top-level architecture, including all containers (C2 in C4-model). 
+   On first invocation, define top-level architecture, including all containers (C2 in C4-model). On consecutive invocation, define the next container until all are present.
+   
+   The skill has more signatures shown below:
+   - **`/sdlc:arch`** → `ARCH.yaml`
+      
+     Explicitly address system architecture
+   
+   - **`/sdlc:arch <container>`** → `ARCH__<container>.yaml`
 
-6. **`/sdlc:arch <container>`** → `ARCH__<container>.yaml`
+     Explicitly address container architecture
 
-   Execute arch skill one per container defined in `ARCH.yaml` to define the components in this container. 
+   - **`/sdlc:arch -d`** → `ARCH.yaml`
+
+     Update only dependency edges on system level
+
+   - **`/sdlc:arch -d <container>`** → `ARCH__<container>.yaml`
+
+     Update only dependency edges on container level
 
 7. **`/sdlc:test <container>`** → `TEST-STRATEGY__<container>.yaml`
   

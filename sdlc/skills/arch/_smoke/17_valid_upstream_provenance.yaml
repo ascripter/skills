@@ -1,0 +1,42 @@
+# 17 — Valid ARCH.yaml carrying metadata.upstream_provenance (CLAUDE.md §7).
+# Expectation: status='complete', validator exits 0 with [OK].
+# Confirms the provenance snapshot block is accepted (type-checked as a list
+# of mappings only; no field-shape enforcement).
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-06-02T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "11111111-1111-1111-1111-111111111111"
+  status: "complete"
+  changelog:
+    - "1.0 (2026-06-02): Initial spec produced by sdlc-arch."
+  upstream_provenance:
+    - {file: docs/PRD.yaml, session_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", last_updated: "2026-06-01T09:00:00Z", sha256: "0123456789abcdef"}
+    - {file: docs/UX.yaml, session_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", last_updated: "2026-06-01T10:00:00Z", sha256: "fedcba9876543210"}
+    - {file: docs/DATA-MODEL.yaml, session_id: "cccccccc-cccc-cccc-cccc-cccccccccccc", last_updated: "2026-06-01T11:00:00Z", sha256: "00112233445566aa"}
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Solo project, simple CRUD, time-to-MVP outweighs modularity."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "Main application monolith."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+
+edges: []
+
+arch_warnings: []

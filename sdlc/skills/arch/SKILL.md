@@ -7,7 +7,10 @@ description: >
   (tech stack, deployment, components, internal edges) written to
   docs/ARCH__<container>.yaml. A third form, /sdlc:arch -d [<container>],
   re-derives the typed edge graph from API.yaml + DATA-MODEL.yaml + UX.yaml
-  without re-running the interview. Trigger only on /sdlc:arch or a direct
+  without re-running the interview. A fourth form, /sdlc:arch --next,
+  auto-advances: it resolves to system mode when no ARCH.yaml exists, to the
+  next not-yet-drilled container otherwise, and reports completion once every
+  drillable container has its file. Trigger only on /sdlc:arch or a direct
   natural-language request to start the architecture skill — never
   auto-trigger from generic architecture chatter. Reads docs/PRD.yaml,
   docs/UX.yaml (+ UX__*), docs/DATA-MODEL.yaml as required preconditions
@@ -33,7 +36,8 @@ generate test strategies, implementation tasks, and deployment configs.
 
 ## What this skill does (at a glance)
 
-The skill runs in **one of three modes**, dispatched on the invocation form:
+The skill runs in **one of three modes**, dispatched on the invocation form —
+plus a `--next` resolver that picks the right mode for you:
 
 | Invocation                  | Mode                      | Output                                  |
 |-----------------------------|---------------------------|------------------------------------------|
@@ -41,6 +45,7 @@ The skill runs in **one of three modes**, dispatched on the invocation form:
 | `/sdlc:arch <container>`    | container interview       | `docs/ARCH__<container>.yaml`            |
 | `/sdlc:arch -d`             | edge re-derivation, system| `docs/ARCH.yaml` (edges only)            |
 | `/sdlc:arch -d <container>` | edge re-derivation, one   | `docs/ARCH__<container>.yaml` (edges only)|
+| `/sdlc:arch --next`         | resolver → one of the above| (whatever the resolved form produces)   |
 
 Interview modes follow the canonical 8-phase flow (see "Phase 1 — Resume
 check" through "Phase 8 — CLAUDE.md pointer & close" below). The `-d` mode
@@ -91,7 +96,59 @@ There is no `SAVE` command — saving is implicit.
 
 ## Invocation dispatch
 
-After reading the `$ARGUMENTS` string, classify the invocation:
+After reading the `$ARGUMENTS` string, classify the invocation.
+
+**`--next` resolver (runs before the classification below).** If the first
+token is `--next` (no other positional args), resolve it to one of the concrete
+forms, then proceed exactly as that form:
+
+1. **An in-progress sub-session exists** (any `sessions[*]` with
+   `status: in_progress`) → resume it. `--next` means "continue the
+   architecture work"; never skip past unfinished work. Phase 1 handles the
+   resume prompt.
+2. **No `docs/ARCH.yaml`** (or it has no `containers`) → resolve to **system
+   mode** (as if `/sdlc:arch`).
+3. **`docs/ARCH.yaml` exists with a drillable container still undrilled** →
+   resolve to **container mode** for the next one (as if
+   `/sdlc:arch <container_id>`). A container is **drillable** if container mode
+   would actually author a file for it: `external: false` AND `archetype` not in
+   the storage/infra set (`primary-database`, `secondary-database`, `cache`,
+   `blob-store`, `search-index`, `message-bus`) AND not `external-service` —
+   exactly the set container mode aborts on (see `references/edge-cases.md` →
+   "External / data-store containers"). A drillable container is **undrilled**
+   if it has no `file_path` and no `docs/ARCH__<container_id>.yaml` on disk.
+   Pick the first undrilled drillable container in **drill order** (below).
+4. **Every drillable container already has its `ARCH__<container>.yaml`** →
+   print and abort:
+   > "All containers are already specified. To change one explicitly, invoke
+   > `/sdlc:arch <container-name>`. Otherwise the architecture is fully
+   > specified — go on with `/sdlc:test`."
+
+Before launching a resolved container interview, confirm the target with one
+`AskUserQuestion` so `--next` never silently drops the user into a long
+interview:
+> "`<k>` of `<n>` drillable containers specified. Next undrilled: `<id>`
+> (`<archetype>`). Start it, pick a different container, or stop?"
+
+Options: `"Start <id>"` / `"Pick another"` / `"Stop"`. On "Pick another", list
+the remaining undrilled drillable container_ids and let the user choose. On
+"Stop", exit cleanly without changing state.
+
+**Drill order.** When several drillable containers are undrilled, author them
+dependency-first so cross-container external edges can resolve to real
+components: order by ascending count of outgoing `depends_on` + `calls` edges
+in `ARCH.yaml.edges` (dependencies before dependents), tie-broken by
+`ARCH.yaml.containers[]` definition order. On a dependency cycle or no edges,
+fall back to plain definition order. This is a soft quality heuristic, not a
+correctness requirement — `-d` mode re-derives edges afterward regardless of
+the order chosen. Persist the resolved order to
+`state.sessions.system.drill_order` so `--next` is deterministic across
+sessions; recompute it only when the container set changed.
+
+`--next` does not combine with `-d`: `/sdlc:arch -d --next` (either order) is an
+unknown-flag error (rule 4 below).
+
+Otherwise, classify a non-`--next` invocation:
 
 1. **`-d` (or `--dependencies`) first token** → **edge-derivation mode**.
    - `/sdlc:arch -d` → re-derive cross-container edges in `docs/ARCH.yaml`.
@@ -228,6 +285,21 @@ one in Phase 5.
 For *what* to pre-fill from which upstream field, see
 `references/container-discovery.md` (system mode) and
 `references/component-discovery.md` (container mode).
+
+**Upstream-change detection (re-runs).** If the active mode's output already
+exists and carries `metadata.upstream_provenance`, this is a re-run: for each
+upstream artifact (`docs/PRD.yaml`, `docs/UX.yaml`, `docs/DATA-MODEL.yaml`, and
+`docs/API.yaml` when `api_present`), compare the recorded `sha256` to its
+current hash (from `docs/INDEX.yaml.generated_from[<file>]`, else
+`sha256(bytes)[:16]`). For every changed upstream, classify the delta
+(added / removed / modified ids) and run the **delta-review pass before the
+theme interview** per `sdlc/skills/ux/references/upstream-reconciliation.md`
+(CLAUDE.md §7). System mode compares against `ARCH.yaml`'s provenance; container
+mode against the specific `ARCH__<container>.yaml`'s — so a container drilled
+long after the system interview is reconciled against whatever upstream state
+*it* was built on. If every upstream is unchanged, proceed to the merge flow
+without a delta-review. Fresh outputs skip this step. See also
+`references/edge-cases.md` → "When an upstream changes after ARCH exists".
 
 ### Phase 3 — Inventory seeding (mode-specific)
 
@@ -410,6 +482,14 @@ Write or merge the active mode's output yaml:
   and bump `ARCH.yaml.metadata.last_updated`. This is the **only** field
   in `ARCH.yaml` that container mode is allowed to mutate.
 
+When writing, (re)write the active output's `metadata.upstream_provenance`:
+one entry per upstream artifact consumed this run (`docs/PRD.yaml`,
+`docs/UX.yaml`, `docs/DATA-MODEL.yaml`, and `docs/API.yaml` when present), each
+`{file, session_id, last_updated, sha256}` (`sha256` from
+`docs/INDEX.yaml.generated_from`, else `sha256(bytes)[:16]`). Replace-on-write
+(not append-only). System mode writes it on `ARCH.yaml`; container mode on the
+`ARCH__<container>.yaml` it just authored. See CLAUDE.md §7.
+
 Then run:
 
 ```bash
@@ -583,6 +663,10 @@ sessions:
     current_container: null     # during the container_inventory drill-down
     defined_containers:         # list of {container_id, archetype, status: proposed|draft|confirmed|dropped, source}
       []
+    drill_order: []             # resolved by `--next`: container_ids in the order
+                                # to drill (dependency-first, definition-order
+                                # tiebreak). Recomputed only when the container
+                                # set changes. See "Invocation dispatch" → Drill order.
     dropped_container_candidates: []
     partial_answers: {}         # mirrors docs/ARCH.yaml structure
 

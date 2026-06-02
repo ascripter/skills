@@ -283,6 +283,10 @@ class APIMetadata(BaseModel):
     monorepo: bool = False
     status: Literal["draft", "complete"] = "draft"
     changelog: Optional[List[str]] = None
+    # One entry per upstream artifact consumed, each a mapping
+    # {file, session_id, last_updated, sha256}. Type-checked as a list of
+    # mappings only — see CLAUDE.md §7 "Upstream-change re-invocation".
+    upstream_provenance: Optional[List[Dict[str, Any]]] = None
 
 
 class APIProduct(_ThemeBase):

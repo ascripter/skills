@@ -32,6 +32,14 @@ metadata:                                  # REQUIRED
     # enforce per-entry format (manual edits are expected here).
     - "1.1 (2026-05-26): Manual review pass. <one-line summary>."
     - "1.0 (2026-05-26): Initial spec produced by sdlc-arch."
+  upstream_provenance:                     # OPTIONAL — one entry per upstream artifact
+    # consumed by the system interview, each a mapping
+    # {file, session_id, last_updated, sha256}. sha256 = the 16-hex prefix from
+    # docs/INDEX.yaml.generated_from[<file>]. Re-runs compare this to detect
+    # upstream drift. Validator type-checks list-of-mappings only.
+    # See CLAUDE.md §7 "Upstream-change re-invocation".
+    - {file: docs/PRD.yaml, session_id: <uuid4>, last_updated: <iso8601>, sha256: <16-hex>}
+    - {file: docs/DATA-MODEL.yaml, session_id: <uuid4>, last_updated: <iso8601>, sha256: <16-hex>}
 
 # ---------------------------------------------------------------------------
 # architecture_pattern — the system's top-level architectural style.

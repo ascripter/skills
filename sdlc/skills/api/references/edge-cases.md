@@ -149,6 +149,19 @@ Behaviour on resume:
 6. If new entities were added, offer to add candidate resources for
    them (re-running theme 8 step a only for the new entities).
 
+## Upstream changes between sessions (re-invocation, §7)
+
+The section above handles an upstream edited *mid-session* (the resume path).
+When the user re-invokes `/sdlc:api` in a *new* session after `docs/API.yaml`
+already exists, Phase 2 runs **upstream-change detection** against
+`metadata.upstream_provenance`: it compares the recorded `sha256` of each
+upstream (`PRD`, `UX`, `DATA-MODEL`) to its current hash and, for any that
+moved, runs the consolidated delta-review (added / removed / modified ids)
+*before* the interview. This is the cross-skill §7 contract and **generalizes
+the `session_id`/`last_updated` comparison used above** — a content hash also
+catches hand-edits, which `session_id` does not. Full mechanics:
+`sdlc/skills/ux/references/upstream-reconciliation.md`.
+
 ## Validation failures
 
 Same flow as `sdlc:prd` and `sdlc:ux`. Show field-level errors

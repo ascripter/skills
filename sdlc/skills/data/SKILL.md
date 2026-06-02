@@ -150,9 +150,17 @@ mapping table). Tag each candidate:
 - **`⚠ inferred`** — derived from signals (e.g. `PRD.data_model.key_entities: [User]` →
   candidate entity name `User`, but no fields yet).
 
-If both PRD and DATA-MODEL.yaml exist and `PRD.metadata.session_id` doesn't
-match what's recorded in `DATA-MODEL.metadata`, flag a possible stale-PRD
-warning to `data_warnings`.
+**Upstream-change detection (re-runs).** If `docs/DATA-MODEL.yaml` already
+exists and carries `metadata.upstream_provenance`, this is a re-run: for each
+upstream artifact (`docs/PRD.yaml`, `docs/UX.yaml`), compare the recorded
+`sha256` to its current hash (from `docs/INDEX.yaml.generated_from[<file>]`,
+else `sha256(bytes)[:16]`). For every changed upstream, classify the delta
+(added / removed / modified ids) and run the **delta-review pass before the
+entity interview** per `sdlc/skills/ux/references/upstream-reconciliation.md`
+(CLAUDE.md §7). This supersedes the older `session_id`-only stale-PRD check —
+a content hash also catches hand-edits to an upstream yaml, which `session_id`
+does not. If every upstream is unchanged, proceed to the merge flow without a
+delta-review. Fresh runs (no prior `docs/DATA-MODEL.yaml`) skip this step.
 
 ### Phase 3 — Entity-candidate discovery
 
@@ -453,7 +461,11 @@ deletion confirmation), type discipline when writing nested entity blocks,
 and the exit-code recovery flow → see `references/merge-validate.md`.
 
 When writing the file: inline YAML comments on top-level keys, updated
-`metadata.last_updated` and `metadata.session_id`.
+`metadata.last_updated` and `metadata.session_id`, and a (re)written
+`metadata.upstream_provenance` snapshot — one entry per upstream consumed
+(`docs/PRD.yaml`, `docs/UX.yaml`), each `{file, session_id, last_updated,
+sha256}` (`sha256` from `docs/INDEX.yaml.generated_from`, else
+`sha256(bytes)[:16]`). Replace-on-write, not append-only. See CLAUDE.md §7.
 
 Set `metadata.status`:
 

@@ -19,6 +19,35 @@ The skill never partially-runs against a partially-validated upstream
 chain. The risk of polluting a downstream artifact with stale assumptions
 is too high.
 
+## When an upstream changes after ARCH exists (re-invocation, §7)
+
+The user re-invokes `/sdlc:arch` (or `/sdlc:arch <container>`) after the output
+already exists, because `docs/PRD.yaml`, `docs/UX.yaml`,
+`docs/DATA-MODEL.yaml`, or `docs/API.yaml` changed in between. Phase 2's
+**upstream-change detection** drives the reconciliation per the cross-skill §7
+contract (`sdlc/skills/ux/references/upstream-reconciliation.md`):
+
+1. Read the active output's `metadata.upstream_provenance`. System mode reads
+   `ARCH.yaml`'s; container mode reads the specific `ARCH__<container>.yaml`'s —
+   a container drilled long ago carries its own, older baseline, so it
+   reconciles against exactly what *it* was built on.
+2. For each upstream, compare the recorded `sha256` to its current hash (from
+   `docs/INDEX.yaml.generated_from[<file>]`, else `sha256(bytes)[:16]`).
+3. For every changed upstream, classify added / removed / modified ids and run
+   the **consolidated delta-review before the theme interview**. Concretely:
+   new API resources / UX surfaces / DATA stores / PRD FRs surface as
+   coverage-driven additions (a new container, or new `owns_*` /
+   `implements_requirements` on an existing one); removed ids are the stale-ref
+   branch (never silently dropped); modified bodies trigger a re-review of the
+   traces that point at them.
+4. Refresh `upstream_provenance` on write and add a `changelog` line naming
+   what moved.
+
+This is distinct from `-d` (edge re-derivation) mode: `-d` re-derives the typed
+edge graph from current upstream without an interview, and is the right tool
+when *only* the edge-bearing relationships changed. A full re-invocation
+delta-review is for added / removed / modified upstream *items*.
+
 ## Invalid `<container>` argument in container mode
 
 User typed `/sdlc:arch backennd-api`. The agent:
@@ -38,6 +67,12 @@ has defined the inventory but not drilled down. Validator does not flag
 it — `file_path` is optional in `ARCH.yaml.containers[]`. Downstream
 test/task/deploy skills will refuse to operate on a container without
 its yaml.
+
+The guided way to work through these is `/sdlc:arch --next`, which resolves to
+the next undrilled drillable container (skipping external / storage-only ones),
+confirms the target, and runs its container interview — repeat until it reports
+all containers specified. See SKILL.md → "Invocation dispatch" → `--next`
+resolver.
 
 ## External / data-store containers (cannot be drilled-down)
 

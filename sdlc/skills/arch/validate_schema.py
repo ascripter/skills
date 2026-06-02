@@ -251,6 +251,10 @@ class ArchMetadata(BaseModel):
     session_id: str
     status: Literal["draft", "complete"] = "draft"
     changelog: Optional[List[str]] = None
+    # One entry per upstream artifact consumed, each a mapping
+    # {file, session_id, last_updated, sha256}. Type-checked as a list of
+    # mappings only — see CLAUDE.md §7 "Upstream-change re-invocation".
+    upstream_provenance: Optional[List[Dict[str, Any]]] = None
 
 
 class ArchitecturePattern(_Base):
@@ -342,6 +346,11 @@ class ContainerArtifactMetadata(BaseModel):
     session_id: str
     status: Literal["draft", "complete"] = "draft"
     changelog: Optional[List[str]] = None
+    # One entry per upstream artifact consumed at the time this container was
+    # drilled, each a mapping {file, session_id, last_updated, sha256}. Lets a
+    # later /sdlc:arch <container> detect upstream drift since the last drill.
+    # See CLAUDE.md §7 "Upstream-change re-invocation".
+    upstream_provenance: Optional[List[Dict[str, Any]]] = None
 
 
 class TechStack(_Base):
