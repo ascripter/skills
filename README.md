@@ -11,7 +11,7 @@ All skills need to be explicitly invoked and will provide an interview mechanic 
 
 In general, if a skill is invoked, three things are checked:
 - Is it first time invocation? → generate initial output
-- Consecutive invocation → revise output
+- If previous run was interrupted → resume
 - Consecutive invocation AND upstream documents have changed → incorporate changes
 
 Execute the following skills in order within your project repo. All skills put their output into **`docs/`** in the repo root (fixed; can't be configured currently).
