@@ -11,6 +11,10 @@ All skills need to be explicitly invoked and will provide an interview mechanic 
 
 Execute the following skills in order within your project repo. All skills put their output into **`docs/`** in the repo root (fixed; can't be configured currently).
 
+0. **`/sdlc:setup`**
+
+   Bootstrap the project by adding hooks that downstream skills will need.
+
 1. **`/sdlc:prd`** → `PRD.yaml`
    
    Product requirements. The skill scans everything already present in the repo, so having already a README or other project docs is beneficial at this stage. 
