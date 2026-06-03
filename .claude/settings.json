@@ -64,6 +64,19 @@
       "Bash(rm -rf *)"
     ]
   },
+  "hooks": {
+    "UserPromptExpansion": [
+      {
+        "matcher": "skill-creator",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/augment_skill_creator.py\""
+          }
+        ]
+      }
+    ]
+  },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "context7"
