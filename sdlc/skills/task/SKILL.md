@@ -1,0 +1,619 @@
+---
+name: task
+description: >
+  Explicitly invoked skill. Two modes: (a) /sdlc:task — the SYSTEM task graph
+  (repo/monorepo scaffold, cross-container integration tasks, the system-level
+  e2e/contract test tasks, the topological build_order, and the registry of
+  per-container subgraphs) written to docs/TASKS.json; (b) /sdlc:task <container>
+  — the per-container task subgraph (dependency-ordered scaffold + per-component
+  implementation tasks + first-class test tasks + within-container wiring)
+  written to docs/TASKS__<container>.json. A third form, /sdlc:task --next,
+  auto-advances: it resolves to the next ready container that has no task graph,
+  then to system mode once every container is done, and reports completion once
+  the whole graph is stitched. Trigger only on /sdlc:task or a direct
+  natural-language request to start the task-breakdown skill — never auto-trigger
+  from generic chatter about tasks or todos. Reads docs/ARCH.yaml,
+  docs/TEST-STRATEGY.yaml (system), and per container docs/ARCH__<container>.yaml
+  + docs/TEST-STRATEGY__<container>.yaml as required preconditions and refuses to
+  run if any is missing or its metadata.status != complete. docs/DATA-MODEL.yaml,
+  docs/API.yaml (+ API__*), and docs/PRD.yaml are read for id resolution.
+user-invocable: true
+disable-model-invocation: true
+model: opus
+effort: high
+allowed-tools: Read Write(CLAUDE.md) Write(docs/TASKS.json) Write(docs/TASKS__*.json) Write(.claude/skills-state/sdlc-task.state.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion
+---
+
+# sdlc-task
+
+Guides the user through a structured interview that produces a validated,
+**dependency-ordered task graph** — the executable backlog the downstream
+code-generation factory fans out over. Two artifacts:
+
+- a **system** `docs/TASKS.json` — repo/monorepo scaffold tasks, cross-container
+  integration tasks, the system-level (e2e/contract) test tasks, the
+  topological `build_order`, and the registry of per-container subgraphs;
+- one **container** `docs/TASKS__<container>.json` per buildable container —
+  that container's scaffold, per-component implementation tasks, first-class
+  test tasks, and within-container wiring.
+
+This is the SDLC factory's Stage-13 "Task Breakdown": per-container task
+subgraphs are produced one container at a time, then **deterministically
+stitched** into one global dependency-ordered graph via `build_order` and
+cross-file `depends_on` edges. Each task is **scoped to one component or one
+contract**, with explicit `inputs` / `outputs` / `acceptance` — and **test
+tasks are first-class**, peers of implementation tasks, never an afterthought.
+
+The task graph is not prose. Every task is a typed `TSK-NNN` item with a `kind`,
+a scope (`component_ref` or `touches_operations`), `depends_on` edges, and a
+machine-checkable `acceptance`. The validator enforces a **trace-or-defer
+coverage contract** (every component and every test realized by a task or
+explicitly deferred) plus a **union-graph acyclicity check** (the stitch must be
+topologically sortable) so the codegen agent receives a buildable, complete plan.
+
+> **Output format is JSON, not YAML.** The task graph is the one sdlc artifact
+> written as JSON (`docs/TASKS.json`, `docs/TASKS__<container>.json`). It is
+> machine-generated and machine-consumed — a large, regular graph that gets
+> programmatically stitched and topologically sorted — so JSON's clean
+> load→manipulate→dump cycle and native fit with the codegen agent's
+> structured-output beat YAML's comment/readability edge (which pays off for the
+> interview-authored, human-reviewed upstream specs but is wasted here). See
+> `references/merge-validate.md` → "Why the task graph is JSON".
+
+## What this skill does (at a glance)
+
+The skill runs in **one of two interview modes**, dispatched on the invocation
+form — plus a `--next` resolver that picks the right mode for you:
+
+| Invocation                  | Mode                       | Output                                       |
+|-----------------------------|----------------------------|----------------------------------------------|
+| `/sdlc:task`                | system interview           | `docs/TASKS.json`                            |
+| `/sdlc:task <container>`    | container interview        | `docs/TASKS__<container>.json`               |
+| `/sdlc:task --next`         | resolver → one of the above| (whatever the resolved form produces)        |
+
+Both modes follow the canonical 8-phase flow (Phase 1 → Phase 8 below). State is
+persisted **after every confirmed batch and after every per-item task
+drill-down**, so the user can `EXIT` at any time without losing progress.
+
+**System file vs. container file — what goes where.** Tasks are scoped by how
+many containers they touch:
+
+- **System** (`TASKS.json`): work with no single owning container — repo/monorepo
+  scaffolding, shared libraries/contracts, cross-container integration tasks
+  (realizing `ARCH.yaml` `calls`/`depends_on` edges), the system-level test
+  tasks (realizing the `TEST-STRATEGY.yaml` e2e/contract suite), deploy-prep
+  handoff, plus the **stitch**: `build_order` (providers before consumers) and
+  the `container_task_graphs` registry.
+- **Container** (`TASKS__<container>.json`): work scoped to one container — its
+  `scaffold` task, one `implementation` task per component (or N at fine
+  granularity), one `test` task per `TST-NNN` in its test strategy, and
+  `integration` tasks for its internal edges.
+
+## Files in this skill
+
+| File | Purpose |
+|---|---|
+| `SKILL.md` | This file — the workflow itself. |
+| `task-questions.yaml` | Question inventory; each theme tagged with `mode: system | container`. |
+| `TASKS.schema.yaml` | Human-readable canonical schema for `docs/TASKS.json`. |
+| `TASKS__CONTAINER.schema.yaml` | Human-readable canonical schema for `docs/TASKS__<container>.json`. |
+| `validate_schema.py` | Pydantic v2 validator (system + every container file + coverage + the union-graph acyclicity check). Loads the JSON artifacts. |
+| `set_claude_md_pointer.py` | Deterministic CLAUDE.md pointer injector, called in Phase 8. |
+| `references/interview-mechanics.md` | AskUserQuestion batch format, EXIT semantics, importance-tier flows. Read on entering Phase 6. |
+| `references/task-discovery.md` | How to seed the task graph from ARCH components + TEST tests + API + DATA (system and container). Read in Phase 3. |
+| `references/granularity-and-ordering.md` | Coarse/fine granularity, dependency ordering, the topological build_order, and the deterministic cross-file stitch. Read in Phases 3–6. |
+| `references/coverage-and-defer.md` | The trace-or-defer coverage contract (component + test coverage) and the WRN-NNN deferral mechanism. Read in Phase 6 and Phase 7. |
+| `references/merge-validate.md` | Merge logic, the cross-check suite, the JSON rationale, CLAUDE.md pointer rules, the downstream-rejection rule. Read on entering Phase 7. |
+| `references/edge-cases.md` | Unusual situations and their handling. |
+
+Runtime files (NOT inside this skill directory):
+
+| File | Purpose |
+|---|---|
+| `docs/TASKS.json` (project root) | System-level task graph. |
+| `docs/TASKS__<container>.json` (project root) | Per-container task subgraph. |
+| `.claude/skills-state/sdlc-task.state.yaml` | Session state for resumability. |
+| `CLAUDE.md` (project root) | Pointer bullet injected on completion. |
+
+## Reserved EXIT command
+
+At any prompt, the user can type `EXIT` (case-insensitive) into the free-text
+field of any `AskUserQuestion` call to abort. State is *always* saved after each
+confirmed batch — `EXIT` simply marks the active sub-session `status: aborted`
+and stops. There is no `SAVE` command — saving is implicit.
+
+## Invocation dispatch
+
+After reading the `$ARGUMENTS` string, classify the invocation.
+
+**`--next` resolver (runs before the classification below).** Note the order is
+the **reverse of `sdlc:test`**: containers are specified FIRST, the system stitch
+LAST. That is FR-013's model — per-container subgraphs are generated, then
+deterministically stitched into the global graph. `build_order` and the
+cross-file deps in `TASKS.json` can only reference container tasks that already
+exist. If the first token is `--next` (no other positional args), resolve it to
+a concrete form, then proceed exactly as that form:
+
+1. **An in-progress sub-session exists** (any `sessions[*]` with
+   `status: in_progress`) → resume it. `--next` means "continue the task work";
+   never skip past unfinished work. Phase 1 handles the resume prompt.
+2. **A ready, buildable container still has no `docs/TASKS__<container>.json`** →
+   resolve to **container mode** for the next one (as if `/sdlc:task <cid>`). A
+   container is **buildable** if it is a unit of behaviour worth its own task
+   subgraph: `external: false` AND `archetype` NOT in the storage/infra set
+   (`primary-database`, `secondary-database`, `cache`, `blob-store`,
+   `search-index`, `message-bus`) AND not `external-service` — the same set
+   `arch`/`test` refuse to drill. A buildable container is **un-specified** if it
+   has no `docs/TASKS__<cid>.json` on disk. It is **ready** only if BOTH
+   `docs/ARCH__<cid>.yaml` AND `docs/TEST-STRATEGY__<cid>.yaml` exist (container
+   mode needs both — test tasks reference `TST-NNN`). Pick the first
+   un-specified, ready, buildable container in **specification order** (below).
+3. **A buildable container is un-specified but NOT ready** (missing
+   `ARCH__<cid>.yaml` or `TEST-STRATEGY__<cid>.yaml`) → name it and tell the user
+   which upstream to run first (`/sdlc:arch <cid>` and/or `/sdlc:test <cid>`),
+   then continue with the next ready one. If none are ready, abort with that
+   message.
+4. **Every buildable, ready container has its `TASKS__<cid>.json`, but no
+   `docs/TASKS.json` exists** → resolve to **system mode** (as if `/sdlc:task`).
+   The stitch comes last: now `build_order` and cross-file deps can reference
+   real container tasks.
+5. **Every container is done AND `docs/TASKS.json` exists** → print and abort:
+   > "All containers have a task graph and the system graph is stitched. To
+   > change one explicitly, invoke `/sdlc:task <container-name>` or `/sdlc:task`.
+   > Otherwise task breakdown is complete — go on with `/sdlc:deploy`."
+
+Before launching a resolved interview, confirm the target with one
+`AskUserQuestion` so `--next` never silently drops the user into a long
+interview:
+> "`<k>` of `<n>` buildable containers have task graphs. Next: `<id>`
+> (`<archetype>`) [or: the system stitch]. Start it, pick a different target, or
+> stop?"
+
+Options: `"Start <target>"` / `"Pick another"` / `"Stop"`. On "Pick another",
+list the remaining ready, un-specified containers (and "system stitch" if all
+containers are done) and let the user choose. On "Stop", exit cleanly without
+changing state.
+
+**Specification order.** Build dependencies first so a consumer's tasks can
+depend on a provider's contract tasks: order by ascending count of outgoing
+`depends_on` + `calls` edges in `ARCH.yaml.edges` (providers before consumers),
+tie-broken by `ARCH.yaml.containers[]` definition order. Reuse `arch`'s
+`state.sessions.system.drill_order` or `test`'s `state.spec_order` when present;
+otherwise compute it. On a cycle or no edges, fall back to definition order.
+Persist the resolved order to `state.spec_order` so `--next` is deterministic
+across sessions; recompute only when the container set changed. This same order
+seeds `build_order` in system mode.
+
+Otherwise, classify a non-`--next` invocation:
+
+1. **No arguments** → **system interview mode**. Output: `docs/TASKS.json`. If no
+   `docs/TASKS__*.json` exist yet, warn that per-container subgraphs are usually
+   built first (`/sdlc:task --next`); offer to proceed anyway (repo-scaffold +
+   system test tasks can still be authored, and `build_order` is seeded from
+   ARCH regardless) or to switch to `--next`.
+2. **One argument** → **container interview mode**. The argument is a
+   `container_id`. It MUST exist in `ARCH.yaml.containers[].container_id`; if
+   not, list valid container_ids and abort. It MUST be buildable (not external,
+   not a storage/infra archetype); if not, explain and abort. Both
+   `docs/ARCH__<cid>.yaml` and `docs/TEST-STRATEGY__<cid>.yaml` MUST exist; if
+   not, tell the user which upstream to run first and abort. Output:
+   `docs/TASKS__<container>.json`.
+3. **More than one positional argument, or unknown flag** → print the three
+   valid invocations and abort.
+
+The skill **never** modifies a different mode's output. Container mode will not
+touch `docs/TASKS.json` except, on first completion of a container, it may
+register the new file under `container_task_graphs[]` and bump
+`TASKS.json.metadata.last_updated` (the only fields container mode mutates in the
+system file). System mode will not touch any `docs/TASKS__*.json`.
+
+## Pre-flight checks (run before everything else)
+
+Do filesystem lookups before the resume check (Phase 1):
+
+```bash
+ls docs/API.yaml 2>/dev/null
+ls docs/DATA-MODEL.yaml 2>/dev/null
+```
+
+`docs/API.yaml` (+ `API__*`) and `docs/DATA-MODEL.yaml` sharpen task seeding
+(operation-level implementation tasks; entity-level migration/repository tasks).
+Record `api_present` / `data_present` in the active sub-session state. Their
+absence is not an error — note it in `task_warnings` (WRN-NNN) only if it leaves
+a gap you would otherwise have filled.
+
+Required preconditions are checked in Phase 2.
+
+## The 8-phase flow
+
+The phases are the same for both modes; the themes differ. Mode-specific themes
+are listed under **System themes** / **Container themes**.
+
+### Phase 1 — Resume check
+
+Check for `.claude/skills-state/sdlc-task.state.yaml`:
+
+- If it exists with `status: in_progress` for the **same mode** (and, for
+  container mode, the same `container_id`), ask:
+  > "I found an unfinished sdlc:task session (`<mode>` mode<, container=X>) from
+  > `<last_updated>`. **Resume**, **restart** (discard previous answers), or
+  > **discard** (delete state and exit)?"
+- If `status: in_progress` but a *different* mode/container is requested, warn
+  and offer to start a new sub-session alongside the existing one (the state file
+  holds a `sessions:` map keyed by `mode|container_id`).
+- If `status: complete` or `aborted` and the target output exists, treat this as
+  an update flow — see `references/merge-validate.md`.
+- If no state file, continue to Phase 2.
+
+### Phase 2 — Scan inputs
+
+Read upstream artifacts once at startup and validate each via its upstream
+validator. **Slice large docs, don't slurp.** `DATA-MODEL.yaml` (and `PRD.yaml`)
+are large; when `docs/INDEX.yaml` exists, look a symbol up in `INDEX.yaml` (or
+`python .claude/sdlc/docs_index.py --show <symbol>`) and `Read` only its line
+range. Fall back to whole-file reads only when `INDEX.yaml` is absent. Protocol:
+`.claude/rules/sdlc-docs-access.md`.
+
+Required upstream artifacts (all MUST exist with `metadata.status: complete`):
+
+- **Both modes:**
+  1. `docs/ARCH.yaml` — `python sdlc/skills/arch/validate_schema.py --path docs/ARCH.yaml`.
+     Supplies containers, archetypes, and the inter-container edges that drive
+     `build_order` and integration tasks.
+- **System mode:**
+  2. `docs/TEST-STRATEGY.yaml` — `python sdlc/skills/test/validate_schema.py --path docs/TEST-STRATEGY.yaml`.
+     Supplies the system e2e/contract `TST-NNN` that become first-class test
+     tasks.
+- **Container mode:**
+  2. `docs/ARCH__<container>.yaml` — the components (each a unit of
+     implementation work), `implements_requirements`, and internal edges.
+  3. `docs/TEST-STRATEGY__<container>.yaml` — the `TST-NNN` that become this
+     container's first-class test tasks.
+
+`docs/PRD.yaml` is read for FR/NFR id resolution (`implements`). Treat it as
+required-for-resolution: if it is absent, the `implements` cross-checks soften to
+format-only and a WRN-NNN is appended.
+
+If any required validator exits non-zero, or any required artifact has
+`metadata.status != complete`, **stop**. Print a clear message naming the
+offending file and the upstream skill to run.
+
+Optional enrichers (read only if present): `docs/DATA-MODEL.yaml` (entities →
+migration/repository tasks; `touches_entities`), `docs/API.yaml` + `API__*`
+(operation_ids → contract/endpoint tasks; `touches_operations`).
+
+**Read `PRD.conventions` (if present).** Honour the binding `conventions` block
+before writing anything — `conventions.artifact_ids` (consult before emitting
+`TSK-NNN`/`WRN-NNN` or referencing `FR/NFR/TST`; never invent or renumber an
+upstream id), and any bucket marked `binding: true`.
+
+**Monorepo handling (v1.0):** if `PRD.metadata.monorepo: true` AND
+`PRD.products` is non-empty, stop and warn that multi-product mode is deferred;
+the user may proceed against one product at a time. See `references/edge-cases.md`.
+
+**Upstream-change detection (re-runs).** If the active mode's output exists and
+carries `metadata.upstream_provenance`, this is a re-run: compare each upstream's
+recorded `sha256` to its current hash; for every changed upstream, classify the
+delta (added / removed / modified ids) and run the **delta-review pass before the
+theme interview** per `sdlc/skills/ux/references/upstream-reconciliation.md`
+(CLAUDE.md §7). Fresh outputs skip this step.
+
+For *what* to seed from which upstream field, see `references/task-discovery.md`.
+
+### Phase 3 — Task seeding (mode-specific)
+
+A task graph is fundamentally a coverage-and-ordering problem: enumerate every
+unit of work implied upstream, then order it by dependency. Both modes start by
+proposing a **draft task list** from upstream so the user corrects early rather
+than inventing from a blank page. Load `references/task-discovery.md` and
+`references/granularity-and-ordering.md` here.
+
+**System mode — cross-container + repo-level work:**
+
+1. **Repo/monorepo scaffold** — one `scaffold` task for the workspace, shared
+   tooling, and root CI. Tag `⚠ inferred`.
+2. **`ARCH.yaml` cross-container `calls`/`depends_on` edges** — each seeds one
+   `integration` task (the consumer's client against the provider's contract).
+   Tag `✓ found`.
+3. **System `TEST-STRATEGY.yaml` tests (e2e/contract `TST-NNN`)** — each seeds
+   one first-class `test` task. Tag `✓ found`.
+4. **`build_order`** — seed from the specification order (providers first). Tag
+   `⚠ inferred`.
+5. **Deploy-prep handoff** — an optional `deploy-prep` task. Tag `⚠ inferred`.
+
+**Container mode — implementation + test work:**
+
+1. **`ARCH__<container>.components[]`** — each component seeds one
+   `implementation` task at coarse granularity (or one per responsibility/
+   endpoint at fine). `component_ref` = the component. Tag `✓ found`.
+2. **`TEST-STRATEGY__<container>.tests[]`** — each `TST-NNN` seeds one
+   first-class `test` task (`implements_tests`). Tag `✓ found`.
+3. **`ARCH__<container>.internal_edges`** — `calls` edges between components seed
+   `integration` tasks. Tag `✓ found`.
+4. **Container `scaffold`** — one task for the package skeleton/manifest. Tag
+   `⚠ inferred`.
+5. **DATA entities / API operations the components trace** — repository
+   components seed `migration`/repository tasks; controllers seed
+   operation-level tasks (`touches_entities` / `touches_operations`). Tag
+   `⚠ inferred`.
+
+Present the draft. Each `⚠ inferred` candidate gets its own AskUserQuestion call.
+Persist confirmations to `state.sessions[<key>].defined_tasks`. The task list is
+a `critical synthesis: true` theme: **after the per-item loop closes in Phase 6,
+run the scope-completeness sweep** (seed from ALL upstream ID families +
+project-type heuristics), per `references/coverage-and-defer.md`.
+
+### Phase 4 — Structural questions
+
+Mode-specific scalars that determine the *shape* of the output, asked before any
+theme batch:
+
+**Both modes:**
+
+1. `granularity` — `coarse` (one implementation task per component) vs `fine`
+   (split per responsibility/endpoint/method). FR-013's only required structural
+   decision. Container mode pre-fills from the system value when present.
+
+**System mode also:**
+
+2. `build_order` — confirm the provider-before-consumer container ordering
+   (pre-filled from the specification order). Present as `⚠ inferred`.
+
+Persist all structural answers to state before proceeding.
+
+### Phase 5 — Pre-fill confirmation
+
+Present the pre-fill map **theme by theme**:
+
+- `✓ found` items can be batch-accepted with `ok`.
+- `⚠ inferred` items must be confirmed or corrected **one by one** in their own
+  AskUserQuestion call. No batch-acceptance — this is the hallucination guard.
+
+### Phase 6 — Theme interview
+
+Walk the themes in `task-questions.yaml` order. Themes are tagged
+`mode: system | container`; load only the active mode's themes.
+
+#### System themes (when `/sdlc:task` was invoked)
+
+1. `build_plan` — `high` (granularity + build_order + rationale).
+2. `system_tasks` — `critical` per item, `synthesis: true`. For each task:
+   `tsk_id`, `title`, `kind` (∈ scaffold / integration / test / config /
+   migration / deploy-prep / docs / chore), `description`, `involves_containers`,
+   `implements`, `implements_tests`, `depends_on`, `inputs`, `outputs`,
+   `acceptance`, `priority`. After the per-item loop, run the scope-completeness
+   sweep. Every system `TST-NNN` must be realized by a `test` task or deferred —
+   Phase 7's system-test-coverage check enforces this.
+
+#### Container themes (when `/sdlc:task <container>` was invoked)
+
+1. `build_plan` — `high` (granularity for this container; inherits system
+   default unless overridden).
+2. `container_tasks` — `critical` per item, `synthesis: true`. For each task:
+   `tsk_id`, `title`, `kind` (∈ scaffold / implementation / test / integration /
+   migration / config / chore), `description`, `component_ref`, `implements`
+   (FR/NFR), `implements_tests` (TST), `touches_entities`, `touches_operations`,
+   `depends_on`, `inputs`, `outputs`, `acceptance`, `priority`. Run the
+   scope-completeness sweep after the per-item loop. The coverage gate (Phase 7)
+   requires every component and every container `TST-NNN` to be realized by a
+   task or deferred.
+
+#### Tier mechanics
+
+Each question carries an `importance: med | high | critical` field. Tier flows
+are identical to `sdlc:test` / `sdlc:arch` — see
+`references/interview-mechanics.md` (which points at the canonical spec in
+`sdlc/skills/prd/references/importance-flows.md`).
+
+The two non-negotiable rules in this phase:
+
+1. `⚠ inferred` candidates surface as the **position-1 recommended option** in
+   their `AskUserQuestion` call. They cannot be silently accepted.
+2. State is written after **every confirmed batch, mini-section, and per-item
+   task completion** — not at theme boundaries.
+
+### Phase 7 — Write & validate
+
+Write or merge the active mode's output JSON:
+
+- System mode → `docs/TASKS.json`. Per-container files are NOT created here.
+- Container mode → `docs/TASKS__<container>.json`. On first completion of a
+  container, register it under `TASKS.json.container_task_graphs[]`
+  (`{container_id, file_path}`) and bump `TASKS.json.metadata.last_updated` — the
+  only fields container mode mutates in the system file.
+
+When writing, (re)write the active output's `metadata.upstream_provenance`: one
+entry per upstream artifact consumed this run, each `{file, session_id,
+last_updated, sha256}` (`sha256` from `docs/INDEX.yaml.generated_from`, else
+`sha256(bytes)[:16]`). Replace-on-write. See CLAUDE.md §7.
+
+Then run:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/validate_schema.py" --path docs/TASKS.json
+```
+
+The validator validates `docs/TASKS.json` plus every sibling `docs/TASKS__*.json`
+and runs the cross-check suite (including the **union-graph acyclicity check**
+across all files — the stitch). Coverage, scope, dependency, and ID-format
+failures force `metadata.status: draft`; upstream-status issues emit warnings
+only. The full check list (and the merge logic + recovery flow on `[FAIL]`) lives
+in `references/merge-validate.md`; in summary:
+
+**Coverage** (block complete — trace-or-defer, see `references/coverage-and-defer.md`):
+
+- **System test coverage** — every `TST-NNN` in `TEST-STRATEGY.yaml` is realized
+  by some system `test` task OR deferred via a `task_warnings` WRN-NNN.
+- **Container component coverage** — every `components[].component_id` in
+  `ARCH__<cid>.yaml` is realized by ≥1 task (`component_ref`) OR deferred.
+- **Container test coverage** — every `TST-NNN` in `TEST-STRATEGY__<cid>.yaml` is
+  realized by some task (`implements_tests`) OR deferred.
+
+**The stitch** (block complete):
+
+- Every `depends_on` resolves to a real task across the union of all task files
+  (same-file `TSK-NNN`, cross-file `<cid>/TSK-NNN`, or `TASKS/TSK-NNN`).
+- The union task graph is **acyclic** (a topological build order exists).
+
+**ID-prefix formats + scope** (block complete):
+
+- `TSK-NNN` on every `tsk_id` (unique per file); `WRN-NNN` on every warning.
+- `implements` resolves to PRD FR/NFR (⊆ the container's/component's
+  `implements_requirements`); `implements_tests` resolves to a `TST-NNN`.
+- Every `implementation` task is scoped to a component (`component_ref`) or a
+  contract (`touches_operations`); every `component_ref` resolves.
+
+Set `metadata.status`:
+
+- `"complete"` — only when all required fields are filled, the validator passes
+  `[OK]`, AND every coverage / stitch / ID-format check passes.
+- `"draft"` — on early EXIT, when any required field is null, or any check fails.
+
+### Phase 8 — CLAUDE.md pointer & close
+
+Call `set_claude_md_pointer.py` to inject or update this skill's bullet in the
+shared `## SDLC Documents` section of the project-root `CLAUDE.md` (create the
+section if missing). For bullet detection and append behaviour, see
+`references/merge-validate.md`.
+
+**Refresh the navigation index.** If `.claude/sdlc/docs_index.py` exists, run
+`python .claude/sdlc/docs_index.py` after writing. Harmless no-op if not
+installed.
+
+After the CLAUDE.md write succeeds: set the active sub-session's
+`status: complete` in the state file (keep the file as audit trail) and tell the
+user where the artifacts live and what `--next` would do.
+
+## Task kinds — the typed vocabulary
+
+The `kind` is the most consequential field on a task: it tells the codegen agent
+*what kind of work unit* this is and what to emit.
+
+**Container kinds:**
+
+| Kind            | Scope & codegen implication                                              |
+|-----------------|--------------------------------------------------------------------------|
+| `scaffold`      | Container skeleton: package layout, manifest, entrypoint.                |
+| `implementation`| Implement one component's behaviour (the bulk). Scoped via `component_ref`.|
+| `test`          | Author the test(s) realizing one or more `TST-NNN`. First-class.         |
+| `integration`   | Wire two components / a within-container call.                           |
+| `migration`     | Schema / persistence / data-migration setup.                            |
+| `config`        | CFG / SCT / env wiring for this container.                               |
+| `chore`         | Tooling, lint config, local CI, misc plumbing.                          |
+
+**System kinds:** `scaffold` (repo/monorepo skeleton) · `integration`
+(cross-container wiring) · `test` (system e2e/contract) · `config` · `migration`
+(shared/bootstrap) · `deploy-prep` (handoff to `/sdlc:deploy`) · `docs`
+(repo-level) · `chore`.
+
+`references/task-discovery.md` maps each upstream signal to the kind it seeds.
+
+## Session state file
+
+Path: `.claude/skills-state/sdlc-task.state.yaml`
+
+Like `arch`/`test`, `task` keeps **per-mode sub-sessions** in one file:
+
+```yaml
+session_file_version: "1"
+skill_version: "1.0"
+last_updated: <iso8601>
+spec_order: []                  # container_ids in --next / build_order sequence (providers first)
+
+sessions:
+  system:                       # /sdlc:task
+    session_id: <uuid4>
+    started_at: <iso8601>
+    last_updated: <iso8601>
+    status: in_progress         # in_progress | complete | aborted
+    mode: system
+    pre_fill_confirmed: false
+    last_ids: {}                # writer-managed counters, e.g. {TSK: 12, WRN: 2}.
+    completed_themes: []
+    skipped_themes: []
+    todo_themes: []
+    pending_themes: []
+    current_theme: null
+    current_task: null          # during the system_tasks drill-down
+    defined_tasks: []           # [{tsk_id, kind, status: draft|confirmed, source}]
+    partial_answers: {}         # mirrors docs/TASKS.json structure
+
+  "container|backend-api":      # /sdlc:task backend-api
+    session_id: <uuid4>
+    started_at: <iso8601>
+    last_updated: <iso8601>
+    status: in_progress
+    mode: container
+    container_id: backend-api
+    pre_fill_confirmed: false
+    last_ids: {}                # this container file's TSK + WRN spaces
+    completed_themes: []
+    skipped_themes: []
+    todo_themes: []
+    pending_themes: []
+    current_theme: null
+    current_task: null
+    defined_tasks: []
+    partial_answers: {}         # mirrors docs/TASKS__backend-api.json
+```
+
+Rules:
+
+- Generate `session_id` (UUID4) on first creation of each sub-session.
+- Update top-level + sub-session `last_updated` on every write.
+- Write the file **after every confirmed batch, mini-section, and per-item step**,
+  including pre-fill confirmations and Phase 3 draft confirmation.
+- On `EXIT`: set the *active* sub-session `status: aborted`, write
+  `partial_answers`, confirm, stop. Other sub-sessions untouched.
+- On Phase 8 completion: set the active sub-session `status: complete`; keep file.
+- **`TSK-NNN` and `WRN-NNN` counters** are writer-managed in the active
+  sub-session's `last_ids`. Each artifact (system file and each container file)
+  owns an **independent** `TSK` space. There is no interview question for
+  warnings; append them at write time and bump the counter. **Reconcile on
+  resume:** if an on-disk file has a higher `TSK-NNN`/`WRN-NNN` than `last_ids`,
+  sync the counter to `max(on_disk, state)` before appending.
+- **`metadata.changelog`** is append-only, most-recent first; one line per write.
+  The validator only type-checks it.
+- The validator ignores this file — it validates only the output JSON.
+
+**Source of truth on resume:** the on-disk JSON is authoritative for *answers*
+(it may have been hand-edited); the state file is authoritative for *interview
+progress*. On resume, load the on-disk JSON first as baseline, then layer the
+sub-session's `partial_answers` on top. If they conflict on the same key, ask the
+user — never silently overwrite.
+
+## Edge cases
+
+For unusual situations (a required upstream missing or in draft; a buildable
+container whose `ARCH__<cid>.yaml` or `TEST-STRATEGY__<cid>.yaml` doesn't exist
+yet; a container with no components; a component that genuinely warrants no task;
+a dependency cycle the user wants; cross-file deps to a not-yet-built container;
+system mode before any container exists; ARCH/TEST edited between sessions;
+monorepo mode; write-permission errors) → `references/edge-cases.md`.
+
+## Style of conversation
+
+The task interview can be long. Keep it humane:
+
+- Lead with the draft task list — the user edits a list, they don't invent one.
+- Keep `AskUserQuestion` batches to 2–4 questions; never more than 4.
+- Acknowledge progress at each theme and task boundary ("That's the `backend-api`
+  subgraph — 1 scaffold, 6 implementation, 9 test, 2 integration. Component
+  coverage: green. Test coverage: green. Next: `web-frontend`.").
+- Always call out that candidate tasks were synthesized from ARCH + TEST +
+  DATA + API — don't pretend they came from nowhere.
+- For each test task, name the `TST-NNN` it realizes so the user sees the
+  test→task link; for each integration task, name the edge it wires.
+- After all themes, congratulate briefly and move to write & validate.
+
+## Quick reference: commands the user can type
+
+| User input | Effect |
+|---|---|
+| `EXIT` | Abort: type into the free-text field of any AskUserQuestion call. |
+| `confirm` | Accept a single inferred pre-fill (Phase 5). |
+| `ok` | Batch-accept all `✓ found` pre-fills in the current theme, OR accept the Phase 3 draft list as-is. |
+| `now` | Run the proposed optional theme (gate question). |
+| `skip` | Skip the proposed optional theme (gate question). |
+| `todo` | Defer the proposed optional theme; logs a `WRN-NNN` to `task_warnings`. |
+| `defer <id>` | Mark an upstream id (component_id / TST-NNN) intentionally not-realized; logs the WRN-NNN deferral that satisfies the coverage gate. |

@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "tasks_version": "1.0",
+    "last_updated": "2026-06-06T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "44444444-4444-4444-4444-444444444444",
+    "status": "draft"
+  },
+  "overview": "Smoke fixture: a partial DRAFT (missing build_order + task fields). Expect [OK] DRAFT with items to resolve.",
+  "granularity": "coarse",
+  "tasks": [
+    {
+      "tsk_id": "TSK-001",
+      "title": "Scaffold the repo",
+      "kind": "scaffold",
+      "description": "Partial task — outputs/acceptance still to fill.",
+      "priority": "must",
+      "status": "draft"
+    }
+  ]
+}

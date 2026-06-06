@@ -1,0 +1,177 @@
+# =============================================================================
+# TASKS__CONTAINER.schema.yaml — canonical schema for one
+#   docs/TASKS__<container>.json
+# =============================================================================
+# NOTE ON FORMAT: the on-disk artifact is JSON (docs/TASKS__<container>.json),
+# not YAML. This file documents that JSON object using commented YAML purely so
+# the schema reads the same way as every other sdlc-* schema. The keys, nesting,
+# and types below map 1:1 onto the JSON. validate_schema.py loads the artifact
+# with json.load, not yaml.safe_load. (Why JSON for this one artifact: see
+# references/merge-validate.md → "Why the task graph is JSON".)
+#
+# Produced by /sdlc:task <container> (container mode). Holds the per-container
+# task SUBGRAPH — the dependency-ordered implementation + test work units
+# (TSK-NNN) that the Stage-14 code-generation agent fans out over, one container
+# at a time. Each task is scoped to one component (CMP) or one contract, with
+# explicit inputs / outputs / acceptance, mirroring the demo PRD's FR-013
+# "Task Breakdown" contract.
+#
+# This file is the source of truth for the agents that scaffold, implement, and
+# test this container. It is NEVER authored for a non-testable / non-buildable
+# container (external, or a storage/infra archetype) — container mode refuses
+# those, the same set `arch`/`test` refuse to drill.
+#
+# ID families this artifact OWNS (writer-managed counters in state.last_ids):
+#   * TSK-NNN — one per task in `tasks`. INDEPENDENT counter per container file;
+#               TSK-001 here is unrelated to TSK-001 in any other file.
+#   * WRN-NNN — one per `task_warnings` entry.
+# Upstream ids it REFERENCES:
+#   * component_id            — ARCH__<container>.yaml components[].component_id
+#   * TST-NNN                 — TEST-STRATEGY__<container>.yaml tests[].tst_id
+#   * FR-NNN / NFR-NNN        — PRD requirements (functional + non-functional)
+#   * entity names            — DATA-MODEL.yaml entities (PascalCase)
+#   * operation_id            — API__<resource>.yaml endpoints[].operation_id
+#   * cross-file TSK refs      — "<other-container>/TSK-NNN" or "TASKS/TSK-NNN"
+#                                (a task in another container file or the system
+#                                 file) used in depends_on for the global stitch.
+# =============================================================================
+
+metadata:                                  # REQUIRED
+  tasks_container_version: "1.0"           # REQUIRED
+  last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
+  generated_by: sdlc-task                  # REQUIRED
+  session_id: <uuid4>                      # REQUIRED — sub-session id from state file
+  status: draft | complete                 # REQUIRED
+  changelog:                               # OPTIONAL — append-only, most-recent first.
+    - "1.0 (2026-06-06): Initial container task graph."
+  upstream_provenance:                     # OPTIONAL — one entry per upstream artifact
+    # consumed this run, each {file, session_id, last_updated, sha256}. Lets a
+    # later /sdlc:task <container> detect upstream drift. Validator type-checks
+    # list-of-mappings only. See CLAUDE.md §7.
+    - {file: docs/ARCH__backend-api.yaml, session_id: <uuid4>, last_updated: <iso8601>, sha256: <16-hex>}
+
+# ---------------------------------------------------------------------------
+# Identity — must match a testable container in ARCH.yaml.
+# ---------------------------------------------------------------------------
+container_id: <kebab-case>                  # REQUIRED — matches ARCH.yaml.containers[]
+overview: <two or three sentences>          # REQUIRED — what building this container entails
+inherits_from: docs/TASKS.json              # OPTIONAL — pointer to the system task graph
+
+# ---------------------------------------------------------------------------
+# granularity — the one structural choice (FR-013's only requires_user_decision).
+#   coarse — one implementation task per component (fewer, larger tasks).
+#   fine   — implementation split per responsibility / endpoint / method.
+# Drives how finely the per-component work is sliced into TSK-NNN units. The
+# codegen agent emits files per TSK, so granularity trades context-size per task
+# against task count. Pre-filled from the inherited system value when present.
+# ---------------------------------------------------------------------------
+granularity: coarse | fine                  # REQUIRED
+
+# ---------------------------------------------------------------------------
+# tasks — the container's dependency-ordered work units. Each is a TSK-NNN item.
+# `critical` per item in the interview: the agent derives candidates from the
+# container's components (one impl task each, or N at fine granularity), its
+# TEST-STRATEGY tests (one test task each — test tasks are first-class), its
+# internal_edges (integration/wiring tasks), and a scaffold task, then confirms
+# each. The list is later TOPOLOGICALLY ORDERED by depends_on.
+# ---------------------------------------------------------------------------
+tasks:                                      # REQUIRED — list[Task], non-empty
+  - tsk_id: TSK-001                         # REQUIRED — unique within THIS file
+    title: <short imperative phrase>        # REQUIRED — e.g. "Implement the auth service"
+    kind:                                   # REQUIRED — one of:
+      # scaffold | implementation | test | integration | migration | config | chore
+      #   scaffold       — container skeleton: package layout, manifest, entrypoint
+      #   implementation — implement a component's behaviour (the bulk of the work)
+      #   test           — author the test(s) realizing one or more TST-NNN
+      #   integration    — wire two components together / a within-container call
+      #   migration      — schema / persistence / data-migration setup
+      #   config         — CFG / SCT / env wiring for this container
+      #   chore          — tooling, lint config, local CI, misc plumbing
+    description: <string>                    # REQUIRED — what to build + why
+    component_ref: <component_id>            # OPTIONAL (see cross-check 4) — a
+                                             #   components[].component_id in the
+                                             #   matching ARCH__<container>.yaml.
+                                             #   An implementation/test task is
+                                             #   "scoped to one CMP" via this.
+    implements:                             # OPTIONAL — FR/NFR ids this task realizes.
+      - FR-008                              #   Subset of the targeted component's /
+      - NFR-011                             #   container's implements_requirements.
+    implements_tests:                       # OPTIONAL (REQUIRED for kind:test) —
+      - TST-003                             #   TST-NNN from TEST-STRATEGY__<container>.yaml
+                                            #   this task authors. Test tasks are
+                                            #   first-class: every TST-NNN must be
+                                            #   realized by some task OR deferred.
+    touches_entities:                       # OPTIONAL — DATA-MODEL entity names
+      - User                                #   (PascalCase) this task reads/writes.
+    touches_operations:                     # OPTIONAL — API operation_ids this task
+      - create-user                         #   implements (a "contract" scope, the
+                                            #   alternative to component_ref).
+    depends_on:                             # OPTIONAL — TSK ids that must complete
+      - TSK-000                             #   first. Same-file ("TSK-000"), or
+      - shared-lib/TSK-004                  #   cross-file ("<container>/TSK-NNN" or
+      - TASKS/TSK-002                       #   "TASKS/TSK-NNN" for a system task).
+                                            #   The union graph MUST be acyclic.
+    inputs:                                 # OPTIONAL but encouraged — the upstream
+      - "ARCH__backend-api.yaml#auth-service"  # artifacts / contracts / files this
+                                            #   task consumes (FR-013 "explicit inputs").
+    outputs:                                # REQUIRED — non-empty. The files /
+      - "src/auth/service.py"               #   modules / artifacts this task produces
+                                            #   (FR-013 "explicit outputs"). This is
+                                            #   what the codegen agent emits.
+    acceptance:                             # REQUIRED — non-empty. Machine-checkable
+      - "auth-service unit tests (TST-003) pass"  # done conditions (FR-013
+      - "src/auth/service.py exposes authenticate()"  # "explicit acceptance").
+    priority: must | should | could          # REQUIRED — must ⇒ part of MVP exit gate
+    estimate: xs | s | m | l | xl            # OPTIONAL — t-shirt size for sequencing
+    status: draft | confirmed                # REQUIRED — interview progress
+
+# ---------------------------------------------------------------------------
+# task_warnings — non-fatal issues + the DEFERRAL half of the trace-or-defer
+# coverage contract. A component_id or a TST-NNN named in a warning counts as
+# intentionally-not-realized and satisfies the coverage gate for that item
+# (see references/coverage-and-defer.md). Validator enforces `^WRN-\d{3,}:\s+.+`.
+# ---------------------------------------------------------------------------
+task_warnings:                              # OPTIONAL — list of "WRN-NNN: ..." strings
+  - "WRN-001: TST-014 is a system-level e2e test; its task lives in docs/TASKS.json, deferred here."
+
+# =============================================================================
+# Required cross-checks (run by validate_schema.py on every write)
+# =============================================================================
+# For each TASKS__<container>.json:
+#
+# 1.  Required-field completeness — status:complete requires every REQUIRED
+#     field non-null, `tasks` non-empty, and every task's outputs + acceptance
+#     non-empty.
+# 2.  TSK-NNN format + uniqueness within this file; WRN-NNN format.
+# 3.  Identity — container_id resolves to a testable ARCH.yaml container, and a
+#     sibling docs/ARCH__<container_id>.yaml exists on disk.
+# 4.  Scope integrity — every implementation task is scoped to one component or
+#     one contract: kind:implementation MUST set component_ref OR touches_operations.
+#     Every component_ref resolves to a components[].component_id in
+#     ARCH__<container_id>.yaml. Blocks complete.
+# 5.  implements integrity — every `implements` entry is FR/NFR format, resolves
+#     to a PRD id, AND ⊆ the union of implements_requirements across the
+#     container + the targeted component. Blocks complete.
+# 6.  implements_tests integrity — every entry is TST-NNN, resolves to a
+#     tests[].tst_id in TEST-STRATEGY__<container_id>.yaml. kind:test MUST set a
+#     non-empty implements_tests. Blocks complete.
+# 7.  Dependency integrity — every depends_on entry resolves to a TSK id (this
+#     file, a cross-file "<cid>/TSK-NNN" against an on-disk TASKS__<cid>.json, or
+#     "TASKS/TSK-NNN" against docs/TASKS.json). The UNION task graph across the
+#     system file + all container files MUST be acyclic (topological sort exists).
+#     Blocks complete. (The acyclicity check is what validates FR-013's
+#     "deterministic stitch into one global dependency-ordered TaskGraph".)
+# 8.  Component coverage (trace-or-defer) — every components[].component_id in
+#     ARCH__<container_id>.yaml is realized by ≥1 task (a task whose component_ref
+#     is that component) OR deferred via a WRN-NNN naming the component_id.
+#     Blocks complete.
+# 9.  Test coverage (trace-or-defer) — every tests[].tst_id in
+#     TEST-STRATEGY__<container_id>.yaml is realized by ≥1 task (implements_tests
+#     contains it) OR deferred via a WRN-NNN naming the TST-NNN. Blocks complete.
+# 10. Requirement coverage (advisory, non-blocking) — every FR/NFR in the
+#     container's + components' implements_requirements that is NOT named by any
+#     task's `implements` emits a WARNING (it is usually covered transitively via
+#     a covered component, so this does not block complete).
+# 11. Coverage / integrity failures force metadata.status: draft (they do not
+#     crash the validator) so partial task graphs remain saveable as drafts.
+# =============================================================================

@@ -1,0 +1,450 @@
+# =============================================================================
+# task-questions.yaml — Question inventory for the sdlc-task skill
+# =============================================================================
+# Lists every question the agent may ask, grouped by theme and tagged with which
+# mode the theme belongs to. The skill loads only the active mode's themes and
+# asks unanswered questions in 2–4-question AskUserQuestion batches.
+#
+# Field reference (same convention as sdlc-test / sdlc-arch / sdlc-api):
+#   theme              — grouping label; matches a top-level key (or the per-item
+#                        list) in TASKS.json / TASKS__<container>.json
+#   id                 — unique slug, kebab-case
+#   schema_path        — dotted path where the answer is written in the output
+#   question           — the prompt shown to the user
+#   hint               — why this matters downstream (kept short)
+#   suggested_answers  — 2–5 plausible options shown as a numbered list
+#   free_text_allowed  — if true, a final "Other / type your own" option appears
+#   required           — true ⇒ must be answered (or explicitly nulled with a
+#                        warning) before the theme can be marked complete
+#   required_if        — optional expression; promotes to required when true
+#   capture_rationale  — if true, follow up with "In one sentence — why?"
+#   confidence_field   — if true, a sibling <schema_path>_confidence is written
+#   importance         — `med | high | critical`. Defaults to `med`.
+#                          * med      — single AskUserQuestion batch entry
+#                          * high     — own mini-section: agent drafts, user
+#                                       approves or iterates (max 3 rounds)
+#                          * critical — full per-item state machine (one task at
+#                                       a time: propose → challenge → detail →
+#                                       approve → next)
+#
+# Theme-level key:
+#   synthesis: true    — the theme produces a scope-defining list synthesized
+#                        from upstream artifacts. After the per-item loop closes,
+#                        the agent runs a dynamic scope-completeness sweep
+#                        (reflect on the draft + ALL upstream ID families +
+#                        project-type heuristics, surface concrete missed
+#                        candidates via one multi-select AskUserQuestion, cap 2
+#                        passes, anti-padding, defer leftovers to a WRN-NNN).
+#                        Marked on `system_tasks` and `container_tasks`. Canonical
+#                        spec: sdlc/skills/prd/references/importance-flows.md and
+#                        sdlc/skills/task/references/coverage-and-defer.md.
+#
+# Theme order below is the canonical interview order for each mode.
+# =============================================================================
+
+themes:
+  # -------- system mode --------
+  - id: build_plan
+    mode: system
+    title: "Build Plan (granularity + build order)"
+    required: true
+    description: "Task granularity and the topological container build order (providers before consumers)."
+
+  - id: system_tasks
+    mode: system
+    title: "System Task Graph (scaffold + integration + system tests)"
+    required: true
+    synthesis: true   # scope-defining list synthesized from the repo shape, ARCH
+                      # cross-container edges, and the system TEST-STRATEGY tests.
+                      # Runs the scope-completeness sweep after the per-item loop —
+                      # see references/coverage-and-defer.md.
+    description: "Repo/monorepo scaffold, cross-container integration tasks, and the system-level e2e/contract test tasks."
+
+  # -------- container mode --------
+  - id: build_plan_container
+    mode: container
+    title: "Build Plan (granularity)"
+    required: true
+    description: "Task granularity for this container; inherits the system default unless overridden."
+
+  - id: container_tasks
+    mode: container
+    title: "Container Task Graph (scaffold + implementation + tests)"
+    required: true
+    synthesis: true   # scope-defining list synthesized from the container's
+                      # components, its TEST-STRATEGY tests, and its internal
+                      # edges. Runs the scope-completeness sweep after the
+                      # per-item loop — see references/coverage-and-defer.md.
+    description: "Scaffold, per-component implementation tasks, first-class test tasks, and within-container wiring for this container."
+
+questions:
+
+  # =========================================================================
+  # SYSTEM MODE — build_plan
+  # =========================================================================
+
+  - theme: build_plan
+    id: granularity
+    schema_path: granularity
+    question: >
+      How finely should work be sliced into tasks — coarse (one implementation
+      task per component) or fine (split per responsibility / endpoint / method)?
+    hint: >
+      FR-013's one required structural decision. The codegen agent emits files
+      per task, so granularity trades context-size per task against task count.
+      Coarse suits small/medium apps; fine suits large components or
+      endpoint-heavy services. Container interviews inherit this default.
+    suggested_answers:
+      - "coarse — one implementation task per component"
+      - "fine — split per responsibility / endpoint / method"
+    free_text_allowed: false
+    required: true
+    capture_rationale: true
+    importance: high
+
+  - theme: build_plan
+    id: build_order
+    schema_path: build_order
+    question: "Confirm the container build order (providers before consumers)?"
+    hint: >
+      Pre-filled from the ARCH inter-container edges (a calls/depends_on edge
+      B→A puts provider A before consumer B) so a consumer's tasks can depend on
+      a provider's contract tasks. This is the backbone of the global stitch and
+      seeds the codegen orchestrator's sequence.
+    suggested_answers:
+      - "accept the inferred provider-first order"
+      - "reorder manually"
+    free_text_allowed: true
+    required: true
+    capture_rationale: false
+    importance: high
+
+  # =========================================================================
+  # SYSTEM MODE — system_tasks (critical per item, synthesis)
+  # =========================================================================
+  #
+  # Per-task state machine:
+  #   for each candidate system task (from Phase 3 + user-added):
+  #     1. propose:   show kind, draft title, what it covers (edge / TST / FR)
+  #     2. challenge: confirm scope (involves_containers) + kind choice
+  #     3. detail:    fill depends_on, inputs, outputs, acceptance, priority
+  #     4. approve:   confirm the task; set status: confirmed
+  #     5. next
+  #   then: run the scope-completeness sweep (references/coverage-and-defer.md)
+  #
+  # The questions below describe the FIELDS each per-task drill-down produces.
+
+  - theme: system_tasks
+    id: kind
+    schema_path: task.kind
+    question: "What kind of system task is this?"
+    hint: "System file holds cross-container/repo-level kinds. See references/task-discovery.md."
+    suggested_answers:
+      - scaffold
+      - integration
+      - test
+      - config
+      - migration
+      - deploy-prep
+      - docs
+      - chore
+    free_text_allowed: false
+    required: true
+    importance: critical
+
+  - theme: system_tasks
+    id: title
+    schema_path: task.title
+    question: "Short imperative title for this task (the unit of work)?"
+    hint: "Imperative, outcome-first — the codegen agent uses it as the work-unit heading."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: system_tasks
+    id: involves_containers
+    schema_path: task.involves_containers
+    question: "Which containers does this task span (if any)?"
+    hint: >
+      Pre-fill from the edge's endpoints / the test's containers. Validated
+      against ARCH.yaml.containers[]. A pure repo-scaffold task may involve none;
+      an integration task must cover both edge endpoints.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: system_tasks
+    id: implements_tests
+    schema_path: task.implements_tests
+    question: "Which system test(s) does this task realize (TST-NNN, for kind:test)?"
+    hint: >
+      For kind:test, the e2e/contract TST-NNN from TEST-STRATEGY.yaml this task
+      authors. EVERY system TST-NNN must be realized by some task OR deferred
+      (the system test-coverage gate). Validated against the system test strategy.
+    suggested_answers: []
+    free_text_allowed: true
+    required_if: "task.kind == 'test'"
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: system_tasks
+    id: implements
+    schema_path: task.implements
+    question: "Which requirements does this task realize (FR / NFR)?"
+    hint: "Reference PRD ids by stable prefix. Optional for scaffold/chore. Validated for format + existence in PRD.yaml."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: system_tasks
+    id: depends_on
+    schema_path: task.depends_on
+    question: "Which tasks must complete before this one (TSK-NNN, same-file or <container>/TSK-NNN)?"
+    hint: >
+      The dependency edges that order the graph. Same-file 'TSK-NNN' or
+      cross-file '<container>/TSK-NNN'. The union graph must stay acyclic; the
+      validator topologically checks it. Scaffold usually precedes everything.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: system_tasks
+    id: inputs
+    schema_path: task.inputs
+    question: "What does this task consume (upstream artifacts, contracts, files)?"
+    hint: "FR-013 'explicit inputs'. Optional but encouraged — grounds the codegen agent's context."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: system_tasks
+    id: outputs
+    schema_path: task.outputs
+    question: "What does this task produce (files / modules / artifacts)?"
+    hint: "FR-013 'explicit outputs' — exactly what the codegen agent emits. Required, non-empty."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: system_tasks
+    id: acceptance
+    schema_path: task.acceptance
+    question: "What machine-checkable condition(s) make this task done?"
+    hint: "FR-013 'explicit acceptance' — the concrete, observable done-conditions the verification stage keys on. Required, non-empty."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: system_tasks
+    id: priority
+    schema_path: task.priority
+    question: "Priority — must, should, or could?"
+    hint: "`must` ⇒ part of the MVP exit gate; lets the codegen heal-loop order work."
+    suggested_answers:
+      - must
+      - should
+      - could
+    free_text_allowed: false
+    required: true
+    confidence_field: false
+    importance: critical
+
+  # =========================================================================
+  # CONTAINER MODE — build_plan_container
+  # =========================================================================
+
+  - theme: build_plan_container
+    id: granularity
+    schema_path: granularity
+    question: "Granularity for this container — coarse (one task per component) or fine (per responsibility/endpoint)?"
+    hint: "Inherits the system default unless this container warrants a different slice (e.g. a large component → fine)."
+    suggested_answers:
+      - "inherit the system default"
+      - "coarse — one implementation task per component"
+      - "fine — split per responsibility / endpoint / method"
+    free_text_allowed: false
+    required: true
+    capture_rationale: true
+    importance: high
+
+  # =========================================================================
+  # CONTAINER MODE — container_tasks (critical per item, synthesis)
+  # =========================================================================
+  #
+  # Per-task state machine, same shape as system_tasks. The questions below
+  # describe each per-task drill-down's FIELDS. After the per-item loop, run the
+  # scope-completeness sweep AND verify the coverage gate (every component and
+  # every container TST-NNN realized or deferred) — see coverage-and-defer.md.
+
+  - theme: container_tasks
+    id: kind
+    schema_path: task.kind
+    question: "What kind of task is this?"
+    hint: "Container kinds: scaffold/implementation/test/integration/migration/config/chore. See references/task-discovery.md."
+    suggested_answers:
+      - implementation
+      - test
+      - integration
+      - scaffold
+      - migration
+      - config
+      - chore
+    free_text_allowed: false
+    required: true
+    importance: critical
+
+  - theme: container_tasks
+    id: title
+    schema_path: task.title
+    question: "Short imperative title for this task?"
+    hint: "Outcome-first; the codegen agent uses it as the work-unit heading."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: container_tasks
+    id: component_ref
+    schema_path: task.component_ref
+    question: "Which component does this task target (its component_id)?"
+    hint: >
+      A components[].component_id from ARCH__<container>.yaml. Scopes an
+      implementation/test task to one CMP. Required for implementation tasks
+      unless the task is contract-scoped (touches_operations). Validated against
+      the container's components.
+    suggested_answers: []
+    free_text_allowed: true
+    required_if: "task.kind == 'implementation'"
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: container_tasks
+    id: implements_tests
+    schema_path: task.implements_tests
+    question: "Which test(s) does this task realize (TST-NNN, for kind:test)?"
+    hint: >
+      For kind:test, the TST-NNN from TEST-STRATEGY__<container>.yaml this task
+      authors. Test tasks are first-class: EVERY container TST-NNN must be
+      realized by some task OR deferred (the test-coverage gate).
+    suggested_answers: []
+    free_text_allowed: true
+    required_if: "task.kind == 'test'"
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: container_tasks
+    id: implements
+    schema_path: task.implements
+    question: "Which requirements does this task realize (FR / NFR)?"
+    hint: >
+      Reference PRD ids by stable prefix. Must be ⊆ what the targeted
+      component/container declares in implements_requirements. Validated for
+      format + existence in PRD.yaml.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: container_tasks
+    id: touches_entities
+    schema_path: task.touches_entities
+    question: "Which data entities does this task read/write (DATA-MODEL names)?"
+    hint: "Optional. For migration/repository tasks. Validated against DATA-MODEL.yaml entities when present."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: container_tasks
+    id: touches_operations
+    schema_path: task.touches_operations
+    question: "Which API operations does this task implement (operation_ids)?"
+    hint: >
+      Optional. The 'contract' scope — the alternative to component_ref for an
+      implementation task. Validated against API__*.yaml endpoints when present.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: container_tasks
+    id: depends_on
+    schema_path: task.depends_on
+    question: "Which tasks must complete first (TSK-NNN, or cross-file <scope>/TSK-NNN)?"
+    hint: >
+      Same-file 'TSK-NNN', another container '<cid>/TSK-NNN', or the system file
+      'TASKS/TSK-NNN' (e.g. this container's scaffold depending on the repo
+      scaffold). Union graph must stay acyclic — the validator checks it.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: container_tasks
+    id: inputs
+    schema_path: task.inputs
+    question: "What does this task consume (contracts, upstream slices, files)?"
+    hint: "FR-013 'explicit inputs'. Optional but encouraged."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: container_tasks
+    id: outputs
+    schema_path: task.outputs
+    question: "What does this task produce (files / modules)?"
+    hint: "FR-013 'explicit outputs' — what the codegen agent emits. Required, non-empty."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: container_tasks
+    id: acceptance
+    schema_path: task.acceptance
+    question: "What machine-checkable condition(s) make this task done?"
+    hint: "FR-013 'explicit acceptance'. Often 'the tests in TST-NNN pass'. Required, non-empty."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: container_tasks
+    id: priority
+    schema_path: task.priority
+    question: "Priority — must, should, or could?"
+    hint: "`must` tasks are part of the container's done-gate; `should`/`could` can land in a later pass."
+    suggested_answers:
+      - must
+      - should
+      - could
+    free_text_allowed: false
+    required: true
+    confidence_field: false
+    importance: critical

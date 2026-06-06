@@ -1,0 +1,36 @@
+{
+  "metadata": {
+    "tasks_version": "1.0",
+    "last_updated": "2026-06-06T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "22222222-2222-2222-2222-222222222222",
+    "status": "complete"
+  },
+  "overview": "Smoke fixture: a dependency cycle TSK-001 <-> TSK-002. Expect [FAIL] cycle.",
+  "granularity": "coarse",
+  "build_order": ["backend-api"],
+  "tasks": [
+    {
+      "tsk_id": "TSK-001",
+      "title": "Task A",
+      "kind": "scaffold",
+      "description": "Depends on B.",
+      "depends_on": ["TSK-002"],
+      "outputs": ["a.txt"],
+      "acceptance": ["a exists"],
+      "priority": "must",
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-002",
+      "title": "Task B",
+      "kind": "scaffold",
+      "description": "Depends on A — cycle.",
+      "depends_on": ["TSK-001"],
+      "outputs": ["b.txt"],
+      "acceptance": ["b exists"],
+      "priority": "must",
+      "status": "confirmed"
+    }
+  ]
+}

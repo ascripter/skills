@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "tasks_container_version": "1.0",
+    "last_updated": "2026-06-06T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "55555555-5555-5555-5555-555555555555",
+    "status": "draft"
+  },
+  "container_id": "backend-api",
+  "overview": "Container task subgraph smoke (no ARCH/TEST upstreams in this dir, so identity + coverage preconditions surface as DRAFT items). Exercises the container code path: scope integrity, depends_on resolution, kind checks.",
+  "granularity": "coarse",
+  "tasks": [
+    {
+      "tsk_id": "TSK-001",
+      "title": "Scaffold backend-api",
+      "kind": "scaffold",
+      "description": "Package skeleton + manifest + entrypoint.",
+      "outputs": ["pyproject.toml", "src/__init__.py"],
+      "acceptance": ["uv sync resolves the package"],
+      "priority": "must",
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-002",
+      "title": "Implement the auth service",
+      "kind": "implementation",
+      "component_ref": "auth-service",
+      "description": "Implement authenticate()/issue-token behaviour.",
+      "depends_on": ["TSK-001"],
+      "outputs": ["src/auth/service.py"],
+      "acceptance": ["src/auth/service.py exposes authenticate()"],
+      "priority": "must",
+      "status": "draft"
+    },
+    {
+      "tsk_id": "TSK-003",
+      "title": "Author auth-service unit tests",
+      "kind": "test",
+      "component_ref": "auth-service",
+      "implements_tests": ["TST-003"],
+      "description": "Realize the auth-service unit tests.",
+      "depends_on": ["TSK-002"],
+      "outputs": ["tests/test_auth_service.py"],
+      "acceptance": ["the tests realizing TST-003 pass"],
+      "priority": "must",
+      "status": "draft"
+    }
+  ],
+  "task_warnings": []
+}

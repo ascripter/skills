@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "tasks_version": "1.0",
+    "last_updated": "2026-06-06T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "33333333-3333-3333-3333-333333333333",
+    "status": "complete"
+  },
+  "overview": "Smoke fixture: malformed tsk_id 'TSK-1' (needs >=3 digits). Expect [FAIL].",
+  "granularity": "coarse",
+  "build_order": ["backend-api"],
+  "tasks": [
+    {
+      "tsk_id": "TSK-1",
+      "title": "Bad id task",
+      "kind": "scaffold",
+      "description": "tsk_id must be TSK-NNN.",
+      "outputs": ["x.txt"],
+      "acceptance": ["x exists"],
+      "priority": "must",
+      "status": "confirmed"
+    }
+  ]
+}

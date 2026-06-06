@@ -1,0 +1,167 @@
+# =============================================================================
+# TASKS.schema.yaml — canonical schema for the system task graph
+#   docs/TASKS.json
+# =============================================================================
+# NOTE ON FORMAT: the on-disk artifact is JSON (docs/TASKS.json), not YAML. This
+# file documents that JSON object using commented YAML so the schema reads like
+# every other sdlc-* schema. validate_schema.py loads it with json.load.
+# (Why JSON for the task graph: see references/merge-validate.md.)
+#
+# Produced by /sdlc:task (system mode). Holds the work that has no single owning
+# container plus the GLOBAL STITCH:
+#   * repo / monorepo scaffolding (workspace config, shared tooling, root CI),
+#   * shared-library / shared-contract tasks consumed by several containers,
+#   * cross-container integration tasks realizing ARCH.yaml `calls`/`depends_on`
+#     edges,
+#   * the system-level test tasks realizing TEST-STRATEGY.yaml's e2e + contract
+#     suite (test tasks are first-class),
+#   * deploy-prep handoff tasks for /sdlc:deploy,
+#   * build_order — the topologically-ordered container sequence the codegen
+#     orchestrator follows (providers before consumers),
+#   * container_task_graphs — the registry of the per-container TASKS__*.json
+#     subgraphs.
+#
+# This is the "deterministic stitch" half of FR-013: the per-container subgraphs
+# are produced one container at a time (TASKS__<container>.json); this file
+# stitches them into one global dependency-ordered TaskGraph via build_order +
+# cross-file depends_on edges, and adds the homeless cross-container work.
+#
+# ID families this artifact OWNS (writer-managed counters in state.last_ids):
+#   * TSK-NNN — one per task in `tasks`. INDEPENDENT counter; unrelated to the
+#               TSK-NNN in any container file.
+#   * WRN-NNN — one per `task_warnings` entry.
+# Upstream ids it REFERENCES:
+#   * container_id   — ARCH.yaml containers[].container_id (build_order,
+#                      involves_containers, container_task_graphs)
+#   * TST-NNN        — TEST-STRATEGY.yaml tests[].tst_id (system e2e/contract)
+#   * FR-NNN/NFR-NNN — PRD requirements
+#   * cross-file TSK — "<container>/TSK-NNN" (a task in a container file) in
+#                      depends_on, to order container work after system scaffold.
+# =============================================================================
+
+metadata:                                  # REQUIRED
+  tasks_version: "1.0"                      # REQUIRED
+  last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
+  generated_by: sdlc-task                  # REQUIRED
+  session_id: <uuid4>                      # REQUIRED — sub-session id from state file
+  status: draft | complete                 # REQUIRED
+  changelog:                               # OPTIONAL — append-only, most-recent first.
+    - "1.0 (2026-06-06): Initial system task graph."
+  upstream_provenance:                     # OPTIONAL — {file, session_id, last_updated, sha256} per upstream
+    - {file: docs/ARCH.yaml, session_id: <uuid4>, last_updated: <iso8601>, sha256: <16-hex>}
+
+overview: <two or three sentences>          # REQUIRED — what bootstrapping + wiring this system entails
+
+# ---------------------------------------------------------------------------
+# granularity — global default the per-container interviews inherit (coarse/fine).
+# ---------------------------------------------------------------------------
+granularity: coarse | fine                  # REQUIRED
+
+# ---------------------------------------------------------------------------
+# build_order — the container sequence the codegen orchestrator builds in.
+# Topologically ordered by ARCH.yaml inter-container edges: a provider (the
+# target of a `calls`/`depends_on` edge) comes before its consumers, so a
+# consumer's tasks can depend on the provider's contract tasks. Covers exactly
+# the buildable (testable) containers in ARCH.yaml. The stitch's backbone.
+# ---------------------------------------------------------------------------
+build_order:                                # REQUIRED — list of container_ids
+  - shared-contracts
+  - backend-api
+  - web-frontend
+
+# ---------------------------------------------------------------------------
+# tasks — the system-level / cross-container work units. Each is a TSK-NNN item.
+# `critical` per item: derived from the repo shape (scaffold), ARCH.yaml
+# cross-container edges (integration), TEST-STRATEGY.yaml e2e/contract tests
+# (test tasks), and the deploy handoff. Topologically ordered by depends_on.
+# ---------------------------------------------------------------------------
+tasks:                                      # REQUIRED — list[SystemTask], non-empty
+  - tsk_id: TSK-001                         # REQUIRED — unique within THIS file
+    title: <short imperative phrase>        # REQUIRED — e.g. "Scaffold the monorepo workspace"
+    kind:                                   # REQUIRED — one of:
+      # scaffold | integration | test | config | migration | deploy-prep | docs | chore
+      #   scaffold     — repo/monorepo skeleton, workspace config, root tooling
+      #   integration  — wire a cross-container call/dependency (ARCH.yaml edge)
+      #   test         — author a system-level test realizing one or more TST-NNN
+      #                  (e2e / contract) from TEST-STRATEGY.yaml
+      #   config       — root config / shared CFG-SCT wiring
+      #   migration    — shared schema / data bootstrap spanning containers
+      #   deploy-prep  — handoff scaffolding for /sdlc:deploy (CI skeleton, etc.)
+      #   docs         — repo-level docs/readme scaffolding
+      #   chore        — shared lint/format/tooling, misc
+    description: <string>                    # REQUIRED — what to build + why
+    involves_containers:                    # OPTIONAL — container_ids this task spans.
+      - backend-api                         #   Validated against ARCH.yaml. A pure
+      - web-frontend                        #   repo-scaffold task may involve none.
+    implements:                             # OPTIONAL — FR/NFR ids this task realizes.
+      - NFR-002
+    implements_tests:                       # OPTIONAL (REQUIRED for kind:test) —
+      - TST-014                             #   TST-NNN from the SYSTEM TEST-STRATEGY.yaml
+                                            #   (e2e/contract) this task authors.
+    depends_on:                             # OPTIONAL — TSK ids that must complete
+      - TSK-001                             #   first. Same-file or cross-file
+      - backend-api/TSK-009                 #   "<container>/TSK-NNN". Union graph
+                                            #   MUST be acyclic.
+    inputs:                                 # OPTIONAL but encouraged
+      - "ARCH.yaml#edges"
+    outputs:                                # REQUIRED — non-empty
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/ci.yml"
+    acceptance:                             # REQUIRED — non-empty, machine-checkable
+      - "pnpm install resolves the workspace"
+    priority: must | should | could          # REQUIRED
+    estimate: xs | s | m | l | xl            # OPTIONAL
+    status: draft | confirmed                # REQUIRED — interview progress
+
+# ---------------------------------------------------------------------------
+# container_task_graphs — registry of the per-container subgraph files. Written
+# / updated as each container file is produced (mirrors test's
+# container_strategies). Lets the codegen orchestrator locate every subgraph.
+# ---------------------------------------------------------------------------
+container_task_graphs:                       # OPTIONAL — list of {container_id, file_path}
+  - container_id: backend-api
+    file_path: docs/TASKS__backend-api.json
+
+# ---------------------------------------------------------------------------
+# task_warnings — non-fatal issues + the DEFERRAL half of the trace-or-defer
+# contract. A TST-NNN named in a warning counts as intentionally-not-realized.
+# Validator enforces `^WRN-\d{3,}:\s+.+`.
+# ---------------------------------------------------------------------------
+task_warnings:                              # OPTIONAL — list of "WRN-NNN: ..." strings
+  - "WRN-001: TST-020 (load test) is deferred to a post-MVP hardening pass."
+
+# =============================================================================
+# Required cross-checks (run by validate_schema.py on every write)
+# =============================================================================
+# For docs/TASKS.json:
+#
+# 1.  Required-field completeness — status:complete requires every REQUIRED
+#     field non-null, `tasks` non-empty, every task's outputs + acceptance
+#     non-empty, and build_order non-empty.
+# 2.  TSK-NNN format + uniqueness within this file; WRN-NNN format.
+# 3.  involves_containers integrity — every entry resolves to an
+#     ARCH.yaml.containers[].container_id. Blocks complete.
+# 4.  build_order integrity — every entry is an ARCH.yaml container_id; the set
+#     SHOULD cover every buildable (testable) container (a missing container is a
+#     WARNING, not a block). Order SHOULD respect ARCH edges (providers before
+#     consumers) — a violation is a WARNING (soft quality heuristic).
+# 5.  implements integrity — every `implements` entry is FR/NFR format and
+#     resolves to a PRD id. Blocks complete.
+# 6.  implements_tests integrity — every entry is TST-NNN and resolves to a
+#     tests[].tst_id in the SYSTEM TEST-STRATEGY.yaml. kind:test MUST set a
+#     non-empty implements_tests. Blocks complete.
+# 7.  Dependency integrity — every depends_on entry resolves to a TSK id (this
+#     file or a cross-file "<container>/TSK-NNN" against an on-disk
+#     TASKS__<container>.json). The UNION task graph across the system file + all
+#     container files MUST be acyclic. Blocks complete.
+# 8.  System test coverage (trace-or-defer) — every tests[].tst_id in the system
+#     TEST-STRATEGY.yaml is realized by some system task (implements_tests) OR
+#     deferred via a WRN-NNN. Blocks complete.
+# 9.  Cross-container edge coverage (advisory, non-blocking) — every
+#     cross-container `calls`/`depends_on` edge in ARCH.yaml.edges that has no
+#     integration task (involves_containers covering both endpoints) and no
+#     deferral emits a WARNING.
+# 10. container_task_graphs integrity (advisory) — each container_id resolves to
+#     ARCH.yaml; each file_path exists on disk. Mismatch ⇒ WARNING.
+# 11. Coverage / integrity failures force metadata.status: draft.
+# =============================================================================
