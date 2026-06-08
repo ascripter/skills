@@ -1,0 +1,321 @@
+[
+  {
+    "id": 1,
+    "name": "system-stitch-and-build-order",
+    "category": "happy-path",
+    "prompt": "Run sdlc-task in SYSTEM mode (/sdlc:task) against the complete docs/ chain in this project (PRD.yaml, ARCH.yaml, TEST-STRATEGY.yaml all status:complete; DATA-MODEL.yaml and API.yaml present as optional enrichers). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; accept inferred pre-fills as proposed; skip optional themes at the gate. The product is tinytrack — a small web task tracker with three buildable containers: web-frontend, backend-api, digest-worker. backend-api calls web-frontend's BFF layer; digest-worker depends on backend-api for task data. Then write docs/TASKS.json and run validate_schema.py until it validates. KEY CANARIES: (1) build_order is non-empty and lists ARCH container_ids in topological order — providers before consumers (digest-worker and backend-api appear after any container they depend on, never before); the order must be consistent with ARCH.yaml edges. (2) A repo scaffold task (kind:scaffold) exists; it is the first task every container scaffold will depend on. (3) Every TST-NNN in TEST-STRATEGY.yaml (system e2e/contract suite) is realized by a system test task (kind:test, implements_tests names that TST-NNN) OR deferred via a WRN-NNN in task_warnings — the system-test coverage gate HARD-fails if any TST-NNN is silently missing. (4) The union dependency graph across docs/TASKS.json and every sibling docs/TASKS__*.json present on disk is ACYCLIC — any cycle is a blocking validator error. (5) Every depends_on entry resolves to a real task (same-file TSK-NNN, cross-file <cid>/TSK-NNN, or TASKS/TSK-NNN). (6) Every task has non-empty outputs and non-empty acceptance. (7) Every tsk_id matches TSK-NNN format and is unique within docs/TASKS.json. (8) Every task kind is one of the system-kind set: scaffold, integration, test, config, migration, deploy-prep, docs, chore.",
+    "context": "Upstream fixtures needed: evals/fixtures/web-app/docs/PRD.yaml (tinytrack; containers: web-frontend, backend-api, digest-worker; backend-api implements FR-001..FR-004, digest-worker implements FR-005), evals/fixtures/web-app/docs/ARCH.yaml (all three containers; ARCH edges: digest-worker depends_on backend-api; web-frontend calls backend-api), evals/fixtures/web-app/docs/TEST-STRATEGY.yaml (system e2e/contract suite, status:complete, 5+ TST-NNN entries), evals/fixtures/web-app/docs/DATA-MODEL.yaml, evals/fixtures/web-app/docs/API.yaml + API__tasks.yaml + API__comments.yaml + API__digest-settings.yaml. No TASKS__*.json files exist on disk at test start.",
+    "input_files": [
+      "evals/fixtures/web-app/docs/PRD.yaml",
+      "evals/fixtures/web-app/docs/ARCH.yaml",
+      "evals/fixtures/web-app/docs/TEST-STRATEGY.yaml",
+      "evals/fixtures/web-app/docs/DATA-MODEL.yaml",
+      "evals/fixtures/web-app/docs/API.yaml",
+      "evals/fixtures/web-app/docs/API__tasks.yaml",
+      "evals/fixtures/web-app/docs/API__comments.yaml",
+      "evals/fixtures/web-app/docs/API__digest-settings.yaml"
+    ],
+    "expected_outcome": "docs/TASKS.json written with metadata.status:complete. build_order is a non-empty list of ARCH container_ids in topological (providers-before-consumers) order. A kind:scaffold task exists for the repo. Every TST-NNN from TEST-STRATEGY.yaml appears in some task's implements_tests or is named in a task_warnings WRN-NNN deferral. Every tsk_id is TSK-NNN unique within the file; every task kind is from the system-kind vocabulary; every task has non-empty outputs and acceptance. The union dependency graph (TASKS.json only, no container files yet) is acyclic. validate_schema.py exits 0 with [OK] complete.",
+    "assertions": [
+      {
+        "id": "A1",
+        "text": "docs/TASKS.json exists on disk after skill completion",
+        "priority": "must",
+        "type": "behavior"
+      },
+      {
+        "id": "A2",
+        "text": "metadata.status equals \"complete\" in docs/TASKS.json",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A3",
+        "text": "build_order is a non-empty JSON array (len >= 1) containing strings that match ARCH.yaml container_ids",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A4",
+        "text": "build_order places every provider container before every container that depends on or calls it per ARCH.yaml edges (e.g. backend-api appears before digest-worker if digest-worker depends_on backend-api)",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A5",
+        "text": "At least one task with kind:scaffold exists in tasks[] (the repo/monorepo skeleton task)",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A6",
+        "text": "For every TST-NNN in TEST-STRATEGY.yaml, either (a) some task's implements_tests list contains that TST-NNN, or (b) a task_warnings entry matches ^WRN-\\d{3,}: and contains that TST-NNN — no TST-NNN is silently absent",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A7",
+        "text": "Every task with kind:test has a non-empty implements_tests list",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A8",
+        "text": "Every tsk_id in tasks[] matches the regex ^TSK-\\d{3,}$ and is unique within docs/TASKS.json",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A9",
+        "text": "Every task's kind is one of: scaffold, integration, test, config, migration, deploy-prep, docs, chore (no container-only kinds such as implementation appear)",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A10",
+        "text": "Every task has a non-empty outputs array and a non-empty acceptance array",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A11",
+        "text": "Every entry in task_warnings matches ^WRN-\\d{3,}:\\s+.+",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A12",
+        "text": "validate_schema.py exits with code 0 and prints [OK] (or equivalent pass summary) when run against docs/TASKS.json",
+        "priority": "must",
+        "type": "tool-use"
+      },
+      {
+        "id": "A13",
+        "text": "metadata.changelog contains at least one entry (append-only; format not enforced by validator but entry must be present)",
+        "priority": "should",
+        "type": "content"
+      },
+      {
+        "id": "A14",
+        "text": "metadata.upstream_provenance is present and lists at least docs/ARCH.yaml and docs/TEST-STRATEGY.yaml as consumed upstream files",
+        "priority": "should",
+        "type": "content"
+      }
+    ],
+    "why_included": "Exercises the full system-mode output path: the topological build_order (the stitch backbone), the repo scaffold task, and the system-test coverage gate. A skill that omits build_order, drops a TST-NNN without deferring, uses wrong kinds, or lets depends_on remain unresolved will fail multiple assertions here."
+  },
+  {
+    "id": 2,
+    "name": "container-coverage-gate",
+    "category": "happy-path",
+    "prompt": "Run sdlc-task in CONTAINER mode for the backend-api container (equivalent to `/sdlc:task backend-api`). The project has a complete, validator-clean upstream chain: PRD.yaml, DATA-MODEL.yaml, ARCH.yaml + ARCH__backend-api.yaml (all status:complete), an existing complete docs/TEST-STRATEGY.yaml (system) plus docs/TEST-STRATEGY__backend-api.yaml (status:complete, contains TST-001..TST-008 for this container). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; accept inferred pre-fills as proposed; skip optional themes at the gate. Decompose backend-api's components into scaffold + implementation + test + integration tasks, then write docs/TASKS__backend-api.json and run validate_schema.py until it validates. KEY CANARIES (the trace-or-defer coverage gate — each HARD-fails if violated): (1) backend-api implements FR-001..FR-004; each must appear in some task's implements OR be present in a task_warnings WRN-NNN deferral — the requirement-coverage advisory fires on each uncovered one. (2) backend-api does NOT implement FR-005 (that belongs to digest-worker) — no task's implements list may name FR-005; the validator rejects it because FR-005 is not in backend-api's implements_requirements. (3) Every component_id in ARCH__backend-api.yaml (e.g. tasks-controller, auth-service, digest-settings-controller, task-repository) must be realized by >=1 task whose component_ref equals that component_id OR deferred via a WRN-NNN naming the component_id — the component-coverage gate HARD-fails on any silently missing component. (4) Every TST-NNN in TEST-STRATEGY__backend-api.yaml must appear in some task's implements_tests OR in a task_warnings WRN-NNN deferral — the test-coverage gate HARD-fails on any silently missing TST-NNN. (5) Every implementation task must set component_ref to a real component_id from ARCH__backend-api.yaml (or set touches_operations); a bare implementation task with neither is a blocking validator error. (6) Every tsk_id is TSK-NNN, unique within docs/TASKS__backend-api.json. (7) Every task kind is one of the container-kind set: scaffold, implementation, test, integration, migration, config, chore.",
+    "context": "Upstream fixtures needed: evals/fixtures/web-app/docs/PRD.yaml (backend-api implements FR-001..FR-004; FR-005 is digest-worker only), evals/fixtures/web-app/docs/DATA-MODEL.yaml, evals/fixtures/web-app-container/docs/ARCH.yaml (container registry with backend-api listed), evals/fixtures/web-app-container/docs/ARCH__backend-api.yaml (components: tasks-controller, auth-service, digest-settings-controller, task-repository; backend-api implements_requirements FR-001..FR-004), evals/fixtures/web-app/docs/API.yaml + API__tasks.yaml + API__comments.yaml + API__digest-settings.yaml, evals/fixtures/next-resolver/docs/TEST-STRATEGY.yaml (system; status:complete), evals/fixtures/web-app-container/docs/TEST-STRATEGY__backend-api.yaml (status:complete; 8 TST-NNN entries for backend-api). No docs/TASKS__backend-api.json exists at test start.",
+    "input_files": [
+      "evals/fixtures/web-app/docs/PRD.yaml",
+      "evals/fixtures/web-app/docs/DATA-MODEL.yaml",
+      "evals/fixtures/web-app-container/docs/ARCH.yaml",
+      "evals/fixtures/web-app-container/docs/ARCH__backend-api.yaml",
+      "evals/fixtures/web-app/docs/API.yaml",
+      "evals/fixtures/web-app/docs/API__tasks.yaml",
+      "evals/fixtures/web-app/docs/API__comments.yaml",
+      "evals/fixtures/web-app/docs/API__digest-settings.yaml",
+      "evals/fixtures/next-resolver/docs/TEST-STRATEGY.yaml",
+      "evals/fixtures/web-app-container/docs/TEST-STRATEGY__backend-api.yaml"
+    ],
+    "expected_outcome": "docs/TASKS__backend-api.json written with container_id:backend-api and metadata.status:complete. Every component in ARCH__backend-api.yaml has >=1 task with matching component_ref OR a WRN-NNN deferral. Every TST-NNN in TEST-STRATEGY__backend-api.yaml appears in implements_tests OR a WRN-NNN deferral. No task's implements names FR-005. Every implementation task has component_ref or touches_operations. Every tsk_id is TSK-NNN unique within the file; every kind is from the container-kind vocabulary; every task has non-empty outputs and acceptance. backend-api is registered in docs/TASKS.json.container_task_graphs[] (or TASKS.json is updated with the registration if it exists). validate_schema.py exits 0 with [OK] complete.",
+    "assertions": [
+      {
+        "id": "A1",
+        "text": "docs/TASKS__backend-api.json exists on disk after skill completion",
+        "priority": "must",
+        "type": "behavior"
+      },
+      {
+        "id": "A2",
+        "text": "container_id in docs/TASKS__backend-api.json equals \"backend-api\"",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A3",
+        "text": "metadata.status equals \"complete\" in docs/TASKS__backend-api.json",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A4",
+        "text": "For every component_id in ARCH__backend-api.yaml, either (a) some task's component_ref equals that component_id, or (b) a task_warnings entry matches ^WRN-\\d{3,}: and contains that component_id — no component is silently absent",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A5",
+        "text": "For every TST-NNN in TEST-STRATEGY__backend-api.yaml, either (a) some task's implements_tests contains that TST-NNN, or (b) a task_warnings entry matches ^WRN-\\d{3,}: and contains that TST-NNN — no test is silently absent",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A6",
+        "text": "No task's implements list contains FR-005 (FR-005 belongs to digest-worker, not backend-api)",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A7",
+        "text": "Every task with kind:implementation has either a non-null component_ref that matches a component_id in ARCH__backend-api.yaml, or a non-empty touches_operations list",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A8",
+        "text": "Every task with kind:test has a non-empty implements_tests list",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A9",
+        "text": "Every tsk_id in tasks[] matches ^TSK-\\d{3,}$ and is unique within docs/TASKS__backend-api.json",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A10",
+        "text": "Every task's kind is one of: scaffold, implementation, test, integration, migration, config, chore (no system-only kinds such as deploy-prep or docs appear)",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A11",
+        "text": "Every task has a non-empty outputs array and a non-empty acceptance array",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A12",
+        "text": "Every entry in task_warnings matches ^WRN-\\d{3,}:\\s+.+",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A13",
+        "text": "validate_schema.py exits with code 0 and prints [OK] when run against docs/TASKS__backend-api.json",
+        "priority": "must",
+        "type": "tool-use"
+      },
+      {
+        "id": "A14",
+        "text": "backend-api is registered in docs/TASKS.json container_task_graphs[] (if docs/TASKS.json exists on disk) with file_path pointing to docs/TASKS__backend-api.json",
+        "priority": "should",
+        "type": "content"
+      },
+      {
+        "id": "A15",
+        "text": "At least one task with kind:scaffold exists in tasks[] (the container skeleton task)",
+        "priority": "should",
+        "type": "content"
+      }
+    ],
+    "why_included": "Exercises the container-mode coverage gate — the two HARD-fail checks (component coverage + test coverage) and the FR-005 scope-boundary rejection. A skill that silently omits a component, drops a TST-NNN, allows FR-005 in implements, or produces a bare implementation task with no scope will fail here."
+  },
+  {
+    "id": 3,
+    "name": "next-builds-container-before-system",
+    "category": "boundary",
+    "prompt": "Run sdlc-task in --next mode (equivalent to `/sdlc:task --next`). Starting state: docs/ARCH.yaml (complete), docs/ARCH__backend-api.yaml (complete), docs/TEST-STRATEGY.yaml (system, status:complete), and docs/TEST-STRATEGY__backend-api.yaml (status:complete) all exist. No TASKS files exist yet (no docs/TASKS.json, no docs/TASKS__*.json). The other buildable containers web-frontend and digest-worker are NOT ready — their docs/ARCH__<container>.yaml and docs/TEST-STRATEGY__<container>.yaml do not exist on disk. The --next resolver must therefore: (a) NOT run system mode (that comes last, only after all ready containers are built — this is the reverse of sdlc:test's order), (b) skip web-frontend and digest-worker as not-ready, and (c) advance to backend-api as the next ready, buildable, un-specified container. When the resolver asks for confirmation, choose 'Start backend-api'. Then run the backend-api container interview: for every multiple-choice pick the recommended (position-1) option; one-line plausible free-text; accept inferred pre-fills; skip optional themes. Write docs/TASKS__backend-api.json and run validate_schema.py until it validates. KEY CANARIES: (1) THE CRITICAL --NEXT DISTINCTION: the resolver produces docs/TASKS__backend-api.json and MUST NOT produce docs/TASKS.json — the system stitch comes last, only after all ready containers are done. (2) The same container coverage gate as explicit container mode applies: every component in ARCH__backend-api.yaml covered or deferred; every TST-NNN in TEST-STRATEGY__backend-api.yaml covered or deferred; no task covers FR-005; every implementation task has component_ref or touches_operations. (3) The resolver must not silently skip backend-api in favour of system mode just because per-container TASKS files did not exist before — containers always precede the system stitch.",
+    "context": "Upstream fixtures needed: evals/fixtures/web-app/docs/PRD.yaml (backend-api implements FR-001..FR-004; FR-005 is digest-worker only; all three containers in ARCH), evals/fixtures/web-app-container/docs/ARCH.yaml (three buildable containers listed; web-frontend + digest-worker have no ARCH__ or TEST-STRATEGY__ siblings), evals/fixtures/web-app-container/docs/ARCH__backend-api.yaml (components: tasks-controller, auth-service, digest-settings-controller, task-repository), evals/fixtures/web-app-container/docs/TEST-STRATEGY__backend-api.yaml (status:complete), evals/fixtures/next-resolver/docs/TEST-STRATEGY.yaml (system, status:complete), evals/fixtures/web-app/docs/DATA-MODEL.yaml, evals/fixtures/web-app/docs/API.yaml + API__tasks.yaml + API__comments.yaml + API__digest-settings.yaml. CRITICAL: NO docs/TASKS.json and NO docs/TASKS__*.json exist at test start. ALSO CRITICAL: docs/ARCH__web-frontend.yaml, docs/ARCH__digest-worker.yaml, docs/TEST-STRATEGY__web-frontend.yaml, docs/TEST-STRATEGY__digest-worker.yaml do NOT exist (those containers are not ready).",
+    "input_files": [
+      "evals/fixtures/web-app/docs/PRD.yaml",
+      "evals/fixtures/web-app/docs/DATA-MODEL.yaml",
+      "evals/fixtures/web-app-container/docs/ARCH.yaml",
+      "evals/fixtures/web-app-container/docs/ARCH__backend-api.yaml",
+      "evals/fixtures/web-app/docs/API.yaml",
+      "evals/fixtures/web-app/docs/API__tasks.yaml",
+      "evals/fixtures/web-app/docs/API__comments.yaml",
+      "evals/fixtures/web-app/docs/API__digest-settings.yaml",
+      "evals/fixtures/next-resolver/docs/TEST-STRATEGY.yaml",
+      "evals/fixtures/web-app-container/docs/TEST-STRATEGY__backend-api.yaml"
+    ],
+    "expected_outcome": "docs/TASKS__backend-api.json created (container_id:backend-api, status:complete). docs/TASKS.json does NOT exist (the system stitch was not run — containers precede system in task's --next order, opposite of sdlc:test). The container file passes the trace-or-defer gate: all ARCH__backend-api.yaml components covered or deferred; all TEST-STRATEGY__backend-api.yaml TST-NNN covered or deferred; no FR-005 in implements; every implementation task scoped via component_ref or touches_operations. validate_schema.py exits 0 with [OK] complete on the container file.",
+    "assertions": [
+      {
+        "id": "A1",
+        "text": "docs/TASKS__backend-api.json exists on disk after skill completion",
+        "priority": "must",
+        "type": "behavior"
+      },
+      {
+        "id": "A2",
+        "text": "docs/TASKS.json does NOT exist on disk (the system stitch must not be run before all ready containers are built — this is the key ordering distinction from sdlc:test --next)",
+        "priority": "must",
+        "type": "behavior"
+      },
+      {
+        "id": "A3",
+        "text": "container_id in docs/TASKS__backend-api.json equals \"backend-api\" (the resolver advanced to the correct container, not web-frontend or digest-worker)",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A4",
+        "text": "metadata.status equals \"complete\" in docs/TASKS__backend-api.json",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A5",
+        "text": "For every component_id in ARCH__backend-api.yaml, either some task's component_ref equals it or a task_warnings WRN-NNN entry names it — no component silently absent",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A6",
+        "text": "For every TST-NNN in TEST-STRATEGY__backend-api.yaml, either some task's implements_tests contains it or a task_warnings WRN-NNN entry names it — no TST-NNN silently absent",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A7",
+        "text": "No task's implements list contains FR-005",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A8",
+        "text": "Every task with kind:implementation has either a non-null component_ref matching a component in ARCH__backend-api.yaml or a non-empty touches_operations list",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A9",
+        "text": "Every tsk_id matches ^TSK-\\d{3,}$ and is unique within docs/TASKS__backend-api.json",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A10",
+        "text": "Every task has a non-empty outputs array and a non-empty acceptance array",
+        "priority": "must",
+        "type": "content"
+      },
+      {
+        "id": "A11",
+        "text": "validate_schema.py exits with code 0 and prints [OK] when run against docs/TASKS__backend-api.json",
+        "priority": "must",
+        "type": "tool-use"
+      },
+      {
+        "id": "A12",
+        "text": "The skill presented a resolver confirmation prompt naming backend-api before launching the container interview (evidence: AskUserQuestion call or printed message that identifies backend-api as the next target)",
+        "priority": "should",
+        "type": "behavior"
+      },
+      {
+        "id": "A13",
+        "text": "The skill mentioned that web-frontend and/or digest-worker were skipped as not-ready (evidence: a message or warning naming those containers and stating a missing upstream prerequisite)",
+        "priority": "should",
+        "type": "behavior"
+      }
+    ],
+    "why_included": "Diagnoses the key ordering distinction between sdlc:task --next (containers FIRST, system stitch LAST) and sdlc:test --next (system FIRST, containers later). A skill that resolves --next to system mode before finishing containers, or that silently produces TASKS.json alongside the container file, fails A2. This case also confirms the resolver correctly identifies the single ready container among three, skipping the two not-ready ones."
+  }
+]

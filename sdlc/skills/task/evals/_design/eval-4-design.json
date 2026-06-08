@@ -1,0 +1,86 @@
+{
+  "id": 4,
+  "name": "cross-file-stitch-system-over-existing-container",
+  "category": "edge-case",
+  "distinguishing_cross_file_assertions": ["A4", "A5"],
+  "gap_closed": "The first three evals each produce exactly one task file (system OR container), so the cross-file half of the union-graph walk is never exercised end-to-end. Cross-file depends_on edges (form '<cid>/TSK-NNN') only resolve when both the referencing file and the referenced container file coexist on disk. This eval closes that gap by staging a pre-built TASKS__backend-api.json before the run, then requiring the system interview to wire at least one cross-file edge into it.",
+  "precondition_rationale": "The pre-built container file carries only same-file deps (as a standalone container build always does). Any cross-file edge in TASKS.json can therefore only appear if system mode authors it — making the presence of a cross-file dep a clean signal of whether the skill correctly performs the stitch, distinct from mere registration in container_task_graphs[].",
+  "assertions": [
+    {
+      "id": "A1",
+      "text": "docs/TASKS.json exists and is valid JSON",
+      "priority": "must",
+      "rationale": "Basic output existence and parseability gate. If the system interview aborts without writing, all downstream assertions are moot."
+    },
+    {
+      "id": "A2",
+      "text": "metadata.status equals 'complete' in docs/TASKS.json",
+      "priority": "must",
+      "rationale": "Downstream-agent rejection rule: any status other than 'complete' means required fields are missing or validation failed."
+    },
+    {
+      "id": "A3",
+      "text": "container_task_graphs[] in docs/TASKS.json contains an entry with container_id 'backend-api' and a file_path that resolves to docs/TASKS__backend-api.json on disk",
+      "priority": "must",
+      "rationale": "The validator warns 'container_task_graphs file_path not found' when file_path is missing or wrong, which blocks the union-graph walk. Correct registration is a prerequisite for A4/A5 to even be testable."
+    },
+    {
+      "id": "A4",
+      "text": "At least one task in docs/TASKS.json has a depends_on entry matching the cross-file form 'backend-api/TSK-NNN' (where NNN refers to a real task in docs/TASKS__backend-api.json) — the stitch from a system task into the pre-built container subgraph",
+      "priority": "must",
+      "rationale": "THE KEY ASSERTION. This is the only assertion that can only pass if system mode actively authors cross-file edges; it cannot be satisfied by container_task_graphs[] registration alone. A skill that produces TASKS.json with only same-file deps and involves_containers (but zero cross-file depends_on) fails here — exactly the failure mode this eval exists to catch. The grader checks that at least one depends_on in tasks[] matches the XREF_RE pattern with scope='backend-api' and that the referenced tsk_id exists in the pre-built TASKS__backend-api.json.",
+      "distinguishing": true
+    },
+    {
+      "id": "A5",
+      "text": "Every depends_on entry across the UNION of docs/TASKS.json and docs/TASKS__backend-api.json resolves to a real task (same-file TSK-NNN, cross-file backend-api/TSK-NNN, or TASKS/TSK-NNN); the union graph is acyclic",
+      "priority": "must",
+      "rationale": "THE SECOND KEY ASSERTION. Whereas eval 1 runs the union-graph check with no container files present, this eval runs it with a real container file on disk, exercising the full two-file stitch. A broken cross-file ref (e.g. 'backend-api/TSK-999' which does not exist) or a cycle introduced by the new cross-file edges would surface here.",
+      "distinguishing": true
+    },
+    {
+      "id": "A6",
+      "text": "docs/TASKS__backend-api.json is byte-for-byte identical to its pre-staged state after the run (system mode must not write to any TASKS__*.json)",
+      "priority": "must",
+      "rationale": "Mode-boundary rule from SKILL.md: 'System mode will not touch any docs/TASKS__*.json.' The grader compares the SHA-256 of the file before and after to ensure the container file was not modified, only registered."
+    },
+    {
+      "id": "A7",
+      "text": "build_order is a non-empty array of ARCH container_ids in topological order with every provider preceding its consumer (backend-api before web-frontend, per ARCH.yaml calls edge)",
+      "priority": "must",
+      "rationale": "Unchanged from eval 1 — needed here too because the pre-built container changes no ARCH edges, so topological ordering must still be correct."
+    },
+    {
+      "id": "A8",
+      "text": "Every system TST-NNN in TEST-STRATEGY.yaml (TST-001..TST-005) is realized by a task's implements_tests or deferred via a task_warnings WRN-NNN",
+      "priority": "must",
+      "rationale": "System-test coverage gate (trace-or-defer). Required in both eval 1 and here — verifying it still holds when a pre-built container file is on disk."
+    },
+    {
+      "id": "A9",
+      "text": "validate_schema.py --path docs/TASKS.json exits 0 with [OK] and the output contains no 'container_task_graphs file_path not found' warning and no 'unresolved depends_on' error",
+      "priority": "must",
+      "rationale": "The validator's union-graph walk covers both files. Exiting 0 means A3/A5 are satisfied from the validator's perspective. The two named strings in the output are the specific validator messages that would fire on the two most likely failure modes (bad file_path registration; broken cross-file ref)."
+    },
+    {
+      "id": "A10",
+      "text": "Every tsk_id in docs/TASKS.json matches ^TSK-\\d{3,}$, is unique within that file, and every kind is in the system-kind vocabulary (scaffold, integration, test, config, migration, deploy-prep, docs, chore)",
+      "priority": "must",
+      "rationale": "Hygiene gate, same as eval 1. Batched here as one assertion because both checks are fast and they test the same 'basic schema correctness' dimension."
+    },
+    {
+      "id": "A11",
+      "text": "Every task in docs/TASKS.json has a non-empty outputs array and a non-empty acceptance array",
+      "priority": "must",
+      "rationale": "Per-task completeness contract. The validator blocks 'complete' status on missing required per-task fields."
+    },
+    {
+      "id": "A12",
+      "text": "metadata.changelog in docs/TASKS.json has at least one entry",
+      "priority": "should",
+      "rationale": "Changelog hygiene. 'should' because the validator only type-checks Optional[List[str]] — an absent or empty changelog does not block 'complete', but it is expected good practice."
+    }
+  ],
+  "fixture_note": "evals/fixtures/web-app-stitch/docs/TASKS__backend-api.json is a verbatim copy of evals/_gold/TASKS__backend-api.json. The fixture lands at test-project/docs/TASKS__backend-api.json via the standard stage_iteration.py prefix-stripping rule (parts[3:] after 'evals/fixtures/web-app-stitch/'). It must be staged BEFORE the skill runs so system mode sees it as a pre-existing container file. The grader records the file's SHA-256 before invocation and re-checks it after (A6).",
+  "non_redundancy_note": "Eval 1 tests system mode with no container files on disk (union-graph walk over one file only). Eval 4 tests system mode with a pre-built container file on disk (two-file union-graph walk including cross-file ref resolution and acyclicity). The two evals are non-redundant because the cross-file path through _graph_acyclic_and_resolved() is only exercised when a TASKS__*.json sibling exists — the code paths that handle XREF_RE matches and the two-scope node-set construction are dead code in eval 1's grader invocation."
+}

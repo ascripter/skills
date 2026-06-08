@@ -3,7 +3,7 @@ name: eval-grader-sonnet
 description: Default first-pass grader for Claude Code skill evals. Grades outputs against assertions with high effort on Sonnet.
 model: sonnet
 effort: high
-tools: Read, Write, Glob, Grep
+tools: Read, Write, Glob, Grep, Bash
 ---
 
 You are the default first-pass grading specialist for Claude Code skills.

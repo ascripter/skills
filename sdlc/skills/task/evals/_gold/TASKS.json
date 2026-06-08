@@ -1,0 +1,100 @@
+{
+  "metadata": {
+    "tasks_version": "1.0",
+    "last_updated": "2026-06-06T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "gold0001-syst-syst-syst-tasksystem001",
+    "status": "complete",
+    "changelog": [
+      "1.0 (2026-06-06): Initial system task graph (gold reference output)."
+    ],
+    "upstream_provenance": [
+      {"file": "docs/ARCH.yaml", "session_id": "archsys1-arcs-arcs-arcs-archsystem001", "last_updated": "2026-05-26T00:00:00Z", "sha256": "0000000000000000"},
+      {"file": "docs/TEST-STRATEGY.yaml", "session_id": "testsys1-tsys-tsys-tsys-teststrategy01", "last_updated": "2026-05-27T09:00:00Z", "sha256": "0000000000000000"}
+    ]
+  },
+  "overview": "System-level task graph for tinytrack: the repo scaffold, the cross-container system test tasks (e2e/contract/load), and the build_order stitch that orders the per-container subgraphs.",
+  "granularity": "coarse",
+  "build_order": ["backend-api", "web-frontend", "digest-worker"],
+  "tasks": [
+    {
+      "tsk_id": "TSK-001",
+      "title": "Scaffold the monorepo workspace",
+      "kind": "scaffold",
+      "description": "Workspace skeleton, shared tooling, root manifests and CI pipeline that every container scaffold depends on.",
+      "outputs": ["package.json", "pnpm-workspace.yaml", ".github/workflows/ci.yml"],
+      "acceptance": ["pnpm install resolves the workspace", "CI runs lint + test on a pull request"],
+      "priority": "must",
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-002",
+      "title": "System e2e: create and triage a task",
+      "kind": "test",
+      "description": "Realize the system e2e test TST-001 driving WKF-001 across the web app and the backend API.",
+      "involves_containers": ["web-frontend", "backend-api"],
+      "implements_tests": ["TST-001"],
+      "depends_on": ["TSK-001"],
+      "outputs": ["e2e/create-triage-task.spec.ts"],
+      "acceptance": ["the e2e suite realizing TST-001 passes against a seeded stack"],
+      "priority": "must",
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-003",
+      "title": "System e2e: comment on a task and close it",
+      "kind": "test",
+      "description": "Realize the system e2e test TST-002 driving WKF-002 across the web app and the backend API.",
+      "involves_containers": ["web-frontend", "backend-api"],
+      "implements_tests": ["TST-002"],
+      "depends_on": ["TSK-001"],
+      "outputs": ["e2e/comment-and-close.spec.ts"],
+      "acceptance": ["the e2e suite realizing TST-002 passes"],
+      "priority": "must",
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-004",
+      "title": "System e2e: configure the weekly digest and review runs",
+      "kind": "test",
+      "description": "Realize the system e2e test TST-003 driving WKF-003 across the web app, backend API and digest worker.",
+      "involves_containers": ["web-frontend", "backend-api", "digest-worker"],
+      "implements_tests": ["TST-003"],
+      "depends_on": ["TSK-001"],
+      "outputs": ["e2e/weekly-digest.spec.ts"],
+      "acceptance": ["the e2e suite realizing TST-003 records a DigestRun visible in the UI"],
+      "priority": "must",
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-005",
+      "title": "Tasks API response contract test",
+      "kind": "test",
+      "description": "Realize the contract test TST-004 pinning the tasks resource response shape the web app depends on.",
+      "involves_containers": ["web-frontend", "backend-api"],
+      "implements_tests": ["TST-004"],
+      "depends_on": ["TSK-001"],
+      "outputs": ["contract/tasks-api.contract.spec.ts"],
+      "acceptance": ["the tasks endpoints conform to the published API__tasks contract"],
+      "priority": "should",
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-006",
+      "title": "Task-list latency load test",
+      "kind": "test",
+      "description": "Realize the load test TST-005 verifying the p95 task-list latency NFR.",
+      "involves_containers": ["backend-api"],
+      "implements_tests": ["TST-005"],
+      "depends_on": ["TSK-001"],
+      "outputs": ["load/task-list-latency.k6.js"],
+      "acceptance": ["p95 task-list load stays within the NFR budget under target load"],
+      "priority": "should",
+      "status": "confirmed"
+    }
+  ],
+  "container_task_graphs": [],
+  "task_warnings": [
+    "WRN-001: the backend-api->identity-provider edge is exercised inside the backend-api container's auth-middleware security tests; no separate system integration task is warranted."
+  ]
+}
