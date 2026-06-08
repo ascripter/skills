@@ -3,7 +3,7 @@ name: eval-grader-opus
 description: Escalation grader for Claude Code skill evals. Used for ambiguous, holistic, cross-artifact, or borderline cases with deeper judgment.
 model: opus
 effort: high
-tools: Read, Write, Glob, Grep
+tools: Read, Write, Glob, Grep, Bash
 ---
 
 You are the escalation grading specialist for Claude Code skills.
