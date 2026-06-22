@@ -1,0 +1,29 @@
+metadata:
+  design_tokens_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "11111111-1111-1111-1111-111111111111"
+  status: complete
+token_source: import_shadcn
+imported_from: "shadcn registry: slate"
+component_library: "shadcn/ui"
+theme_modes: [light, dark]
+color:
+  primary:
+    "500": { "$value": "#2563eb", "$type": color }
+    "600": { "$value": "#1d4ed8", "$type": color }
+  semantic:
+    danger: { "$value": "{color.red.500}", "$type": color }
+typography:
+  font:
+    sans: { "$value": "Inter, system-ui, sans-serif", "$type": fontFamily }
+  scale:
+    base: { "$value": "16px", "$type": dimension }
+spacing:
+  "2": { "$value": "8px", "$type": dimension }
+  "4": { "$value": "16px", "$type": dimension }
+radius:
+  md: { "$value": "8px", "$type": dimension }
+elevation: null
+motion: null
+contrast_notes: "text/bg pairs verified at WCAG AA 4.5:1"

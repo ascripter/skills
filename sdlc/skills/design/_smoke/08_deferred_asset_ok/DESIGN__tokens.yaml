@@ -1,0 +1,14 @@
+metadata:
+  design_tokens_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "88888888-8888-8888-8888-888888888888"
+  status: complete
+token_source: dtcg_authored
+theme_modes: [dark]
+color:
+  bg: { "$value": "#14121a", "$type": color }
+typography:
+  body: { "$value": "EB Garamond, serif", "$type": fontFamily }
+spacing:
+  base: { "$value": "8px", "$type": dimension }

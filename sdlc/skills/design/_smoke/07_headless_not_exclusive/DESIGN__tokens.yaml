@@ -1,0 +1,14 @@
+metadata:
+  design_tokens_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "77777777-7777-7777-7777-777777777777"
+  status: complete
+token_source: dtcg_authored
+theme_modes: [dark]
+color:
+  fg: { "$value": "#00ff66", "$type": color }
+typography:
+  mono: { "$value": "JetBrains Mono", "$type": fontFamily }
+spacing:
+  base: { "$value": "8px", "$type": dimension }

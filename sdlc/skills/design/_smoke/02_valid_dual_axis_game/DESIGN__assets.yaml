@@ -1,0 +1,36 @@
+metadata:
+  design_assets_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "22222222-2222-2222-2222-222222222222"
+  status: complete
+asset_taxonomy: [sprite, tileset, background, character, audio_sfx, audio_music, font]
+render_pipeline: "WebGL via PixiJS; packed sprite atlas; integer scaling; nearest-neighbour filtering"
+style_guide: "every sprite on a 16px grid, 1px black outline, drawn from the shared 32-colour palette; no anti-aliasing"
+assets:
+  - id: AST-001
+    asset_type: character
+    name: hero-knight-idle
+    description: "4-frame idle animation of the player knight, side view"
+    format_hint: "png spritesheet"
+    source: to_be_generated
+    traces_ux_surfaces: ["SCR-001"]
+    references_entities: ["ENT-002"]
+    generation_brief:
+      target_modality: image
+      recommended_tools: ["Aseprite (manual)", "Stable Diffusion + pixel-art LoRA"]
+      prompt: "16x16 pixel-art knight in idle stance, 4 animation frames, side view, muted 32-colour dungeon palette, 1px black outline, lit by warm torchlight"
+      negative_prompt: "anti-aliasing, smooth gradients, high detail, photorealism, drop shadow"
+      style_anchors: ["pixel_art", "gritty", "muted 32-colour palette", "1px dithering"]
+      technical_constraints: "16x16 px per frame, 4 frames laid out horizontally, transparent background, indexed PNG"
+      acceptance_criteria: ["silhouette readable at 1x scale", "palette is a subset of the shared 32-colour set", "idle loop is seamless"]
+      variation_notes: "generate 3 seeds; choose the clearest silhouette"
+  - id: AST-002
+    asset_type: audio_music
+    name: dungeon-theme-loop
+    description: "looping ambient dungeon background track"
+    format_hint: ogg
+    source: user_supplied
+    traces_ux_surfaces: ["SCR-002"]
+    references_entities: null
+    generation_brief: null

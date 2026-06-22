@@ -1,0 +1,28 @@
+metadata:
+  design_tokens_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "22222222-2222-2222-2222-222222222222"
+  status: complete
+token_source: dtcg_authored
+imported_from: null
+component_library: "custom HUD layer over PixiJS"
+theme_modes: [dark]
+color:
+  ui:
+    panel: { "$value": "#1a1420", "$type": color }
+    text: { "$value": "#e8d8b0", "$type": color }
+  accent:
+    torch: { "$value": "#ff8a3c", "$type": color }
+typography:
+  font:
+    display: { "$value": "'Press Start 2P', monospace", "$type": fontFamily }
+    body: { "$value": "Inter, sans-serif", "$type": fontFamily }
+spacing:
+  grid: { "$value": "16px", "$type": dimension }
+radius:
+  none: { "$value": "0px", "$type": dimension }
+elevation: null
+motion:
+  fast: { "$value": "120ms", "$type": duration }
+contrast_notes: "HUD text-on-panel verified at 7:1 for readability over busy backgrounds"

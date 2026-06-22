@@ -1,0 +1,17 @@
+metadata:
+  design_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "44444444-4444-4444-4444-444444444444"
+  monorepo: false
+  status: complete
+design_warnings: []
+functional_structure: [token_based_ui]
+aesthetic_direction:
+  style_family: material
+  mood_keywords: [clean, efficient]
+  requires_custom_assets: false
+sub_artifacts:
+  tokens: docs/DESIGN__tokens.yaml
+  assets: null
+# BROKEN: claims complete + token_based_ui but no DESIGN__tokens.yaml sibling exists.

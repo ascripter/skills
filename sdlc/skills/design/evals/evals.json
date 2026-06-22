@@ -1,0 +1,146 @@
+{
+  "skill_name": "sdlc-design",
+  "evals": [
+    {
+      "id": 1,
+      "name": "game-dual-axis",
+      "prompt": "Run sdlc-design against the docs/ in this project. For every multiple-choice question pick the recommended (first / position-1) option; for free-text questions give a one-line plausible answer; accept the agent's inferred pre-fills; skip optional themes at the gate (brand_identity may be skipped). Then write the artifacts and run the validator. Specifically: confirm functional_structure contains BOTH token_based_ui AND asset_pipeline (the agent should derive both from a pixel-art canvas roguelike); accept a pixel-art-like style_family; when the scope-completeness sweep runs on the asset manifest, accept all proposed audio and font candidates; ensure every to_be_generated asset receives a generation_brief; and confirm docs/DESIGN.yaml, docs/DESIGN__tokens.yaml, and docs/DESIGN__assets.yaml are all written.",
+      "expected_output": "docs/DESIGN.yaml exists with functional_structure == [token_based_ui, asset_pipeline], aesthetic_direction.style_family containing 'pixel' (e.g. pixel_art or pixel_art_like), and sub_artifacts.tokens and sub_artifacts.assets both set to non-null paths. docs/DESIGN__tokens.yaml exists (token_based_ui present). docs/DESIGN__assets.yaml exists with asset_taxonomy including at least sprite, character, tileset, audio_sfx, and audio_music (sweep-caught audio), plus a font entry; every asset with source == to_be_generated carries a non-null generation_brief with non-null prompt and acceptance_criteria. All AST-NNN ids are zero-padded 3-digit format. All design_warnings entries start with WRN-NNN. validate_schema.py exits 0. metadata.status == complete in all three files.",
+      "files": [
+        "evals/fixtures/game-dual-axis/docs/PRD.yaml",
+        "evals/fixtures/game-dual-axis/docs/UX.yaml",
+        "evals/fixtures/game-dual-axis/docs/UX__main-menu.yaml",
+        "evals/fixtures/game-dual-axis/docs/UX__game-canvas.yaml",
+        "evals/fixtures/game-dual-axis/docs/UX__settings.yaml"
+      ],
+      "assertions": [
+        {
+          "id": "axis-a-dual",
+          "text": "docs/DESIGN.yaml functional_structure is a list containing both 'token_based_ui' and 'asset_pipeline' (the game has menus AND a sprite canvas)."
+        },
+        {
+          "id": "tokens-file-emitted",
+          "text": "docs/DESIGN__tokens.yaml exists on disk AND docs/DESIGN.yaml sub_artifacts.tokens is a non-null string path pointing to that file."
+        },
+        {
+          "id": "assets-file-emitted",
+          "text": "docs/DESIGN__assets.yaml exists on disk AND docs/DESIGN.yaml sub_artifacts.assets is a non-null string path pointing to that file."
+        },
+        {
+          "id": "pixel-art-style",
+          "text": "docs/DESIGN.yaml aesthetic_direction.style_family contains the substring 'pixel' (case-insensitive), e.g. 'pixel_art' or 'pixel_art_like'."
+        },
+        {
+          "id": "sweep-caught-audio",
+          "text": "docs/DESIGN__assets.yaml asset_taxonomy includes at least one of 'audio_sfx' or 'audio_music', AND at least one asset entry has asset_type matching that kind — confirming the scope sweep added audio candidates not explicitly listed in the UX surfaces."
+        },
+        {
+          "id": "all-generated-assets-have-briefs",
+          "text": "Every entry in docs/DESIGN__assets.yaml assets[] where source == 'to_be_generated' has generation_brief.prompt as a non-null, non-empty string AND generation_brief.acceptance_criteria as a non-empty list."
+        },
+        {
+          "id": "ast-id-format",
+          "text": "Every assets[].id value in docs/DESIGN__assets.yaml matches the regex AST-\\d{3,} (e.g. AST-001, AST-012) with no exceptions."
+        },
+        {
+          "id": "wrn-id-format",
+          "text": "Every entry in docs/DESIGN.yaml design_warnings[] starts with the prefix 'WRN-' followed by digits and a colon (e.g. 'WRN-001: ...'). If design_warnings is empty this assertion passes trivially."
+        },
+        {
+          "id": "validator-exits-0-status-complete",
+          "text": "Running validate_schema.py --path docs/DESIGN.yaml exits with code 0, AND metadata.status == 'complete' in docs/DESIGN.yaml, docs/DESIGN__tokens.yaml, and docs/DESIGN__assets.yaml."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "web-artistic-bridge",
+      "prompt": "Run sdlc-design against the docs/ in this project. For every multiple-choice question pick the recommended (first / position-1) option; for free-text questions give a one-line plausible answer; accept the agent's inferred pre-fills; skip optional themes at the gate (brand_identity may be skipped). Pay close attention to the bridge scenario: the product is a standard web habit-tracker (NOT a game), so functional_structure should be [token_based_ui] only — do NOT add asset_pipeline. However, the aesthetic is hand-drawn/illustrated, so the agent MUST set aesthetic_direction.requires_custom_assets to true and emit docs/DESIGN__assets.yaml anyway (containing illustration and icon assets). Accept that recommendation when it appears. The token file must note WCAG AA contrast. Confirm docs/DESIGN.yaml, docs/DESIGN__tokens.yaml, and docs/DESIGN__assets.yaml are all written. Run the validator.",
+      "expected_output": "docs/DESIGN.yaml exists with functional_structure == [token_based_ui] (asset_pipeline absent), aesthetic_direction.requires_custom_assets == true, aesthetic_direction.style_family containing 'hand' or 'drawn' or 'illustrat' (case-insensitive). sub_artifacts.tokens is non-null (token_based_ui present). sub_artifacts.assets is non-null (requires_custom_assets triggered the bridge). docs/DESIGN__tokens.yaml exists and contrast_notes mentions WCAG AA. docs/DESIGN__assets.yaml exists with illustration and/or icon asset entries. All to_be_generated assets have generation briefs. validate_schema.py exits 0. metadata.status == complete in all three files.",
+      "files": [
+        "evals/fixtures/web-artistic-bridge/docs/PRD.yaml",
+        "evals/fixtures/web-artistic-bridge/docs/UX.yaml",
+        "evals/fixtures/web-artistic-bridge/docs/UX__dashboard.yaml",
+        "evals/fixtures/web-artistic-bridge/docs/UX__garden.yaml",
+        "evals/fixtures/web-artistic-bridge/docs/UX__habit-editor.yaml"
+      ],
+      "assertions": [
+        {
+          "id": "axis-a-token-only-no-pipeline",
+          "text": "docs/DESIGN.yaml functional_structure is a list containing 'token_based_ui' AND NOT containing 'asset_pipeline' (this is a web app, not a game)."
+        },
+        {
+          "id": "bridge-requires-custom-assets-true",
+          "text": "docs/DESIGN.yaml aesthetic_direction.requires_custom_assets == true (the hand-drawn aesthetic on a token UI triggers the bridge)."
+        },
+        {
+          "id": "bridge-assets-file-emitted",
+          "text": "docs/DESIGN__assets.yaml exists on disk AND docs/DESIGN.yaml sub_artifacts.assets is a non-null string path — proving the bridge fired (assets file emitted without asset_pipeline in functional_structure)."
+        },
+        {
+          "id": "hand-drawn-style-family",
+          "text": "docs/DESIGN.yaml aesthetic_direction.style_family contains at least one of the substrings 'hand', 'drawn', 'illustrat', or 'storybook' (case-insensitive), matching the PRD's hand-drawn/illustrated aesthetic."
+        },
+        {
+          "id": "tokens-file-emitted-with-wcag",
+          "text": "docs/DESIGN__tokens.yaml exists on disk AND contrast_notes is a non-null string containing 'WCAG' or 'wcag' or 'AA' (the UX fixture specifies wcag_aa accessibility)."
+        },
+        {
+          "id": "illustration-or-icon-in-assets",
+          "text": "docs/DESIGN__assets.yaml assets[] contains at least one entry with asset_type == 'illustration' or asset_type == 'icon', reflecting the hand-drawn garden/plant assets the PRD describes."
+        },
+        {
+          "id": "all-generated-assets-have-briefs-bridge",
+          "text": "Every entry in docs/DESIGN__assets.yaml assets[] where source == 'to_be_generated' has generation_brief.prompt as a non-null, non-empty string."
+        },
+        {
+          "id": "validator-exits-0-status-complete-bridge",
+          "text": "Running validate_schema.py --path docs/DESIGN.yaml exits with code 0, AND metadata.status == 'complete' in docs/DESIGN.yaml, docs/DESIGN__tokens.yaml, and docs/DESIGN__assets.yaml."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "cli-headless",
+      "prompt": "Run sdlc-design against the docs/ in this project. For every multiple-choice question pick the recommended (first / position-1) option; for free-text questions give a one-line plausible answer; accept the agent's inferred pre-fills. The UX surface_family is 'cli', so the agent should derive functional_structure == [headless] and offer an optional light terminal aesthetic — decline that optional aesthetic (pick 'skip' or 'no' at the gate). Confirm the headless path: NO docs/DESIGN__tokens.yaml and NO docs/DESIGN__assets.yaml should be created; docs/DESIGN.yaml should contain at least one WRN-NNN warning noting that visual design is not applicable; aesthetic_direction should be null. Run the validator.",
+      "expected_output": "docs/DESIGN.yaml exists with functional_structure == [headless], aesthetic_direction == null (or omitted), sub_artifacts.tokens == null, sub_artifacts.assets == null. docs/DESIGN__tokens.yaml does NOT exist. docs/DESIGN__assets.yaml does NOT exist. design_warnings contains at least one entry starting with 'WRN-' that notes visual design is not applicable (or equivalent headless no-op message). validate_schema.py exits 0. metadata.status == complete in docs/DESIGN.yaml.",
+      "files": [
+        "evals/fixtures/cli-headless/docs/PRD.yaml",
+        "evals/fixtures/cli-headless/docs/UX.yaml",
+        "evals/fixtures/cli-headless/docs/UX__task-add.yaml",
+        "evals/fixtures/cli-headless/docs/UX__task-list.yaml",
+        "evals/fixtures/cli-headless/docs/UX__task-export.yaml"
+      ],
+      "assertions": [
+        {
+          "id": "axis-a-headless-only",
+          "text": "docs/DESIGN.yaml functional_structure is exactly ['headless'] — no other values present."
+        },
+        {
+          "id": "aesthetic-direction-null",
+          "text": "docs/DESIGN.yaml aesthetic_direction is null or the entire block is absent (headless with declined terminal aesthetic means no Axis B output)."
+        },
+        {
+          "id": "sub-artifacts-both-null",
+          "text": "docs/DESIGN.yaml sub_artifacts.tokens == null AND sub_artifacts.assets == null."
+        },
+        {
+          "id": "no-tokens-file-on-disk",
+          "text": "docs/DESIGN__tokens.yaml does NOT exist on disk (headless products do not emit a token file)."
+        },
+        {
+          "id": "no-assets-file-on-disk",
+          "text": "docs/DESIGN__assets.yaml does NOT exist on disk (headless products do not emit an asset file)."
+        },
+        {
+          "id": "wrn-headless-note",
+          "text": "docs/DESIGN.yaml design_warnings contains at least one entry that (a) starts with 'WRN-' followed by digits and a colon, and (b) contains text communicating that visual design is not applicable or that the product is headless/CLI."
+        },
+        {
+          "id": "validator-exits-0-status-complete-headless",
+          "text": "Running validate_schema.py --path docs/DESIGN.yaml exits with code 0, AND metadata.status == 'complete' in docs/DESIGN.yaml."
+        }
+      ]
+    }
+  ]
+}

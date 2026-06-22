@@ -1,0 +1,27 @@
+metadata:
+  design_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "22222222-2222-2222-2222-222222222222"
+  monorepo: false
+  status: complete
+design_warnings: []
+functional_structure: [token_based_ui, asset_pipeline]
+functional_structure_confidence: confirmed
+functional_structure_rationale: "Menus/HUD are a component UI; the game canvas is an asset pipeline."
+aesthetic_direction:
+  style_family: pixel_art
+  style_family_confidence: confirmed
+  mood_keywords: [gritty, retro, atmospheric]
+  palette_intent: "muted 32-colour dungeon palette with a warm torchlight accent"
+  style_references: ["Hyper Light Drifter", "Dead Cells"]
+  typographic_voice: "chunky pixel display face for titles, clean sans for body copy"
+  motion_character: playful
+  texture_and_finish: "1px dithering, no anti-aliasing, optional CRT scanline overlay"
+  requires_custom_assets: true
+sub_artifacts:
+  tokens: docs/DESIGN__tokens.yaml
+  assets: docs/DESIGN__assets.yaml
+brand_identity: null
+implements_requirements: ["FR-003", "NFR-010"]
+traces_ux_surfaces: ["SCR-001", "SCR-002", "SCR-003"]

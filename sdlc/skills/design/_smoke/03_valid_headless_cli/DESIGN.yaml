@@ -1,0 +1,19 @@
+metadata:
+  design_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "33333333-3333-3333-3333-333333333333"
+  monorepo: false
+  status: complete
+design_warnings:
+  - "WRN-001: headless product (CLI) — visual design is not applicable; output and log formatting conventions belong in ARCH and the code-style conventions."
+functional_structure: [headless]
+functional_structure_confidence: confirmed
+functional_structure_rationale: "A scriptable CLI with no visual surfaces, design tokens, or assets."
+aesthetic_direction: null
+sub_artifacts:
+  tokens: null
+  assets: null
+brand_identity: null
+implements_requirements: null
+traces_ux_surfaces: null

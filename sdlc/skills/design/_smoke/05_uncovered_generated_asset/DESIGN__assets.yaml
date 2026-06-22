@@ -1,0 +1,18 @@
+metadata:
+  design_assets_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "55555555-5555-5555-5555-555555555555"
+  status: complete
+asset_taxonomy: [illustration, icon, texture]
+render_pipeline: "inline SVG + raster fallback"
+style_guide: "hand-inked line work, off-white paper grain background"
+assets:
+  # BROKEN: to_be_generated but no generation_brief and no WRN-NNN deferral.
+  - id: AST-001
+    asset_type: illustration
+    name: empty-state-doodle
+    description: "hand-drawn doodle for the empty dashboard state"
+    format_hint: svg
+    source: to_be_generated
+    generation_brief: null

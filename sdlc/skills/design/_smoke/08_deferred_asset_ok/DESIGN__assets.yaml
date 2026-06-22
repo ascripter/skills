@@ -1,0 +1,19 @@
+metadata:
+  design_assets_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "88888888-8888-8888-8888-888888888888"
+  status: complete
+asset_taxonomy: [character, background, illustration]
+render_pipeline: "pre-rendered painterly backplates + sprite overlays"
+style_guide: "oil-painting texture, dramatic single-source lighting"
+assets:
+  # to_be_generated WITHOUT a brief, but deferred via WRN-001 in DESIGN.yaml -> covered.
+  - id: AST-001
+    asset_type: character
+    name: final-boss-portrait
+    description: "full-body portrait of the final boss for the climax cutscene"
+    format_hint: png
+    source: to_be_generated
+    traces_ux_surfaces: ["SCR-003"]
+    generation_brief: null

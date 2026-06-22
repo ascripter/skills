@@ -1,0 +1,27 @@
+metadata:
+  design_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "11111111-1111-1111-1111-111111111111"
+  monorepo: false
+  status: complete
+design_warnings: []
+functional_structure: [token_based_ui]
+functional_structure_confidence: confirmed
+functional_structure_rationale: "Web SaaS rendered by a component library; no bespoke assets."
+aesthetic_direction:
+  style_family: minimal_flat
+  style_family_confidence: confirmed
+  mood_keywords: [calm, trustworthy, spacious]
+  palette_intent: "cool neutrals with a single warm accent"
+  style_references: ["https://linear.app"]
+  typographic_voice: "geometric sans, generous leading, few weights"
+  motion_character: subtle
+  texture_and_finish: null
+  requires_custom_assets: false
+sub_artifacts:
+  tokens: docs/DESIGN__tokens.yaml
+  assets: null
+brand_identity: null
+implements_requirements: ["NFR-010"]
+traces_ux_surfaces: ["SCR-001", "SCR-002"]

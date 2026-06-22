@@ -1,0 +1,14 @@
+metadata:
+  design_tokens_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "55555555-5555-5555-5555-555555555555"
+  status: complete
+token_source: dtcg_authored
+theme_modes: [light]
+color:
+  ink: { "$value": "#222018", "$type": color }
+typography:
+  body: { "$value": "Caveat, cursive", "$type": fontFamily }
+spacing:
+  base: { "$value": "8px", "$type": dimension }

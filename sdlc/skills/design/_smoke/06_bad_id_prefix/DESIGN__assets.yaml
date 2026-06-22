@@ -1,0 +1,16 @@
+metadata:
+  design_assets_version: "1.0"
+  last_updated: "2026-06-22T12:00:00Z"
+  generated_by: sdlc-design
+  session_id: "66666666-6666-6666-6666-666666666666"
+  status: complete
+asset_taxonomy: [icon]
+assets:
+  # BROKEN: id "ASSET-1" does not match the AST-NNN family format.
+  - id: ASSET-1
+    asset_type: icon
+    name: app-logo
+    description: "primary app icon"
+    format_hint: svg
+    source: user_supplied
+    generation_brief: null
