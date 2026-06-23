@@ -83,6 +83,7 @@ many containers they touch:
 | `references/interview-mechanics.md` | AskUserQuestion batch format, EXIT semantics, importance-tier flows. Read on entering Phase 6. |
 | `references/test-discovery.md` | How to seed the test suite from PRD + ARCH + DATA + API (system and container). Read in Phase 3. |
 | `references/tiering-guidance.md` | General test-strategy guidance: the pyramid, tier selection, mock vs. real, fixtures, coverage-as-signal, AI-codegen-specific advice. Read in Phases 3–6. |
+| `references/explaining-choices.md` | The explain-the-why presentation contract for conceptually-loaded decisions (test mix, mocking, coverage, fixtures, per-test tier), written for devs who aren't test engineers. Read on entering Phase 4; applies through Phase 6. |
 | `references/coverage-and-defer.md` | The trace-or-defer coverage contract and the WRN-NNN deferral mechanism. Read in Phase 6 (closing each list) and Phase 7. |
 | `references/merge-validate.md` | Merge logic for existing artifacts, the cross-check suite, CLAUDE.md pointer rules, the downstream-rejection rule. Read on entering Phase 7. |
 | `references/edge-cases.md` | Unusual situations and their handling. |
@@ -329,6 +330,19 @@ families + project-type heuristics), per `references/coverage-and-defer.md`.
 
 ### Phase 4 — Structural questions
 
+**Load `references/explaining-choices.md` now.** Several decisions in this and
+the next phases are *conceptually loaded* — they carry a jargon term the user
+may not know AND silently hurt the project if defaulted wrong (the test mix,
+mocking policy, coverage floor, fixtures, and each test's tier). Every question
+carrying an `explainer:` block in `test-questions.yaml` is one of these. For
+those, do **not** present a bare label list or a terse draft→approve: present
+the explain-the-why contract — a plain-language frame, a recommendation tied to
+*this* project's upstream facts, a plain-language gloss on every option, and a
+"not sure — explain" escape hatch. Assume the user may be a capable developer
+who is **not** a test engineer; teach the choice in a sentence or two, but let
+an expert one-click the recommendation and move on. This is the fix for "it
+recommended pyramid percentages but never said why."
+
 Mode-specific scalars that determine the *shape* of the output, asked before
 any theme batch:
 
@@ -410,12 +424,20 @@ are identical to `sdlc:arch` / `sdlc:api` / `sdlc:data` — see
 `references/interview-mechanics.md` (which points at the canonical spec in
 `sdlc/skills/prd/references/importance-flows.md`).
 
-The two non-negotiable rules in this phase:
+The three non-negotiable rules in this phase:
 
 1. `⚠ inferred` candidates surface as the **position-1 recommended option** in
    their `AskUserQuestion` call. They cannot be silently accepted.
 2. State is written after **every confirmed batch, mini-section, and per-item
    test completion** — not at theme boundaries.
+3. **Loaded decisions get the explain-the-why treatment.** Any question with an
+   `explainer:` block (`mock_policy`, `fixture_strategy`, each suite's per-test
+   `tier`, plus the Phase-4 `pyramid_targets` / coverage floors) is presented
+   per `references/explaining-choices.md`: plain-language frame, project-tailored
+   recommendation, glossed options, and a "not sure — explain" escape hatch.
+   In the per-test `tier` challenge (the "push-down" step), state *why* the
+   cheaper tier gives the same confidence in concrete terms (speed, and how
+   clearly a failure points at the cause) — never just the tier label.
 
 ### Phase 7 — Write & validate
 
@@ -618,6 +640,12 @@ system) → `references/edge-cases.md`.
 
 The test interview can be long. Keep it humane:
 
+- **Assume the user may not be a test engineer.** For the conceptually-loaded
+  decisions (test mix, mocking, coverage, fixtures, per-test tier), teach the
+  choice in one or two plain sentences and say *why you recommend what you do
+  for this project* — don't hand over jargon labels and hope. The depth lives
+  behind a "not sure — explain" option; an expert can one-click past it. Full
+  contract: `references/explaining-choices.md`.
 - Lead with the draft suite — the user edits a list, they don't invent one.
 - Keep `AskUserQuestion` batches to 2–4 questions; never more than 4.
 - Acknowledge progress at each theme and test boundary ("That's the

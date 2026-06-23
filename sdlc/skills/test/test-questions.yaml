@@ -23,6 +23,34 @@
 #                        Stored at <schema_path>_rationale.
 #   confidence_field   — if true, a sibling <schema_path>_confidence is written.
 #                        Defaults to true; set false to opt out.
+#   explainer          — OPTIONAL block. Its presence marks this as a
+#                        "conceptually loaded" decision: a jargon term the user
+#                        may not know AND a choice that silently hurts the
+#                        project if defaulted wrong (test mix, mocking, coverage
+#                        floor, fixtures, per-test tier). The agent MUST present
+#                        such questions via the explain-the-why contract in
+#                        references/explaining-choices.md — a plain-language
+#                        frame, a recommendation tied to THIS project, a
+#                        plain-language gloss on every option, and a
+#                        "not sure — explain" escape hatch — instead of a bare
+#                        label list or a terse draft→approve. This is the fix
+#                        for "it recommended percentages but didn't say why" and
+#                        is written for developers who are NOT test engineers.
+#                        Sub-keys:
+#                          what           — one plain sentence: what the choice
+#                                           controls.
+#                          why            — one plain sentence: what goes wrong
+#                                           if it's chosen badly.
+#                          recommend_from — the upstream signal(s) that should
+#                                           tailor the recommendation (e.g.
+#                                           ARCH.yaml.architecture_pattern,
+#                                           container archetypes, PRD NFRs,
+#                                           project type). The agent reads these
+#                                           and names the driving fact in its
+#                                           recommendation.
+#                          jargon         — map of term → one-line plain gloss
+#                                           the agent inlines on first use;
+#                                           never assume the term is known.
 #   importance         — `med | high | critical`. Defaults to `med`.
 #                          * med      — single AskUserQuestion batch entry,
 #                                       inferred suggestion at position 1.
@@ -121,14 +149,34 @@ questions:
       microservices/event-driven push weight toward contract + integration; a
       monolith leans on unit. Stored as a tier→proportion mapping.
     suggested_answers:
-      - "unit ~70% / integration ~20% / e2e ~10% (classic pyramid)"
-      - "unit ~50% / integration ~30% / contract ~10% / e2e ~10% (service mesh)"
-      - "unit ~60% / integration ~25% / e2e ~15% (testing trophy lean)"
-      - "unit ~80% / integration ~15% / e2e ~5% (library / pure-logic heavy)"
+      - "unit ~70% / integration ~20% / e2e ~10% (classic pyramid — most risk is logic inside one unit)"
+      - "unit ~50% / integration ~25% / contract ~15% / e2e ~10% (microservices — main risk is services drifting apart)"
+      - "unit ~60% / integration ~25% / e2e ~15% (testing trophy — IO/glue-heavy code, bugs live at the seams)"
+      - "unit ~80% / integration ~15% / e2e ~5% (library / pure-logic — branch logic is the whole product)"
     free_text_allowed: true
     required: true
     capture_rationale: true
     importance: high
+    explainer:
+      what: >
+        The MIX of test types — many fast tests that check one piece of code
+        (unit), fewer that check pieces working together (integration), a few
+        that drive the whole app like a user (e2e), plus a contract band that
+        pins the interface between services.
+      why: >
+        Pick the wrong mix and you get a slow, flaky suite that tests the wrong
+        layer — e.g. an end-to-end test per business rule (slow, localizes
+        failures poorly) when a unit test would prove the same thing in
+        milliseconds.
+      recommend_from:
+        - "ARCH.yaml.architecture_pattern (monolith/microservices/event_driven/serverless/pipeline/hexagonal)"
+        - "the number and kind of containers + cross-container edges in ARCH.yaml"
+        - "project type (library vs app vs pipeline)"
+      jargon:
+        "test pyramid": "the recommended shape: lots of small fast tests at the base, few slow ones at the top"
+        "contract test": "a cheap test that pins the response/message shape between two services so they can't drift apart"
+        "testing trophy": "a flatter shape with more integration tests than the classic pyramid — fits glue/IO-heavy code"
+        "e2e": "end-to-end — drives the whole system like a real user; slow and flaky but proves it actually works"
 
   - theme: test_approach
     id: ai_builder_notes
@@ -160,14 +208,29 @@ questions:
       signal, not a target — see references/tiering-guidance.md. A common
       default is 80; safety-critical paths warrant more, throwaway code less.
     suggested_answers:
-      - "80"
-      - "70"
-      - "90"
-      - "no global floor (per-container only)"
+      - "80 (common default — a floor that stops backsliding, not a target to chase)"
+      - "70 (looser — fine for an early-stage or exploratory codebase)"
+      - "90 (stricter — money/auth/safety paths where a missed branch is costly)"
+      - "no global floor (per-container only — set the bar where the risk is)"
     free_text_allowed: true
     required: true
     capture_rationale: true
     importance: high
+    explainer:
+      what: >
+        The minimum % of code that must be exercised by tests for the build to
+        pass — a floor the verification stage enforces.
+      why: >
+        Coverage tells you what code RAN, not that behaviour is correct: 100%
+        with weak assertions proves nothing. Treat the number as a backstop that
+        stops backsliding, not a target — or people write empty tests to chase
+        it. Let requirements and risks drive what to test; coverage is the net.
+      recommend_from:
+        - "PRD NFRs and the presence of money/auth/safety-critical paths"
+        - "project maturity (early-stage vs production) implied by PRD/ARCH"
+      jargon:
+        "line coverage": "the share of code lines that ran during the test suite"
+        "branch coverage": "the share of yes/no decision paths exercised — catches untested conditionals line coverage misses"
 
   - theme: coverage_threshold
     id: branch_pct
@@ -213,13 +276,34 @@ questions:
       agent reaches for a mock or a real instance at each boundary. See
       references/tiering-guidance.md (mock vs. real).
     suggested_answers:
-      - "Mock only at process/network boundaries; use real in-process deps otherwise"
-      - "Mock all external services; use a real database via testcontainers"
-      - "No mocks — full integration against ephemeral real dependencies"
-      - "Mock everything outside the unit under test (classic London-school)"
+      - "Mock only at process/network boundaries (Stripe, email); use real in-process deps (in-memory DB, real objects) otherwise"
+      - "Mock external services; use a real database via testcontainers (higher fidelity, a bit slower)"
+      - "No mocks — full integration against ephemeral real dependencies (slowest, most realistic)"
+      - "Mock everything outside the unit under test (London-school: fast + isolated, but can pass while prod breaks)"
     free_text_allowed: true
     required: true
+    capture_rationale: true
     importance: high
+    explainer:
+      what: >
+        How aggressively tests replace a real dependency (a database, another
+        service, an email/payment API) with a fast stand-in ("mock") instead of
+        using the real thing.
+      why: >
+        Over-mock and tests pass while production breaks — you're checking your
+        ASSUMPTIONS about the dependency, not the dependency. Under-mock and the
+        suite is slow and flaky. The rule that ages well: mock only what's slow,
+        external, or out of your control; use the real thing in-process when
+        it's cheap.
+      recommend_from:
+        - "the external dependencies in ARCH.yaml (third-party APIs, payment, email → mock)"
+        - "the datastores/buses in ARCH.yaml (DB/queue → prefer a real throwaway instance over a mock)"
+        - "DATA-MODEL.yaml entities the containers persist"
+      jargon:
+        "mock / stub": "a fake stand-in for a real dependency, returning canned answers so the test is fast and predictable"
+        "testcontainers": "spins up a real database/queue in a throwaway container for the test — real behaviour, auto-cleaned"
+        "London-school": "mock every collaborator of the unit under test; maximally isolated and fast, but breaks on refactors and can hide broken wiring"
+        "in-process dependency": "a real dependency that runs inside the test (in-memory SQLite, a real pure function) — cheap and realistic"
 
   - theme: global_policy
     id: fixture_strategy
@@ -227,13 +311,30 @@ questions:
     question: "How are test fixtures and test data produced?"
     hint: "Drives reuse and determinism. Factories beat hand-rolled fixtures for evolving schemas."
     suggested_answers:
-      - "Data factories/builders with sensible defaults, overridable per test"
-      - "Static fixture files committed alongside tests"
-      - "Database seed scripts shared across the integration suite"
-      - "Inline construction in each test (small surface only)"
+      - "Data factories/builders with sensible defaults, overridable per test (resilient to schema change — recommended for evolving data)"
+      - "Static fixture files committed alongside tests (simple, but rot as the schema changes)"
+      - "Database seed scripts shared across the integration suite (watch for order-dependent flakes)"
+      - "Inline construction in each test (clear for a small surface; verbose at scale)"
     free_text_allowed: true
     required: true
+    capture_rationale: true
     importance: high
+    explainer:
+      what: >
+        How each test gets the data it needs to run — generated on the fly by a
+        factory, loaded from a committed file, seeded into a DB, or built inline.
+      why: >
+        Shared, static, or mutable test data is the #1 source of brittle,
+        order-dependent tests that break whenever the schema moves. A factory
+        with sensible defaults that each test overrides keeps tests readable and
+        resilient; static fixtures rot.
+      recommend_from:
+        - "DATA-MODEL.yaml — how many entities and how likely the schema is to evolve"
+        - "whether the suite is mostly unit (inline is fine) or integration-heavy (factories pay off)"
+      jargon:
+        "fixture": "the prepared data/state a test runs against"
+        "factory / builder": "a small helper that constructs a valid object with defaults you override per test — instead of hand-writing the data each time"
+        "golden / snapshot file": "a recorded expected output a test compares against; powerful for serializers, but a rubber-stamp if regenerated blindly"
 
   - theme: global_policy
     id: test_data_strategy
@@ -310,6 +411,24 @@ questions:
     free_text_allowed: false
     required: true
     importance: critical
+    explainer:
+      what: >
+        The KIND of test — which decides how slow/realistic it is and what the
+        codegen agent builds. The challenge step is "push down": prove each
+        thing at the cheapest tier that still gives confidence.
+      why: >
+        An end-to-end test per business rule is an anti-pattern: slow, and when
+        it fails it doesn't tell you WHERE. A unit test on the component that
+        owns the rule proves the same thing in milliseconds and points at the
+        line. Keep e2e for the happy-path journey wiring; use contract (not e2e)
+        to catch interface drift.
+      recommend_from:
+        - "what the candidate test actually verifies — a workflow (e2e), an interface (contract), or a rule (push to unit/integration in a container file)"
+        - "ARCH.yaml.edges — a cross-container `calls` edge is a contract test"
+      jargon:
+        "contract test": "pins the response/event shape between a provider and consumer so they can't drift apart — cheaper and clearer than an e2e"
+        "load test": "checks a latency/throughput NFR holds under volume"
+        "push down": "move a test to a lower (cheaper, faster, more precise) tier that still proves the same thing"
 
   - theme: system_suite
     id: name
@@ -415,14 +534,27 @@ questions:
       per_container_overrides). Raise it for risk-bearing logic; lower it for
       thin plumbing — but justify in the rationale.
     suggested_answers:
-      - "inherit the system floor"
-      - "90"
-      - "85"
-      - "70"
+      - "inherit the system floor (the safe default — only override with a reason)"
+      - "90 (raise it — this container carries risk-bearing logic: money, auth, core rules)"
+      - "85 (a modest raise)"
+      - "70 (lower it — thin plumbing, an adapter, or generated code)"
     free_text_allowed: true
     required: true
     capture_rationale: true
     importance: high
+    explainer:
+      what: >
+        This container's coverage floor. Inherits the system threshold unless
+        you raise it (risk-bearing logic) or lower it (thin plumbing).
+      why: >
+        Same logic as the global floor — a backstop, not a target. The point of
+        a per-container override is to put the bar where the RISK is, not to
+        hit one number everywhere. Justify any deviation in the rationale.
+      recommend_from:
+        - "what this container does per ARCH__<container>.yaml — money/auth/core logic vs. adapter/gateway/generated code"
+        - "TEST-STRATEGY.yaml.coverage_threshold and any per_container_overrides already set for it"
+      jargon:
+        "inherit": "use the system-wide floor from TEST-STRATEGY.yaml unless you set a number here"
 
   - theme: coverage_target
     id: branch_pct
@@ -449,14 +581,28 @@ questions:
     question: "Does this container need a mock policy different from the global default?"
     hint: "Null ⇒ inherit TEST-STRATEGY.yaml.mock_policy. Override only when the container's deps demand it."
     suggested_answers:
-      - "inherit global policy"
-      - "use a real database via testcontainers here"
-      - "mock the upstream service this container calls"
-      - "no mocks — this container is pure logic"
+      - "inherit global policy (the safe default)"
+      - "use a real database via testcontainers here (this container leans on DB-specific behaviour)"
+      - "mock the upstream service this container calls (it's external / slow / out of your control)"
+      - "no mocks — this container is pure logic (nothing slow or external to fake)"
     free_text_allowed: true
     required: false
     confidence_field: false
     importance: med
+    explainer:
+      what: >
+        Whether this container overrides the global mocking default. Same idea
+        as the system mock policy (mock only what's slow/external/uncontrolled;
+        use real cheap deps) — applied to THIS container's dependencies.
+      why: >
+        Override only when the container's deps genuinely differ from the global
+        assumption — e.g. it depends on Postgres-specific behaviour a mock or
+        SQLite would miss, or it's pure logic with nothing worth faking.
+      recommend_from:
+        - "this container's outgoing edges in ARCH.yaml (what it actually calls)"
+        - "TEST-STRATEGY.yaml.mock_policy (the default it inherits)"
+      jargon:
+        "inherit": "reuse the global mock policy from TEST-STRATEGY.yaml unless this container needs something different"
 
   - theme: container_policy
     id: fixture_strategy
@@ -513,6 +659,23 @@ questions:
     free_text_allowed: false
     required: true
     importance: critical
+    explainer:
+      what: >
+        The KIND of test for this component. Default to `unit` (one component in
+        isolation) and only climb to `integration` when the behaviour genuinely
+        needs two+ components wired together.
+      why: >
+        Higher tiers are slower and localize failures worse. Verifying a single
+        component's rule with an integration test (or worse, bubbling it up to a
+        system e2e) wastes time and clarity. Push down to a fast unit test
+        whenever it gives the same confidence.
+      recommend_from:
+        - "whether the candidate targets one component (unit) or spans several internal_edges (integration)"
+        - "ARCH__<container>.components[] and internal_edges"
+      jargon:
+        "unit test": "exercises one component/function in isolation, collaborators mocked — fastest, most precise"
+        "integration test": "exercises two+ components inside this container with real wiring — catches seam bugs a unit test can't"
+        "property test": "checks an invariant holds across many generated inputs, instead of a few hand-picked cases"
 
   - theme: container_suite
     id: name

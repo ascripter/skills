@@ -71,8 +71,12 @@ coverage_threshold:                        # REQUIRED
 # ---------------------------------------------------------------------------
 mock_policy: <string>                      # REQUIRED — default mocking policy
 mock_policy_confidence: confirmed | inferred | assumption   # OPTIONAL
+mock_policy_rationale: <string>            # OPTIONAL — why this policy (the
+                                           #   recommendation's "why" when the
+                                           #   user accepted as-is, else theirs)
 fixture_strategy: <string>                 # REQUIRED — how fixtures/test data are produced
 fixture_strategy_confidence: confirmed | inferred | assumption  # OPTIONAL
+fixture_strategy_rationale: <string>       # OPTIONAL — why this strategy
 test_data_strategy: <string>              # OPTIONAL — sensitive/large-volume data handling
 
 # ---------------------------------------------------------------------------

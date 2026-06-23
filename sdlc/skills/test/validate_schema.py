@@ -186,8 +186,10 @@ class TestStrategySystem(BaseModel):
     coverage_threshold: Optional[CoverageThreshold] = None
     mock_policy: Optional[str] = None
     mock_policy_confidence: Optional[Confidence] = None
+    mock_policy_rationale: Optional[str] = None
     fixture_strategy: Optional[str] = None
     fixture_strategy_confidence: Optional[Confidence] = None
+    fixture_strategy_rationale: Optional[str] = None
     test_data_strategy: Optional[str] = None
     ci_integration: Optional[str] = None
     environments: Optional[List[Environment]] = None

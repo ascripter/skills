@@ -24,6 +24,12 @@ Read it on entering Phase 6. Everything below is the delta for `test`.
 - `med` questions batch together. `high` questions each get a draft-then-
   approve mini-section (cap 3 iterations). `critical` questions run the full
   per-item state machine — here, **one test at a time**.
+- **Exception for loaded `high` scalars** (`pyramid_targets`, `mock_policy`,
+  `fixture_strategy`, coverage floors — any question with an `explainer:`
+  block): replace the bare draft→approve with the explain-the-why presentation
+  in `references/explaining-choices.md` (plain-language frame, project-tailored
+  recommendation at position 1, glossed options, "not sure — explain" hatch).
+  The user can still type their own value in "Other".
 
 ## The per-test `critical` flow (system_suite / container_suite)
 
@@ -36,7 +42,12 @@ Both suites are `critical synthesis: true`. Run each candidate test through:
 2. **challenge** — confirm the tier is the *cheapest that proves the
    requirement* (push e2e → integration → unit where possible; see
    `tiering-guidance.md`), and confirm scope (`involves_containers` for
-   system tests, `component_ref` for unit tests).
+   system tests, `component_ref` for unit tests). When you propose pushing a
+   test down a tier, **say why in plain language** — the concrete cost of the
+   higher tier (slower, and a failure that doesn't tell you *where* it broke)
+   vs. what the lower tier buys. This is the highest-leverage teaching moment
+   in the whole interview for a user who isn't a test engineer. Full contract:
+   `references/explaining-choices.md` §7.
 3. **detail** — fill `directives` (the arrange/act/assert sketch the codegen
    agent follows), `setup`, `priority`, `acceptance`, plus `fixtures`/`mocks`
    for container tests.
