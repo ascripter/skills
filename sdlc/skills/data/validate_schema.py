@@ -177,6 +177,20 @@ class PrimaryStore(str, Enum):
 
 
 class SecondaryStoreKind(str, Enum):
+    # Paradigm families — use when a secondary store is a *different paradigm*
+    # than the primary and the concrete engine is TBD / finalized at deploy.
+    # A secondary legitimately spans paradigms (see references/polyglot-
+    # persistence.md): the canonical RAG shape is primary relational +
+    # secondary `vector`; a recommendation sidecar is a secondary `graph`; a
+    # rare second source-of-truth ledger is a secondary `relational`. Pick the
+    # family here and name the concrete engine in `rationale`. Mirrors the
+    # Paradigm family vocabulary, so `relational` is valid as a secondary kind.
+    relational = "relational"
+    document = "document"
+    key_value = "key_value"
+    graph = "graph"
+    vector = "vector"
+    # Specific auxiliary technologies (characteristically deployed as secondary).
     redis = "redis"
     memcached = "memcached"
     elasticsearch = "elasticsearch"
@@ -195,6 +209,13 @@ class SecondaryStoreRole(str, Enum):
     queue = "queue"
     analytics = "analytics"
     timeseries = "timeseries"
+    # A secondary store that is itself authoritative for some subset of data —
+    # the rare, deliberate multi-source-of-truth case (e.g. orders in the
+    # primary + payments in a separate ledger DB; flag with rationale). This is
+    # NOT the main store: that belongs in `primary_store` (or the per-product
+    # `primary_store` in monorepo mode). There is deliberately no `primary`
+    # role — a *secondary* store cannot be the primary by definition.
+    source_of_truth = "source_of_truth"
     other = "other"
 
 

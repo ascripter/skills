@@ -16,10 +16,10 @@ paradigm from the primary. The most common cross-paradigm case:
   shape. The source of truth is rows/documents/files; a vector store is a
   derived semantic index, rebuilt from the primary. Pick the primary paradigm
   for `persistence.paradigm`, model entities there, and record the vector store
-  under `secondary_stores` (role: `search` or `other`) with a one-line note on
-  what gets embedded and how the index is rebuilt. Only choose `vector` as the
-  *primary* paradigm when similarity search dominates and there's little other
-  state (see `references/paradigms/vector.md`).
+  under `secondary_stores` (`kind: vector`, role: `search` or `other`) with a
+  one-line note on what gets embedded and how the index is rebuilt. Only choose
+  `vector` as the *primary* paradigm when similarity search dominates and
+  there's little other state (see `references/paradigms/vector.md`).
 - **Primary relational + secondary key_value (cache)** or **+ graph (a
   recommendation/relationship sidecar)** follow the same rule: primary paradigm
   models the truth; the secondary is derived and noted, not modeled as a full
@@ -47,7 +47,12 @@ infrastructure:
 
 True multi-source-of-truth (e.g. orders in Postgres + payments in a
 separate ledger DB) is rare and should be flagged with explicit
-rationale.
+rationale. Model the second authoritative store as a secondary store
+with `role: source_of_truth` (and a `kind` family such as `relational`),
+NOT `role: primary` — the single main store always belongs in
+`primary_store` (or the per-product `primary_store` in monorepo mode).
+`source_of_truth` makes the multi-SoT decision a typed signal downstream
+consistency/transaction reviews can act on.
 
 ## What to capture in DATA-MODEL.yaml
 
@@ -66,6 +71,9 @@ persistence:
     - kind: kafka
       role: queue
       rationale: "Decouples event consumers; supports CDC outbox."
+    - kind: vector            # family fallback — concrete engine in rationale
+      role: search
+      rationale: "Semantic search over Document embeddings; qdrant, rebuilt from Postgres."
   file_blob_store: s3
   file_blob_store_bucket: "acme-uploads"
 ```

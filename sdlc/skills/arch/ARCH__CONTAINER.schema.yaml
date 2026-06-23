@@ -238,7 +238,11 @@ components:                                # REQUIRED — non-empty
     traces_data_entities:                  # OPTIONAL — list of DATA entity names
       - User                               #            (PascalCase) this component
                                            #            reads/writes. Validated against
-                                           #            DATA-MODEL.yaml.entities.
+                                           #            DATA-MODEL.yaml.entities ONLY —
+                                           #            entities, not enums/value types
+                                           #            (enums_and_lookups.enums). To
+                                           #            reference an enum, trace the
+                                           #            entity that carries it instead.
     implements_requirements:               # OPTIONAL — PRD requirements this component
       - FR-001                             #            implements. Accepts FR-NNN
       - NFR-011                            #            (features) and NFR-NNN
@@ -338,7 +342,8 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #       * traces_api_resources   ⊆ resource_ids in docs/API__*.yaml
 #       * traces_api_operations  ⊆ operation_ids in docs/API__*.yaml endpoints
 #       * traces_ux_surfaces     ⊆ surface_ids in docs/UX__*.yaml
-#       * traces_data_entities   ⊆ entity names in docs/DATA-MODEL.yaml
+#       * traces_data_entities   ⊆ entity names in docs/DATA-MODEL.yaml.entities
+#         (entities only — NOT enums_and_lookups.enums value types)
 #     Plus parent containment:
 #       * traces_api_resources   ⊆ parent container's owns_api_resources
 #       * traces_ux_surfaces     ⊆ parent container's owns_ux_surfaces

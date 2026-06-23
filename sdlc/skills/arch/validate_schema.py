@@ -783,6 +783,32 @@ def load_data_entity_names(data_path: Path) -> Set[str]:
     return {str(k) for k in entities.keys()}
 
 
+def load_data_enum_names(data_path: Path) -> Set[str]:
+    """Return enum type names from DATA-MODEL.yaml.enums_and_lookups.enums.
+
+    Enums are value types (closed sets), NOT entities. Used only to turn the
+    'not an entity' error into targeted guidance when a component traces an
+    enum by mistake. Mirrors load_data_entity_names (top-level / system mode);
+    in monorepo mode entities live under products.<slug>, so the entity set is
+    empty there and the trace cross-check is skipped anyway.
+    """
+    if not data_path.exists():
+        return set()
+    try:
+        raw = yaml.safe_load(data_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return set()
+    if not isinstance(raw, dict):
+        return set()
+    block = raw.get("enums_and_lookups") or {}
+    if not isinstance(block, dict):
+        return set()
+    enums = block.get("enums") or {}
+    if not isinstance(enums, dict):
+        return set()
+    return {str(k) for k in enums.keys()}
+
+
 def load_upstream_statuses(docs_dir: Path) -> Dict[str, Optional[str]]:
     """Return metadata.status from each upstream artifact.
 
@@ -1210,11 +1236,13 @@ def check_component_traces(
     api_operation_ids: Set[str],
     ux_surface_ids: Set[str],
     data_entity_names: Set[str],
+    data_enum_names: Optional[Set[str]] = None,
 ) -> List[str]:
     """Cross-check #14 — every Component.traces_* entry resolves to an
     upstream artifact AND, for api/ux traces, sits within the parent
     container's owns_*.
     """
+    data_enum_names = data_enum_names or set()
     errs: List[str] = []
     if not container.components:
         return errs
@@ -1265,13 +1293,25 @@ def check_component_traces(
                     f"contains '{s}' which is not in the parent container's "
                     f"owns_ux_surfaces"
                 )
-        # traces_data_entities
+        # traces_data_entities — must resolve to an ENTITY. Enums
+        # (enums_and_lookups.enums) are value types, not entities: a component
+        # that "uses" an enum actually reads/writes the entity that carries it,
+        # so the trace must point at that entity.
         for e in comp.traces_data_entities or []:
             if data_entity_names and e not in data_entity_names:
-                errs.append(
-                    f"{file_label}: components[{i}]='{cid}'.traces_data_entities "
-                    f"contains '{e}' which is not an entity in DATA-MODEL.yaml"
-                )
+                if e in data_enum_names:
+                    errs.append(
+                        f"{file_label}: components[{i}]='{cid}'.traces_data_entities "
+                        f"contains '{e}', which is an enum "
+                        f"(DATA-MODEL.yaml enums_and_lookups.enums), not an entity. "
+                        f"traces_data_entities references entities only — trace the "
+                        f"entity that carries this enum-typed field instead."
+                    )
+                else:
+                    errs.append(
+                        f"{file_label}: components[{i}]='{cid}'.traces_data_entities "
+                        f"contains '{e}' which is not an entity in DATA-MODEL.yaml"
+                    )
     return errs
 
 
@@ -1596,6 +1636,7 @@ def validate_all(arch_path: Path) -> int:
     ux_ids_set: Set[str] = set(ux_ids)
     store_ids = load_data_store_ids(docs_dir / "DATA-MODEL.yaml")
     data_entity_names = load_data_entity_names(docs_dir / "DATA-MODEL.yaml")
+    data_enum_names = load_data_enum_names(docs_dir / "DATA-MODEL.yaml")
     prd_path = docs_dir / "PRD.yaml"
     prd_features = load_prd_must_have_features(prd_path)
     prd_families = load_prd_id_families(prd_path)
@@ -1621,6 +1662,7 @@ def validate_all(arch_path: Path) -> int:
                 c, arch, name,
                 api_ids_set, api_operation_ids,
                 ux_ids_set, data_entity_names,
+                data_enum_names,
             )
         )
         container_via_errs.extend(

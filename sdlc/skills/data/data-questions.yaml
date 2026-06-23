@@ -295,12 +295,18 @@ questions:
     id: secondary_stores
     schema_path: persistence.secondary_stores
     question: "Which secondary stores, and what role does each play? (kind: role; e.g. 'redis: cache')"
-    hint: "Each secondary store implies sync/invalidation work for downstream agents — surface them now."
+    hint: >
+      Each secondary store implies sync/invalidation work for downstream agents —
+      surface them now. A secondary may be a DIFFERENT paradigm than the primary:
+      use a family kind (relational | document | key_value | graph | vector) when
+      the engine is TBD (e.g. RAG: 'vector: search'), naming the engine in
+      rationale. A second authoritative store is role 'source_of_truth' (rare,
+      flag rationale) — never 'primary'; the main store lives in primary_store.
     suggested_answers:
       - "redis: cache"
       - "elasticsearch: search"
+      - "vector: search"
       - "kafka: queue"
-      - "clickhouse: analytics"
       - "none"
     free_text_allowed: true
     required: false

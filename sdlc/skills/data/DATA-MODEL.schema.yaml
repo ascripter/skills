@@ -201,11 +201,26 @@ persistence:
   serialization_format: null       # file_native only — yaml | json | toml | other
   polyglot: false                  # bool — true if any secondary_stores present
   secondary_stores: null           # list[SecondaryStore]; each:
-                                   #   - kind: redis | memcached | elasticsearch |
-                                   #           opensearch | meilisearch | kafka |
-                                   #           rabbitmq | clickhouse | duckdb | other
+                                   #   - kind: <paradigm family OR specific tech>
+                                   #       families (engine TBD; mirrors paradigm):
+                                   #         relational | document | key_value |
+                                   #         graph | vector
+                                   #       techs: redis | memcached | elasticsearch |
+                                   #         opensearch | meilisearch | kafka |
+                                   #         rabbitmq | clickhouse | duckdb | other
+                                   #       A secondary MAY be a different paradigm
+                                   #       than the primary (e.g. RAG: primary
+                                   #       relational + secondary vector). Use a
+                                   #       family when the concrete engine is TBD
+                                   #       and name the engine in rationale.
                                    #     role: cache | search | queue | analytics |
-                                   #           timeseries | other
+                                   #           timeseries | source_of_truth | other
+                                   #       source_of_truth = rare, deliberate
+                                   #       multi-source-of-truth (flag with
+                                   #       rationale); the MAIN store goes in
+                                   #       primary_store, never here. There is no
+                                   #       `primary` role — a secondary store
+                                   #       cannot be the primary.
                                    #     rationale: string
   secondary_stores_confidence: null  # confirmed | inferred | assumption
                                    # certainty of the secondary-store inventory as a whole
