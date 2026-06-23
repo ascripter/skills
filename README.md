@@ -28,15 +28,19 @@ Execute the following skills in order within your project repo. All skills put t
    
    Define frontend type (desktop, mobile, web, cli) and UX surfaces for it.
 
-3. **`/sdlc:data`** → `DATA-MODEL.yaml`
+3. **`/sdlc:design`** → `DESIGN.yaml`
+
+   Create design manifest (depending on type of software)
+
+4. **`/sdlc:data`** → `DATA-MODEL.yaml`
     
    Define data storage (SQL, graph, document, key-value or vector database, or simple filesystem storage), then all data entities and their relations. 
 
-4. **`/sdlc:api`** (optional) → `API.yaml` + `API__<resource>.yaml` 
+5. **`/sdlc:api`** (optional) → `API.yaml` + `API__<resource>.yaml` 
 
    If the app has an api, use this skill next. 
 
-5. **`/sdlc:arch --next`** → `ARCH.yaml` or `ARCH__<container>.yaml` (context sensitive)
+6. **`/sdlc:arch --next`** → `ARCH.yaml` or `ARCH__<container>.yaml` (context sensitive)
 
    On first invocation, define top-level architecture, including all containers (C2 in C4-model). On consecutive invocation, define the next container until all are present.
    
@@ -57,19 +61,35 @@ Execute the following skills in order within your project repo. All skills put t
 
      Update only dependency edges on container level
 
-7. **`/sdlc:test <container>`** → `TEST-STRATEGY__<container>.yaml`
-  
-   Execute once per container to define its test strategy. 
+7. **`/sdlc:test --next`** → `TEST-STRATEGY.yaml` or `TEST-STRATEGY__<container>.yaml` (context sensitive)
 
-8. **`/sdlc:task <container>`** → `TASKS__<container>.yaml`
+   On first invocation, define the system-level test strategy. On consecutive invocations, define per-container test strategies until all containers are covered.
 
-   Create ALL coding tasks. 
+   The skill has more signatures shown below:
+   - **`/sdlc:test`** → `TEST-STRATEGY.yaml`
+
+     Explicitly address system test strategy
+
+   - **`/sdlc:test <container>`** → `TEST-STRATEGY__<container>.yaml`
+
+     Explicitly address per-container test strategy
+
+8. **`/sdlc:task --next`** → `TASKS.json` or `TASKS__<container>.json` (context sensitive)
+
+   On first invocation, produce per-container task subgraphs one at a time. Once all containers are done, stitch them into the system task graph.
+
+   The skill has more signatures shown below:
+   - **`/sdlc:task`** → `TASKS.json`
+
+     Explicitly address system task graph
+
+   - **`/sdlc:task <container>`** → `TASKS__<container>.json`
+
+     Explicitly address per-container task graph
 
 9. **`/sdlc:deploy`** → `DEPLOY.yaml`
-   
-   Deployment strategy document. 
-   
 
-   
+   Deployment strategy document.
 
-*NOTE: Steps 7 to 9 are not yet implemented*
+
+*NOTE: Step 9 is not yet implemented*
