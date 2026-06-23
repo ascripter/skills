@@ -1,0 +1,37 @@
+# Container deep-dive whose single component declares a code_location. The task
+# validator grounds the sibling TASKS__svc.json task's target_files against it.
+metadata:
+  arch_container_version: "1.1"
+  last_updated: "2026-06-23T10:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "06060606-aaaa-0606-0606-060606060602"
+  status: "complete"
+container_id: svc
+archetype: worker
+overview: "Background worker that ingests and processes jobs."
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+deployment:
+  shape: container
+  shape_confidence: confirmed
+observability:
+  logs: "stdout structured json"
+failure_modes:
+  - id: worker-crash
+    description: "Worker process crashes mid-job."
+    likelihood: low
+    impact: medium
+    mitigation: "Supervisor restarts; jobs are idempotent."
+components:
+  - component_id: ingest-worker
+    archetype: background_worker
+    purpose: "Pulls and processes queued jobs."
+    responsibilities:
+      - "Pull jobs from the queue and process them."
+    code_location:
+      - "src/worker/"
+    status: confirmed
+internal_edges: []
+external_edges: []
+arch_warnings: []

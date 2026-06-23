@@ -35,6 +35,35 @@ one `implementation` task per component; at **fine**, split by the component's
 `implements_requirements` the task realizes. Keep it a subset — the validator
 rejects an `implements` outside the component/container's declared requirements.
 
+### Ground `target_files` in the component's `code_location`
+
+`ARCH__<container>.yaml` gives every component a `code_location` — the
+repo-relative directory(ies) its source lives in (the component → code-module
+seam). **Seed each component-scoped task's `target_files` from it** rather than
+inventing paths:
+
+- A coarse `implementation` task for component `C` → `target_files` are the
+  file(s) under `C.code_location` it writes (e.g. `code_location: ["src/auth/"]`
+  → `target_files: ["src/auth/service.py", "src/auth/tokens.py"]`).
+- A `test` task → the test file(s), typically mirroring the component's location
+  under the project's test root (`tests/auth/test_service.py`).
+- At **fine** granularity, each split task takes the subset of `code_location`
+  files for its slice.
+
+The validator emits an advisory WARNING when a component-scoped task's
+`target_files` fall outside the owning component's `code_location` (directory-
+level) — that warning is the signal that codegen would write outside the
+component's declared home. If a task genuinely needs to write outside (a
+cross-cutting file), either widen the component's `code_location` in ARCH or make
+it an `integration`/system task. **`target_files` is the raw write-target list;
+`outputs` stays the contract-level result** (an exported symbol, an applied
+migration, a passing suite) that downstream tasks depend on — fill both.
+
+A component with no `code_location` (ARCH left it blank) means you have nothing
+to ground against — note it (`WRN-NNN`) and either ask the user for the path or
+fall back to the conventional location for the component's archetype, so a
+target path is still chosen deliberately rather than invented at codegen time.
+
 ## System mode — `docs/TASKS.json`
 
 | Upstream signal | Seeds | kind | Scope field |

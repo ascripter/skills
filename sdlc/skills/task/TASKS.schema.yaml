@@ -104,9 +104,19 @@ tasks:                                      # REQUIRED — list[SystemTask], non
                                             #   MUST be acyclic.
     inputs:                                 # OPTIONAL but encouraged
       - "ARCH.yaml#edges"
-    outputs:                                # REQUIRED — non-empty
-      - "pnpm-workspace.yaml"
-      - ".github/workflows/ci.yml"
+    target_files:                           # OPTIONAL but encouraged — the concrete
+      - "pnpm-workspace.yaml"               #   repo-relative file paths this task CREATES
+      - ".github/workflows/ci.yml"          #   or MODIFIES (the codegen write targets).
+                                            #   System tasks aren't component-scoped, so
+                                            #   there's no code_location to ground against
+                                            #   — but listing the files still removes the
+                                            #   "which path?" ambiguity for scaffold/config
+                                            #   tasks.
+    outputs:                                # REQUIRED — non-empty. The CONTRACT-LEVEL
+      - "workspace resolves"                #   result made available to dependents
+      - "root CI runs on push"              #   (a resolvable workspace, a green CI). A
+                                            #   file path is still a valid output when the
+                                            #   file is itself the deliverable.
     acceptance:                             # REQUIRED — non-empty, machine-checkable
       - "pnpm install resolves the workspace"
     priority: must | should | could          # REQUIRED

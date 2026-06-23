@@ -153,6 +153,8 @@ class ContainerTask(BaseModel):
     touches_operations: Optional[List[str]] = None
     depends_on: Optional[List[str]] = None
     inputs: Optional[List[str]] = None
+    target_files: Optional[List[str]] = None  # codegen write targets; grounded
+                                              # in the component's code_location.
     outputs: Optional[List[str]] = None
     acceptance: Optional[List[str]] = None
     priority: Optional[Priority] = None
@@ -170,6 +172,7 @@ class SystemTask(BaseModel):
     implements_tests: Optional[List[str]] = None
     depends_on: Optional[List[str]] = None
     inputs: Optional[List[str]] = None
+    target_files: Optional[List[str]] = None
     outputs: Optional[List[str]] = None
     acceptance: Optional[List[str]] = None
     priority: Optional[Priority] = None
@@ -266,6 +269,34 @@ def _deferred_literals(warnings: List[str], ids: Set[str]) -> Set[str]:
     return deferred
 
 
+def _code_location_bases(code_location: List[str]) -> List[str]:
+    """Normalize a component's code_location into directory/exact prefixes to
+    test target_files against. A file-looking entry (a dot in its last segment)
+    also contributes its parent directory, honouring the schema's
+    'directory-firm, file-illustrative' rule."""
+    bases: List[str] = []
+    for cl in code_location or []:
+        c = str(cl).strip().replace("\\", "/").rstrip("/")
+        if not c:
+            continue
+        bases.append(c)
+        last = c.rsplit("/", 1)[-1]
+        if "." in last and "/" in c:        # looks like a file → allow its dir
+            bases.append(c.rsplit("/", 1)[0])
+    return bases
+
+
+def _path_within_any(path: str, bases: List[str]) -> bool:
+    """True if `path` equals or sits under any normalized base prefix."""
+    p = str(path).strip().replace("\\", "/").rstrip("/")
+    if not p:
+        return True  # empty path isn't a placement claim — don't flag it
+    for b in bases:
+        if p == b or p.startswith(b + "/"):
+            return True
+    return False
+
+
 # =============================================================================
 # Upstream loaders (PRD / ARCH / ARCH__<cid> / TEST-STRATEGY(.__cid))
 # =============================================================================
@@ -349,6 +380,8 @@ class ArchContainerInfo:
         self.present: bool = False
         self.component_ids: Set[str] = set()
         self.implements: Set[str] = set()    # union of all implements_requirements
+        # component_id -> its code_location list (repo-relative dirs/files).
+        self.component_code_location: Dict[str, List[str]] = {}
 
 
 def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
@@ -364,6 +397,9 @@ def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
         coid = comp.get("component_id")
         if coid:
             info.component_ids.add(coid)
+            cl = comp.get("code_location")
+            if isinstance(cl, list):
+                info.component_code_location[coid] = [str(x) for x in cl]
         info.implements |= _req_tokens_in(comp.get("implements_requirements") or [])
     return info
 
@@ -673,6 +709,18 @@ def check_container(
             covered_components.add(t.component_ref)
             if ac.present and t.component_ref not in ac.component_ids:
                 errs.append(f"{label} tasks[{i}].component_ref '{t.component_ref}' is not a component in ARCH__{cid}.yaml")
+        # target_files grounding (advisory) — a component-scoped task's write
+        # targets should sit within the owning component's code_location.
+        if t.component_ref and t.target_files:
+            bases = _code_location_bases(ac.component_code_location.get(t.component_ref, []))
+            if bases:
+                for tf in t.target_files:
+                    if not _path_within_any(tf, bases):
+                        warns.append(
+                            f"{label} tasks[{i}] target_file '{tf}' is outside "
+                            f"component '{t.component_ref}' code_location "
+                            f"({sorted(set(bases))}) — confirm placement"
+                        )
         # Scope integrity: an implementation task targets a component or a contract.
         if t.kind == "implementation" and not t.component_ref and not t.touches_operations:
             errs.append(f"{label} tasks[{i}] is kind:implementation but is scoped to neither a component (component_ref) nor a contract (touches_operations)")

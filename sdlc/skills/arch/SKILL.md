@@ -447,13 +447,23 @@ mode.
 9. `per_component_deepdive` — `critical` per component. Mirrors
    `sdlc:api`'s `per_resource_deepdive`: for each component, an interview
    fills `component_id`, `archetype`, `purpose`, `responsibilities`,
-   `inputs`, `outputs`, `failure_modes`, `traces_api_resources` /
-   `traces_ux_surfaces` / `traces_data_entities`, and
-   `implements_requirements` (FR-NNN / NFR-NNN) / `traces_prd_workflows`
+   `code_location`, `inputs`, `outputs`, `failure_modes`,
+   `traces_api_resources` / `traces_ux_surfaces` / `traces_data_entities`,
+   and `implements_requirements` (FR-NNN / NFR-NNN) / `traces_prd_workflows`
    (WKF-NNN) where applicable. A component's `implements_requirements` must
-   be a subset of its parent container's.
+   be a subset of its parent container's. `code_location` (the component →
+   code-module seam) is drafted from the component's archetype + the
+   container's source layout (`importance: high` mini-section); downstream
+   `task` grounds each task's `target_files` in it, so don't leave it vague
+   for non-trivial components. See `references/component-discovery.md` →
+   "Deriving code_location".
 10. `internal_and_external_edges` — `critical` synthesis (see
-    `references/edge-derivation.md`).
+    `references/edge-derivation.md`). Once components carry `code_location`,
+    keep the call graph **layering-legal**: a `calls`/`reads`/`writes` edge
+    between *peer* components (same layer / sibling archetype) is realized by
+    a runtime composition root, NOT a direct sideways import — retarget it
+    through the composing component or flag a `WRN-NNN`. See
+    `references/edge-derivation.md` → "Edges vs imports".
 
 #### Tier mechanics
 
@@ -559,6 +569,11 @@ checks emit warnings only.
     the validator emits a warning. (The skill itself refuses to run in
     that case, but a downstream agent re-running the validator alone
     will see the warning.)
+12. **Component `code_location` coverage** — a non-trivial component
+    (non-plumbing archetype, carrying at least one trace) with no
+    `code_location` emits a warning: downstream `task`/codegen will have to
+    infer its file placement. Non-blocking (placement can be deferred), but
+    filling it is what makes autonomous downstream codegen hold.
 
 For merge logic, the recovery flow on `[FAIL]`, and the CLAUDE.md pointer
 rules → see `references/merge-validate.md`.

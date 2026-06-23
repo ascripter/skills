@@ -39,6 +39,9 @@ components:
     purpose: "Implements task creation."
     responsibilities:
       - "Validate and persist new tasks."
+    code_location:
+      - "src/tasks/"
+      - "src/tasks/service.py"
     implements_requirements:
       - "FR-001"
     traces_prd_workflows:

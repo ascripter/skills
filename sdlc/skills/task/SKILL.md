@@ -380,10 +380,10 @@ Walk the themes in `task-questions.yaml` order. Themes are tagged
 2. `system_tasks` — `critical` per item, `synthesis: true`. For each task:
    `tsk_id`, `title`, `kind` (∈ scaffold / integration / test / config /
    migration / deploy-prep / docs / chore), `description`, `involves_containers`,
-   `implements`, `implements_tests`, `depends_on`, `inputs`, `outputs`,
-   `acceptance`, `priority`. After the per-item loop, run the scope-completeness
-   sweep. Every system `TST-NNN` must be realized by a `test` task or deferred —
-   Phase 7's system-test-coverage check enforces this.
+   `implements`, `implements_tests`, `depends_on`, `inputs`, `target_files`,
+   `outputs`, `acceptance`, `priority`. After the per-item loop, run the
+   scope-completeness sweep. Every system `TST-NNN` must be realized by a `test`
+   task or deferred — Phase 7's system-test-coverage check enforces this.
 
 #### Container themes (when `/sdlc:task <container>` was invoked)
 
@@ -393,10 +393,14 @@ Walk the themes in `task-questions.yaml` order. Themes are tagged
    `tsk_id`, `title`, `kind` (∈ scaffold / implementation / test / integration /
    migration / config / chore), `description`, `component_ref`, `implements`
    (FR/NFR), `implements_tests` (TST), `touches_entities`, `touches_operations`,
-   `depends_on`, `inputs`, `outputs`, `acceptance`, `priority`. Run the
-   scope-completeness sweep after the per-item loop. The coverage gate (Phase 7)
-   requires every component and every container `TST-NNN` to be realized by a
-   task or deferred.
+   `depends_on`, `inputs`, `target_files`, `outputs`, `acceptance`, `priority`.
+   `target_files` (the codegen write targets) is drafted from the owning
+   component's `code_location` in `ARCH__<container>.yaml` — a component-scoped
+   task's files must sit within it (validator warns otherwise), which is what
+   stops codegen inventing paths; `outputs` stays the contract-level result.
+   Run the scope-completeness sweep after the per-item loop. The coverage gate
+   (Phase 7) requires every component and every container `TST-NNN` to be
+   realized by a task or deferred.
 
 #### Tier mechanics
 
@@ -462,6 +466,13 @@ in `references/merge-validate.md`; in summary:
   `implements_requirements`); `implements_tests` resolves to a `TST-NNN`.
 - Every `implementation` task is scoped to a component (`component_ref`) or a
   contract (`touches_operations`); every `component_ref` resolves.
+
+**Advisory (warn only, never blocks complete):**
+
+- `target_files` grounding — a component-scoped task whose `target_files` fall
+  outside the owning component's `code_location` (from `ARCH__<cid>.yaml`) emits a
+  warning (placement drift). Directory-level; skipped when the component declares
+  no `code_location`.
 
 Set `metadata.status`:
 

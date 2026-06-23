@@ -27,7 +27,8 @@
       "component_ref": "auth-service",
       "description": "Implement authenticate()/issue-token behaviour.",
       "depends_on": ["TSK-001"],
-      "outputs": ["src/auth/service.py"],
+      "target_files": ["src/auth/service.py", "src/auth/tokens.py"],
+      "outputs": ["auth-service.authenticate() exported"],
       "acceptance": ["src/auth/service.py exposes authenticate()"],
       "priority": "must",
       "status": "draft"

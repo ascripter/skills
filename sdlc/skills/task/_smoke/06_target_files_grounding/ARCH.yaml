@@ -1,0 +1,31 @@
+# Minimal system ARCH for the target_files-grounding smoke fixture.
+# The task validator reads this (container ids + archetypes) plus the sibling
+# ARCH__svc.yaml (component code_location) to ground a task's target_files.
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-06-23T10:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "06060606-aaaa-0606-0606-060606060601"
+  status: "complete"
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "A single background worker."
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+containers:
+  - container_id: svc
+    archetype: worker
+    purpose: "Background job worker."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: ARCH__svc.yaml
+edges: []
+arch_warnings: []

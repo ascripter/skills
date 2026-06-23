@@ -28,6 +28,44 @@ This file is read at three points:
 Hierarchical relationships (`contains`, `owns`) are NOT edges — they
 live in the document structure (`containers[].components[]`).
 
+## Edges vs imports — keep the call graph layering-legal
+
+Once components carry `code_location` (see
+`references/component-discovery.md`), an internal edge and a source-level
+*import* are two different graphs, and the downstream codegen agent will
+write real imports from them. Be explicit about how each edge type is
+**realized** so codegen doesn't write an illegal import:
+
+| Edge type                       | How codegen realizes it                              |
+|---------------------------------|------------------------------------------------------|
+| `depends_on`, `implements`      | A real **build-time import** — must respect the project's import layering (dependency direction). |
+| `calls`, `reads`, `writes`      | A **runtime call**. Often a direct import (controller → service), but between *peer* components it is frequently wired at a composition root / router rather than a direct import. |
+| `publishes`, `subscribes_to`    | **Runtime, indirected** through a bus/queue — never a direct import between the two components. |
+
+The trap: a `calls` (or `reads`/`writes`) edge between two components in
+the **same layer** (e.g. `service → service`, or two pipeline nodes that
+"call" each other) implies a *sideways import*, which many layered
+architectures forbid ("never import sideways or upward"). In reality such
+peer-to-peer runtime edges are composed by a higher-layer component (a
+router, an orchestrator, a graph/composition module), not by one peer
+importing its sibling.
+
+When you derive an internal `calls`/`reads`/`writes` edge whose endpoints
+share a layer in their `code_location` (or whose archetypes are siblings,
+e.g. two `service`s, two `event_handler`s), do **one** of:
+
+1. **Retarget** the edge through the composing component if one exists
+   (the router/orchestrator/graph module that wires them), so the edge —
+   and the import codegen derives from it — points downward, not sideways.
+2. Keep the runtime edge but add an **`arch_warning` (WRN-NNN)** stating
+   that it is a runtime wiring edge realized at the composition root, NOT
+   a direct import, so the codegen agent does not emit a sideways import.
+
+`depends_on` is the only type that should ever denote a hard import between
+peers — and even then it must respect the layer order. This is what lets
+you mechanically check every internal edge against the import layering once
+`code_location` is set.
+
 ## Edge `via_*` pre-fill (REQUIRED practice)
 
 Every derived edge has OPTIONAL `via_*` fields that ground it in an

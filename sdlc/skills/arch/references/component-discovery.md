@@ -138,6 +138,51 @@ MUST be a subset of the parent container's `implements_requirements`
 (the validator enforces containment), so draw only from the features the
 container itself claims.
 
+## Deriving code_location
+
+`code_location` is the **component → code-module seam**: the repo-relative
+directory(ies) (and optionally an illustrative file) where this component's
+source lives. It is filled during `per_component_deepdive` (an `importance:
+high` mini-section — the agent drafts, the user approves). It is the single
+highest-leverage field for autonomous downstream work: the `task` skill grounds
+every task's `target_files` in the owning component's `code_location`, so if it's
+vague or absent the codegen agent has to *invent* each file's placement — the
+most common way a generated repo drifts from its architecture.
+
+**Draft it from archetype + the container's source layout.** The container's
+`tech_stack` (language + framework) and its conventional import layering tell you
+where each archetype's code belongs. Map the component's archetype to a directory
+in that layout:
+
+| Archetype (component)                | Typical home (layered backend)     | Notes |
+|--------------------------------------|------------------------------------|-------|
+| `controller`                         | `src/<area>/` or `controllers/`    | one per API resource the controller owns |
+| `service` / `use_case`               | `services/` / `core/`              | the bulk of behaviour |
+| `repository`                         | `repositories/` / `data/`          | one per entity/store |
+| `middleware` / `error_handler`       | `middleware/`                      | |
+| `view`                               | `src/views/` / `app/<route>/`      | frontend; map to the surface's route |
+| `api_client`                         | `clients/` / `api/`                | the SDK for a called container |
+| `event_handler` / `background_worker`| `workers/` / `handlers/`           | |
+| `cache_client` / `blob_client`       | `clients/`                         | |
+| `config_loader` / `serializer`       | `config/` / `serialization/`       | plumbing — code_location optional |
+
+These are *heuristics keyed to the conventional layout for the chosen stack* —
+not a fixed list. Read the project's own layering signal first (a `README`, an
+`architecture.*` doc, an existing `src/` tree, or a `CLAUDE.md` layering rule the
+project ships) and prefer it over the table. Honour the **directory-firm,
+file-illustrative** rule: a directory entry is a contract the executor must
+respect; a file path is a hint it may rename.
+
+**A component may span layers** — e.g. a runtime component that owns both its
+node module and the schema it emits lists both dirs. List each directory rather
+than picking one. **Reconcile with edges:** a component's `code_location` plus
+the internal-edge graph is what makes every edge mechanically checkable against
+the project's import layering — see `references/edge-derivation.md` → "Edges vs
+imports".
+
+When you persist a drafted component's placement to state, carry it on the
+`defined_components` entry (`code_location: [...]`) so resume doesn't re-draft it.
+
 ## Scope-completeness sweep (synthesis theme)
 
 `component_inventory` is a `critical synthesis: true` theme. After the

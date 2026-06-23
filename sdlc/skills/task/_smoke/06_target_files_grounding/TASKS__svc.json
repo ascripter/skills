@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "tasks_container_version": "1.0",
+    "last_updated": "2026-06-23T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "06060606-aaaa-0606-0606-060606060603",
+    "status": "draft"
+  },
+  "container_id": "svc",
+  "overview": "Smoke fixture for target_files grounding: one in-bounds path (src/worker/ingest.py, under the component's code_location) and one out-of-bounds path (src/legacy/ingest.py) that must surface a non-blocking placement-drift WARNING. Kept as a DRAFT so the advisory check is the focus, not the coverage gates.",
+  "granularity": "coarse",
+  "tasks": [
+    {
+      "tsk_id": "TSK-001",
+      "title": "Implement the ingest worker",
+      "kind": "implementation",
+      "component_ref": "ingest-worker",
+      "description": "Implement job ingestion + processing for the worker.",
+      "target_files": ["src/worker/ingest.py", "src/legacy/ingest.py"],
+      "outputs": ["ingest pipeline available to the scheduler"],
+      "acceptance": ["queued jobs are pulled and processed"],
+      "priority": "must",
+      "status": "draft"
+    }
+  ],
+  "task_warnings": []
+}

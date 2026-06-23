@@ -114,10 +114,29 @@ tasks:                                      # REQUIRED — list[Task], non-empty
     inputs:                                 # OPTIONAL but encouraged — the upstream
       - "ARCH__backend-api.yaml#auth-service"  # artifacts / contracts / files this
                                             #   task consumes (FR-013 "explicit inputs").
-    outputs:                                # REQUIRED — non-empty. The files /
-      - "src/auth/service.py"               #   modules / artifacts this task produces
-                                            #   (FR-013 "explicit outputs"). This is
-                                            #   what the codegen agent emits.
+    target_files:                           # OPTIONAL but strongly encouraged for
+      - "src/auth/service.py"               #   scaffold/implementation/test tasks — the
+      - "src/auth/tokens.py"                #   concrete repo-relative file paths this task
+                                            #   CREATES or MODIFIES (the codegen agent's
+                                            #   write targets). For a component-scoped task
+                                            #   (component_ref set) these MUST sit within
+                                            #   the owning component's `code_location` in
+                                            #   ARCH__<container>.yaml — the placement seam
+                                            #   that stops the codegen agent inventing
+                                            #   paths. The validator emits an advisory
+                                            #   WARNING (non-blocking) for a path outside
+                                            #   the component's code_location. See
+                                            #   references/task-discovery.md.
+    outputs:                                # REQUIRED — non-empty. The CONTRACT-LEVEL
+      - "auth-service.authenticate() exported"  # result this task makes available to
+      - "TST-003 green"                     #   dependents: an exported symbol/API, an
+                                            #   applied migration, a passing suite, or a
+                                            #   produced artifact (FR-013 "explicit
+                                            #   outputs"). Distinct from target_files (the
+                                            #   raw write targets): outputs is what
+                                            #   downstream tasks DEPEND ON. A file path is
+                                            #   still a valid output when the file itself
+                                            #   is the deliverable.
     acceptance:                             # REQUIRED — non-empty. Machine-checkable
       - "auth-service unit tests (TST-003) pass"  # done conditions (FR-013
       - "src/auth/service.py exposes authenticate()"  # "explicit acceptance").
@@ -172,6 +191,12 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     container's + components' implements_requirements that is NOT named by any
 #     task's `implements` emits a WARNING (it is usually covered transitively via
 #     a covered component, so this does not block complete).
-# 11. Coverage / integrity failures force metadata.status: draft (they do not
+# 11. target_files grounding (advisory, non-blocking) — for a component-scoped
+#     task (component_ref set), every target_files path SHOULD sit within one of
+#     the owning component's `code_location` directories in ARCH__<cid>.yaml. A
+#     path outside emits a WARNING (placement drift — the codegen agent would
+#     write outside the component's declared home). Directory-level containment;
+#     skipped when the component declares no code_location.
+# 12. Coverage / integrity failures force metadata.status: draft (they do not
 #     crash the validator) so partial task graphs remain saveable as drafts.
 # =============================================================================

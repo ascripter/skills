@@ -229,10 +229,28 @@ questions:
     importance: high
 
   - theme: system_tasks
+    id: target_files
+    schema_path: task.target_files
+    question: "Which concrete repo files will this task create or modify (the codegen write targets)?"
+    hint: >
+      System tasks aren't component-scoped (no code_location to ground against),
+      but listing the concrete files still removes the 'which path?' ambiguity for
+      scaffold/config/deploy-prep tasks (e.g. pnpm-workspace.yaml, .github/
+      workflows/ci.yml). Distinct from `outputs` (the contract-level result).
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: system_tasks
     id: outputs
     schema_path: task.outputs
-    question: "What does this task produce (files / modules / artifacts)?"
-    hint: "FR-013 'explicit outputs' — exactly what the codegen agent emits. Required, non-empty."
+    question: "What contract-level result does this task make available to dependents?"
+    hint: >
+      FR-013 'explicit outputs' — what downstream tasks DEPEND ON (a resolvable
+      workspace, a green CI, a shared contract). Distinct from target_files (the
+      raw write paths). Required, non-empty.
     suggested_answers: []
     free_text_allowed: true
     required: true
@@ -414,10 +432,32 @@ questions:
     importance: high
 
   - theme: container_tasks
+    id: target_files
+    schema_path: task.target_files
+    question: "Which concrete repo files will this task create or modify (the codegen write targets)?"
+    hint: >
+      DRAFT from the owning component's `code_location` in ARCH__<container>.yaml:
+      a component-scoped task's target_files MUST sit within the component's
+      code_location dir(s) — that grounding is what stops the codegen agent
+      inventing file paths (the validator warns on a path outside it). For
+      scaffold/config tasks with no component, list the files directly. Skip only
+      when the task produces no files. Distinct from `outputs` (the contract-level
+      result); these are the raw paths written.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: container_tasks
     id: outputs
     schema_path: task.outputs
-    question: "What does this task produce (files / modules)?"
-    hint: "FR-013 'explicit outputs' — what the codegen agent emits. Required, non-empty."
+    question: "What contract-level result does this task make available to dependents?"
+    hint: >
+      FR-013 'explicit outputs' — what downstream tasks DEPEND ON: an exported
+      symbol/API, an applied migration, a passing suite, a produced artifact.
+      Distinct from target_files (the raw write paths); a file path is still a
+      valid output when the file is itself the deliverable. Required, non-empty.
     suggested_answers: []
     free_text_allowed: true
     required: true

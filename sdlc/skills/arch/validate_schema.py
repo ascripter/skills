@@ -453,6 +453,8 @@ class Component(_Base):
     archetype: Optional[ComponentArchetype] = None
     purpose: Optional[str] = None
     responsibilities: Optional[List[str]] = None
+    code_location: Optional[List[str]] = None  # repo-relative dirs/files; the
+                                               # component→code-module seam.
     inputs: Optional[List[str]] = None
     outputs: Optional[List[str]] = None
     traces_api_resources: Optional[List[str]] = None
@@ -1273,6 +1275,45 @@ def check_component_traces(
     return errs
 
 
+# Plumbing component archetypes that don't need an explicit code_location —
+# their placement is conventional and uninteresting to downstream codegen.
+_PLUMBING_COMPONENT_ARCHETYPES = {
+    "config_loader",
+    "serializer",
+    "observability_bootstrap",
+    "error_handler",
+}
+
+
+def check_component_code_location(
+    container: ArchContainer,
+    file_label: str,
+) -> List[str]:
+    """Cross-check #20 (advisory, non-blocking) — a non-trivial component that
+    carries at least one upstream trace but no `code_location` gets a WARNING:
+    downstream `task`/codegen will have to invent its file placement.
+    """
+    warnings: List[str] = []
+    for i, comp in enumerate(container.components or []):
+        archetype = comp.archetype.value if comp.archetype else None
+        if archetype in _PLUMBING_COMPONENT_ARCHETYPES:
+            continue
+        has_trace = any([
+            comp.traces_api_resources,
+            comp.traces_api_operations,
+            comp.traces_ux_surfaces,
+            comp.traces_data_entities,
+            comp.implements_requirements,
+        ])
+        if has_trace and not comp.code_location:
+            warnings.append(
+                f"{file_label}: components[{i}]='{comp.component_id}' has no "
+                f"code_location — downstream task/codegen must infer its file "
+                f"placement (set code_location to its source dir(s))"
+            )
+    return warnings
+
+
 def check_edge_via_fields_arch(
     arch: Arch,
     api_resource_ids: Set[str],
@@ -1567,12 +1608,14 @@ def validate_all(arch_path: Path) -> int:
     component_trace_errs: List[str] = []
     container_via_errs: List[str] = []
     deployment_compat_errs: List[str] = []
+    code_location_warnings: List[str] = []
     warning_id_errs: List[str] = check_warning_ids(arch.arch_warnings, "arch_warnings")
     id_format_errs: List[str] = check_arch_id_formats(arch)
     for name, c in containers.items():
         missing_containers.extend(check_container_required(c, name, arch))
         edge_errs_containers.extend(check_container_edges(c, name, arch))
         consistency_errs.extend(check_container_self_consistency(c, arch, name))
+        code_location_warnings.extend(check_component_code_location(c, name))
         component_trace_errs.extend(
             check_component_traces(
                 c, arch, name,
@@ -1659,7 +1702,7 @@ def validate_all(arch_path: Path) -> int:
             store_ids,
         )
         _print_extra_problems(extra_problems)
-        _print_warnings(external_warnings, upstream_warnings)
+        _print_warnings(external_warnings, upstream_warnings, code_location_warnings)
         return 1
 
     if status == "complete":
@@ -1678,7 +1721,7 @@ def validate_all(arch_path: Path) -> int:
             f"{len(ux_ids)} data-bearing UX surface(s) all owned; "
             f"{store_note}; {feat_note}; edges resolve."
         )
-        _print_warnings(external_warnings, upstream_warnings)
+        _print_warnings(external_warnings, upstream_warnings, code_location_warnings)
         return 0
 
     # status == "draft"
@@ -1716,7 +1759,7 @@ def validate_all(arch_path: Path) -> int:
             "\nAll required fields filled, coverage complete, edges resolve. "
             "Set metadata.status: complete when done."
         )
-    _print_warnings(external_warnings, upstream_warnings)
+    _print_warnings(external_warnings, upstream_warnings, code_location_warnings)
     return 0
 
 
@@ -1812,7 +1855,11 @@ def _print_extra_problems(extra: List[Tuple[str, List[str]]]) -> None:
                 print(f"  - {it}")
 
 
-def _print_warnings(external_warnings: List[str], upstream_warnings: List[str]) -> None:
+def _print_warnings(
+    external_warnings: List[str],
+    upstream_warnings: List[str],
+    code_location_warnings: Optional[List[str]] = None,
+) -> None:
     if external_warnings:
         print()
         print(f"WARNINGS ({len(external_warnings)} external-container file(s)):")
@@ -1822,6 +1869,11 @@ def _print_warnings(external_warnings: List[str], upstream_warnings: List[str]) 
         print()
         print(f"WARNINGS ({len(upstream_warnings)} upstream-status issue(s)):")
         for w in upstream_warnings:
+            print(f"  - {w}")
+    if code_location_warnings:
+        print()
+        print(f"WARNINGS ({len(code_location_warnings)} component(s) without code_location):")
+        for w in code_location_warnings:
             print(f"  - {w}")
 
 

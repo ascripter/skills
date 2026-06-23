@@ -867,6 +867,29 @@ questions:
     importance: critical
 
   - theme: per_component_deepdive
+    id: code_location
+    schema_path: component.code_location
+    question: "Which repo directory(ies) / module(s) does this component's source live in?"
+    hint: >
+      The component→code-module seam — the single most load-bearing field for
+      autonomous downstream task breakdown and codegen. DRAFT it from the
+      component's archetype + the container's source layout / import layering
+      (tech_stack + framework conventions): a layered backend maps controllers
+      to a controllers/ dir, services to services/, repositories to
+      repositories/; a CLI maps to config/ core/ ui/; etc. DIRECTORY entries are
+      the firm contract; add an illustrative file path only when it's obvious. A
+      component may span layers — list each dir. Downstream `task` grounds each
+      task's `target_files` here, so vague placement here forces the codegen
+      agent to invent paths. Skip only for trivial plumbing (config_loader,
+      serializer). See references/component-discovery.md → "Deriving
+      code_location".
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: per_component_deepdive
     id: inputs
     schema_path: component.inputs
     question: "Inputs (where do calls or data arrive from)?"

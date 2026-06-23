@@ -183,6 +183,15 @@ security_concerns:                         # OPTIONAL — list[SecurityConcern]
 # `archetype` is an enum drawn from references/component-taxonomy.yaml.
 # `traces_*` fields ground each component in upstream artifacts; the
 # validator cross-checks them (cross-checks 11/12/13 below).
+#
+# `code_location` is the component → code-module seam: which directory(ies)
+# / module(s) this component's source lives in. It is the single most
+# load-bearing field for autonomous downstream task breakdown and codegen —
+# without it the `task` agent must INVENT each component's file placement,
+# and an invented path is the most common way a generated repo drifts from
+# its architecture. The downstream `task` skill grounds each task's
+# `target_files` in the owning component's `code_location` (validated). See
+# references/component-discovery.md → "Deriving code_location".
 # ---------------------------------------------------------------------------
 components:                                # REQUIRED — non-empty
   - component_id: <kebab-case>             # REQUIRED — unique within this container
@@ -194,6 +203,21 @@ components:                                # REQUIRED — non-empty
     purpose: <one sentence>                # REQUIRED
     responsibilities:                      # REQUIRED — non-empty
       - <one short sentence>
+    code_location:                         # OPTIONAL but strongly encouraged — the
+      - "src/auth/"                        #   repo-relative directory(ies) and/or
+      - "src/auth/service.py"              #   illustrative file(s) where this
+                                           #   component's source lives. DIRECTORY
+                                           #   entries are the firm contract;
+                                           #   file-level entries are illustrative
+                                           #   for the executor to confirm. Keyed to
+                                           #   the project's source layout / import
+                                           #   layering (e.g. a layered backend's
+                                           #   controllers/ services/ repositories/,
+                                           #   or a CLI's config/ core/ ui/). A
+                                           #   component may span layers (list each).
+                                           #   The validator emits a non-blocking
+                                           #   WARNING for a non-trivial component
+                                           #   with traces but no code_location.
     inputs:                                # OPTIONAL
       - <string>
     outputs:                               # OPTIONAL
@@ -337,4 +361,11 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #         implements_requirements.
 #       * traces_prd_workflows     → WKF-NNN format + exists in PRD.yaml.
 # 19. WRN-NNN format — every arch_warnings entry matches `^WRN-\d{3,}:\s+.+`.
+# 20. code_location coverage (advisory, non-blocking) — a non-trivial component
+#     (archetype not in {config_loader, serializer, observability_bootstrap,
+#     error_handler} and carrying at least one trace) with an empty/absent
+#     code_location emits a WARNING: downstream `task`/codegen will have to
+#     infer its file placement. Does NOT block status: complete (placement can
+#     legitimately be deferred), but filling it is what makes "mostly
+#     autonomous" downstream codegen actually hold.
 # =============================================================================
