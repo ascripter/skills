@@ -1,0 +1,42 @@
+{
+  "eval_id": 2,
+  "eval_name": "container-coverage-gate",
+  "prompt": "Run sdlc-test in CONTAINER mode for the `backend-api` container (equivalent to `/sdlc:test backend-api`). The project has a complete validator-clean upstream chain (PRD, DATA-MODEL, ARCH + ARCH__backend-api) and an existing complete docs/TEST-STRATEGY.yaml whose global policy this container inherits. Decompose backend-api's components into a unit/integration suite plus the risk-driven negative cases, then write docs/TEST-STRATEGY__backend-api.yaml and run validate_schema.py until it validates. Coverage gate: FR-001..FR-004 each covered or deferred; backend-api does NOT implement FR-005; components tasks-controller and digest-settings-controller each targeted by >=1 test via component_ref (or deferred); every unit-tier test sets component_ref to a real component; failure_modes id postgres-unavailable and security_concerns ids jwt-forgery and pii-in-logs each exercised or deferred; every tst_id is TST-NNN, unique.",
+  "assertions": [
+    {
+      "id": "CON-1",
+      "text": "validate_schema.py exits 0, metadata.status == complete, container_id == backend-api",
+      "priority": "must"
+    },
+    {
+      "id": "CON-2",
+      "text": "FR-001..FR-004 each covered or deferred; no test covers FR-005",
+      "priority": "must"
+    },
+    {
+      "id": "CON-3",
+      "text": "postgres-unavailable, jwt-forgery, pii-in-logs each exercised or deferred; every unit-tier test has component_ref",
+      "priority": "must"
+    },
+    {
+      "id": "CON-DISC-1",
+      "text": "At least one negative/invalid-input test on tasks-controller (rejects malformed/oversized/missing-field create payloads) OR a reasoned WRN-NNN deferral of that gap",
+      "priority": "must"
+    },
+    {
+      "id": "CON-DISC-2",
+      "text": "digest-settings-controller is targeted by >=2 distinct tests (its two acceptance criteria tested separately)",
+      "priority": "should"
+    },
+    {
+      "id": "CON-DISC-3",
+      "text": "tasks-controller is targeted by >=2 distinct tests",
+      "priority": "should"
+    },
+    {
+      "id": "CON-COUNT",
+      "text": "METRIC: total number of TST-NNN tests in the container file",
+      "priority": "should"
+    }
+  ]
+}

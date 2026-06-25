@@ -1,0 +1,195 @@
+# Input fixture for the CONTAINER-MODE eval (/sdlc:arch backend-api).
+# A complete, validator-clean system architecture. The eval drills into the
+# `backend-api` container, which owns the tasks/comments/digest-settings API
+# resources and implements FR-001..FR-004 (NOT FR-005 — that belongs to
+# digest-worker). The produced ARCH__backend-api.yaml's components must each
+# carry an implements_requirements that is a SUBSET of {FR-001..FR-004}.
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "archcm01-arcm-arcm-arcm-archcontainr01"
+  status: complete
+  changelog:
+    - "1.0 (2026-05-26): Initial spec produced by sdlc-arch (system mode)."
+
+architecture_pattern:
+  pattern: modular_monolith
+  pattern_confidence: inferred
+  rationale: >
+    A two-engineer team building a featherweight tracker with medium
+    scalability is best served by a modular monolith: one backend codebase
+    with clear module boundaries (tasks, comments, digest) plus a small
+    scheduled job that shares the same domain code and database.
+  tradeoff_notes: >
+    Single deployable backend keeps ops simple; the cost is that the digest
+    job and the API scale together unless later split out.
+  ai_builder_notes: >
+    Few moving parts; prefer typed module interfaces between tasks, comments
+    and digest. The scheduled digest job reuses the same domain/repository
+    layer rather than duplicating data access.
+
+identity_and_auth:
+  identity_provider: external_oidc
+  identity_provider_confidence: inferred
+  token_strategy: jwt
+  token_strategy_confidence: confirmed
+  identity_container: identity-provider
+  rationale: >
+    PRD.conventions.nfr_propagation binds security_compliance.auth_model=jwt
+    to token_strategy: jwt and requires proposing an identity-provider
+    container. The backend validates bearer JWTs (API.auth.schemes:
+    bearer_jwt) issued by an external OIDC provider.
+
+containers:
+  - container_id: web-frontend
+    archetype: web-frontend
+    purpose: >
+      Next.js single-page web app rendering the task list, task detail,
+      comments panel and digest-settings screens; calls the backend API.
+    owns_api_resources: []
+    owns_ux_surfaces:
+      - task-list
+      - task-detail
+      - comments-panel
+      - digest-settings
+    persistence: []
+    implements_requirements:
+      - FR-001
+      - FR-002
+      - FR-003
+      - FR-004
+    traces_prd_workflows:
+      - WKF-001
+      - WKF-002
+      - WKF-003
+    deployment_unit: static_asset
+    ownership:
+      team: "Full-stack engineers"
+      change_cadence: "weekly"
+    external: false
+    status: confirmed
+
+  - container_id: backend-api
+    archetype: backend-api
+    file_path: docs/ARCH__backend-api.yaml
+    purpose: >
+      Fastify REST API serving the tasks, comments and digest-settings
+      resources; validates JWTs and persists to Postgres.
+    owns_api_resources:
+      - tasks
+      - comments
+      - digest-settings
+    owns_ux_surfaces: []
+    persistence:
+      - postgres
+    implements_requirements:
+      - FR-001
+      - FR-002
+      - FR-003
+      - FR-004
+    traces_prd_workflows:
+      - WKF-001
+      - WKF-002
+      - WKF-003
+    deployment_unit: long_running_service
+    ownership:
+      team: "Full-stack engineers"
+      change_cadence: "weekly"
+    external: false
+    status: confirmed
+
+  - container_id: digest-worker
+    archetype: scheduler
+    purpose: >
+      Scheduled job that runs every Monday 08:00 (per team timezone), reads
+      open tasks per owner, sends the weekly digest email and records each
+      run as a DigestRun. This is the operational home of FR-005, which has
+      no API resource and no UX surface.
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence:
+      - postgres
+    implements_requirements:
+      - FR-005
+    traces_prd_workflows:
+      - WKF-003
+    deployment_unit: scheduled_job
+    ownership:
+      team: "Full-stack engineers"
+      change_cadence: "monthly"
+    external: false
+    status: confirmed
+
+  - container_id: primary-postgres
+    archetype: primary-database
+    purpose: >
+      Primary relational store holding Task, Comment, DigestRun and AuditLog
+      entities. Maps to DATA-MODEL.persistence.primary_store: postgres.
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence:
+      - postgres
+    deployment_unit: external_managed
+    external: false
+    status: confirmed
+
+  - container_id: identity-provider
+    archetype: identity-provider
+    purpose: >
+      External OIDC provider that issues and signs the bearer JWTs the
+      backend validates. Proposed per PRD.conventions.nfr_propagation
+      (auth_model=jwt).
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: external_managed
+    external: true
+    status: confirmed
+
+edges:
+  - from: web-frontend
+    to: backend-api
+    type: calls
+    via_resource_id: tasks
+    note: "Task-list / task-detail screens consume the tasks resource."
+  - from: web-frontend
+    to: backend-api
+    type: calls
+    via_resource_id: comments
+    note: "Comments panel consumes the comments resource."
+  - from: web-frontend
+    to: backend-api
+    type: calls
+    via_resource_id: digest-settings
+    note: "Digest-settings screen consumes the digest-settings resource."
+  - from: backend-api
+    to: primary-postgres
+    type: reads
+    via_entity: Task
+    note: "Backend reads task/comment/digest data from Postgres."
+  - from: backend-api
+    to: primary-postgres
+    type: writes
+    via_entity: Task
+    note: "Backend persists task/comment/digest-settings changes."
+  - from: backend-api
+    to: identity-provider
+    type: calls
+    note: "Validates bearer JWTs against the external OIDC provider."
+  - from: digest-worker
+    to: primary-postgres
+    type: reads
+    via_entity: DigestRun
+    note: "Reads open tasks per owner to build the weekly digest."
+  - from: digest-worker
+    to: primary-postgres
+    type: writes
+    via_entity: DigestRun
+    note: "Records each weekly digest execution as a DigestRun."
+
+non_container_features: []
+
+arch_warnings:
+  - "WRN-001: digest-worker is an inferred operational container for FR-005 (no API resource, no UX surface); confirm its scheduling and email-provider binding during container deep-dive."
+  - "WRN-002: identity-provider is modelled as external (external_oidc); the concrete provider (e.g. Cognito) is an open PRD decision."

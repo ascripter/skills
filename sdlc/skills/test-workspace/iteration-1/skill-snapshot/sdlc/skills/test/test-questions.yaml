@@ -1,0 +1,809 @@
+# =============================================================================
+# test-questions.yaml — Question inventory for the sdlc-test skill
+# =============================================================================
+# Lists every question the agent may ask, grouped by theme and tagged with
+# which mode the theme belongs to. The skill loads only the active mode's
+# themes and asks unanswered questions in 2–4-question AskUserQuestion batches.
+#
+# Field reference (same convention as sdlc-arch / sdlc-api / sdlc-data):
+#   theme              — grouping label; matches a top-level key in
+#                        TEST-STRATEGY.yaml or TEST-STRATEGY__<container>.yaml
+#   id                 — unique slug, kebab-case
+#   schema_path        — dotted path where the answer is written in the output
+#                        yaml (e.g. "test_approach.pyramid_targets")
+#   question           — the prompt shown to the user
+#   hint               — why this matters downstream (kept short)
+#   suggested_answers  — 2–5 plausible options shown as a numbered list
+#   free_text_allowed  — if true, a final "Other / type your own" option
+#                        appears in AskUserQuestion
+#   required           — true ⇒ must be answered (or explicitly nulled with a
+#                        warning) before the theme can be marked complete.
+#   required_if        — optional expression; promotes to required when true.
+#   capture_rationale  — if true, follow up with "In one sentence — why?".
+#                        Stored at <schema_path>_rationale.
+#   confidence_field   — if true, a sibling <schema_path>_confidence is written.
+#                        Defaults to true; set false to opt out.
+#   explainer          — OPTIONAL block. Its presence marks this as a
+#                        "conceptually loaded" decision: a jargon term the user
+#                        may not know AND a choice that silently hurts the
+#                        project if defaulted wrong (test mix, mocking, coverage
+#                        floor, fixtures, per-test tier). The agent MUST present
+#                        such questions via the explain-the-why contract in
+#                        references/explaining-choices.md — a plain-language
+#                        frame, a recommendation tied to THIS project, a
+#                        plain-language gloss on every option, and a
+#                        "not sure — explain" escape hatch — instead of a bare
+#                        label list or a terse draft→approve. This is the fix
+#                        for "it recommended percentages but didn't say why" and
+#                        is written for developers who are NOT test engineers.
+#                        Sub-keys:
+#                          what           — one plain sentence: what the choice
+#                                           controls.
+#                          why            — one plain sentence: what goes wrong
+#                                           if it's chosen badly.
+#                          recommend_from — the upstream signal(s) that should
+#                                           tailor the recommendation (e.g.
+#                                           ARCH.yaml.architecture_pattern,
+#                                           container archetypes, PRD NFRs,
+#                                           project type). The agent reads these
+#                                           and names the driving fact in its
+#                                           recommendation.
+#                          jargon         — map of term → one-line plain gloss
+#                                           the agent inlines on first use;
+#                                           never assume the term is known.
+#   importance         — `med | high | critical`. Defaults to `med`.
+#                          * med      — single AskUserQuestion batch entry,
+#                                       inferred suggestion at position 1.
+#                          * high     — own mini-section: agent drafts a full
+#                                       answer, user approves or iterates
+#                                       (max 3 rounds).
+#                          * critical — full per-item state machine (one test
+#                                       at a time: propose → challenge →
+#                                       detail → approve → next).
+#
+# Theme-level key:
+#   synthesis: true    — the theme produces a scope-defining list synthesized
+#                        from upstream artifacts. After the per-item loop
+#                        closes, the agent runs a dynamic scope-completeness
+#                        sweep that reflects on the draft list + ALL upstream
+#                        ID families + project-type heuristics, surfaces
+#                        concrete missed candidates via one multi-select
+#                        AskUserQuestion (cap 2 passes, anti-padding, defer
+#                        leftovers to a WRN-NNN). Marked on `system_suite`
+#                        (system) and `container_suite` (container). Canonical
+#                        spec: sdlc/skills/prd/references/importance-flows.md
+#                        and sdlc/skills/test/references/coverage-and-defer.md.
+#
+# Theme order below is the canonical interview order for each mode.
+# =============================================================================
+
+themes:
+  # -------- system mode --------
+  - id: test_approach
+    mode: system
+    title: "Test Approach"
+    required: true
+    description: "Overall testing philosophy and the pyramid proportions per tier."
+
+  - id: coverage_threshold
+    mode: system
+    title: "Coverage Threshold"
+    required: true
+    description: "The global line/branch coverage floor the verification stage must meet."
+
+  - id: global_policy
+    mode: system
+    title: "Global Mock / Fixture / CI Policy"
+    required: true
+    description: "Default mocking, fixture, and test-data policy every container inherits, plus CI gating."
+
+  - id: system_suite
+    mode: system
+    title: "System Test Suite (e2e + contract)"
+    required: true
+    synthesis: true   # scope-defining list synthesized from PRD WKF workflows,
+                      # ARCH cross-container edges, and NFRs. Runs the
+                      # scope-completeness sweep after the per-item loop — see
+                      # references/coverage-and-defer.md.
+    description: "Cross-container end-to-end + contract tests (and system-level load/security/a11y)."
+
+  # -------- container mode --------
+  - id: coverage_target
+    mode: container
+    title: "Container Coverage Target"
+    required: true
+    description: "This container's coverage goal; inherits the system threshold unless overridden."
+
+  - id: container_policy
+    mode: container
+    title: "Container Mock / Fixture Policy"
+    required: false
+    description: "Per-container mock/fixture/test-environment refinements; null ⇒ inherit system policy."
+
+  - id: container_suite
+    mode: container
+    title: "Container Test Suite (unit + integration)"
+    required: true
+    synthesis: true   # scope-defining list synthesized from the container's
+                      # components, internal edges, implements_requirements,
+                      # acceptance_criteria, failure_modes, and
+                      # security_concerns. Runs the scope-completeness sweep
+                      # after the per-item loop — see references/coverage-and-defer.md.
+    description: "Unit + integration (+ property/negative) tests scoped to this container."
+
+questions:
+
+  # =========================================================================
+  # SYSTEM MODE — test_approach
+  # =========================================================================
+
+  - theme: test_approach
+    id: pyramid_targets
+    schema_path: test_approach.pyramid_targets
+    question: >
+      What proportions should the test pyramid target across tiers (e.g.
+      ~70% unit / ~20% integration / ~10% e2e)?
+    hint: >
+      Drives how the downstream codegen agent budgets test effort per unit.
+      Pre-fill from the architecture pattern (load references/tiering-guidance.md):
+      microservices/event-driven push weight toward contract + integration; a
+      monolith leans on unit. Stored as a tier→proportion mapping.
+    suggested_answers:
+      - "unit ~70% / integration ~20% / e2e ~10% (classic pyramid — most risk is logic inside one unit)"
+      - "unit ~50% / integration ~25% / contract ~15% / e2e ~10% (microservices — main risk is services drifting apart)"
+      - "unit ~60% / integration ~25% / e2e ~15% (testing trophy — IO/glue-heavy code, bugs live at the seams)"
+      - "unit ~80% / integration ~15% / e2e ~5% (library / pure-logic — branch logic is the whole product)"
+    free_text_allowed: true
+    required: true
+    capture_rationale: true
+    importance: high
+    explainer:
+      what: >
+        The MIX of test types — many fast tests that check one piece of code
+        (unit), fewer that check pieces working together (integration), a few
+        that drive the whole app like a user (e2e), plus a contract band that
+        pins the interface between services.
+      why: >
+        Pick the wrong mix and you get a slow, flaky suite that tests the wrong
+        layer — e.g. an end-to-end test per business rule (slow, localizes
+        failures poorly) when a unit test would prove the same thing in
+        milliseconds.
+      recommend_from:
+        - "ARCH.yaml.architecture_pattern (monolith/microservices/event_driven/serverless/pipeline/hexagonal)"
+        - "the number and kind of containers + cross-container edges in ARCH.yaml"
+        - "project type (library vs app vs pipeline)"
+      jargon:
+        "test pyramid": "the recommended shape: lots of small fast tests at the base, few slow ones at the top"
+        "contract test": "a cheap test that pins the response/message shape between two services so they can't drift apart"
+        "testing trophy": "a flatter shape with more integration tests than the classic pyramid — fits glue/IO-heavy code"
+        "e2e": "end-to-end — drives the whole system like a real user; slow and flaky but proves it actually works"
+
+  - theme: test_approach
+    id: ai_builder_notes
+    schema_path: test_approach.ai_builder_notes
+    question: >
+      Any guidance for the AI agent that will WRITE these tests (determinism,
+      flake avoidance, what never to mock, golden-file policy)?
+    hint: "Tests are the executable spec the codegen agent is graded against — make the rules explicit here."
+    suggested_answers:
+      - "Tests must be deterministic — no real clock, network, or randomness without a seed"
+      - "Never mock the unit under test; only mock its collaborators across a boundary"
+      - "Prefer real in-process dependencies (sqlite, in-memory bus) over mocks where cheap"
+      - "Each test asserts one behaviour; name it for the behaviour, not the method"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  # =========================================================================
+  # SYSTEM MODE — coverage_threshold
+  # =========================================================================
+
+  - theme: coverage_threshold
+    id: line_pct
+    schema_path: coverage_threshold.line_pct
+    question: "What minimum line-coverage % must the build meet to pass verification?"
+    hint: >
+      The floor the downstream verification stage enforces. Treat coverage as a
+      signal, not a target — see references/tiering-guidance.md. A common
+      default is 80; safety-critical paths warrant more, throwaway code less.
+    suggested_answers:
+      - "80 (common default — a floor that stops backsliding, not a target to chase)"
+      - "70 (looser — fine for an early-stage or exploratory codebase)"
+      - "90 (stricter — money/auth/safety paths where a missed branch is costly)"
+      - "no global floor (per-container only — set the bar where the risk is)"
+    free_text_allowed: true
+    required: true
+    capture_rationale: true
+    importance: high
+    explainer:
+      what: >
+        The minimum % of code that must be exercised by tests for the build to
+        pass — a floor the verification stage enforces.
+      why: >
+        Coverage tells you what code RAN, not that behaviour is correct: 100%
+        with weak assertions proves nothing. Treat the number as a backstop that
+        stops backsliding, not a target — or people write empty tests to chase
+        it. Let requirements and risks drive what to test; coverage is the net.
+      recommend_from:
+        - "PRD NFRs and the presence of money/auth/safety-critical paths"
+        - "project maturity (early-stage vs production) implied by PRD/ARCH"
+      jargon:
+        "line coverage": "the share of code lines that ran during the test suite"
+        "branch coverage": "the share of yes/no decision paths exercised — catches untested conditionals line coverage misses"
+
+  - theme: coverage_threshold
+    id: branch_pct
+    schema_path: coverage_threshold.branch_pct
+    question: "Minimum branch-coverage %, if you gate on branches too?"
+    hint: "Optional. Branch coverage catches untested conditionals that line coverage misses. Null ⇒ not gated."
+    suggested_answers:
+      - "70"
+      - "60"
+      - "80"
+      - "not gated"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: coverage_threshold
+    id: per_container_overrides
+    schema_path: coverage_threshold.per_container_overrides
+    question: "Any containers that should have a higher or lower coverage floor than the global one?"
+    hint: >
+      Optional mapping container_id → {line_pct, branch_pct}. Money/auth paths
+      warrant a higher bar; thin adapters or generated code a lower one.
+    suggested_answers:
+      - "none — global floor applies everywhere"
+      - "raise the floor for the payment/auth container"
+      - "lower the floor for a thin gateway/proxy container"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  # =========================================================================
+  # SYSTEM MODE — global_policy
+  # =========================================================================
+
+  - theme: global_policy
+    id: mock_policy
+    schema_path: mock_policy
+    question: "What is the default policy for mocking dependencies?"
+    hint: >
+      The single most error-prone test decision. Drives whether the codegen
+      agent reaches for a mock or a real instance at each boundary. See
+      references/tiering-guidance.md (mock vs. real).
+    suggested_answers:
+      - "Mock only at process/network boundaries (Stripe, email); use real in-process deps (in-memory DB, real objects) otherwise"
+      - "Mock external services; use a real database via testcontainers (higher fidelity, a bit slower)"
+      - "No mocks — full integration against ephemeral real dependencies (slowest, most realistic)"
+      - "Mock everything outside the unit under test (London-school: fast + isolated, but can pass while prod breaks)"
+    free_text_allowed: true
+    required: true
+    capture_rationale: true
+    importance: high
+    explainer:
+      what: >
+        How aggressively tests replace a real dependency (a database, another
+        service, an email/payment API) with a fast stand-in ("mock") instead of
+        using the real thing.
+      why: >
+        Over-mock and tests pass while production breaks — you're checking your
+        ASSUMPTIONS about the dependency, not the dependency. Under-mock and the
+        suite is slow and flaky. The rule that ages well: mock only what's slow,
+        external, or out of your control; use the real thing in-process when
+        it's cheap.
+      recommend_from:
+        - "the external dependencies in ARCH.yaml (third-party APIs, payment, email → mock)"
+        - "the datastores/buses in ARCH.yaml (DB/queue → prefer a real throwaway instance over a mock)"
+        - "DATA-MODEL.yaml entities the containers persist"
+      jargon:
+        "mock / stub": "a fake stand-in for a real dependency, returning canned answers so the test is fast and predictable"
+        "testcontainers": "spins up a real database/queue in a throwaway container for the test — real behaviour, auto-cleaned"
+        "London-school": "mock every collaborator of the unit under test; maximally isolated and fast, but breaks on refactors and can hide broken wiring"
+        "in-process dependency": "a real dependency that runs inside the test (in-memory SQLite, a real pure function) — cheap and realistic"
+
+  - theme: global_policy
+    id: fixture_strategy
+    schema_path: fixture_strategy
+    question: "How are test fixtures and test data produced?"
+    hint: "Drives reuse and determinism. Factories beat hand-rolled fixtures for evolving schemas."
+    suggested_answers:
+      - "Data factories/builders with sensible defaults, overridable per test (resilient to schema change — recommended for evolving data)"
+      - "Static fixture files committed alongside tests (simple, but rot as the schema changes)"
+      - "Database seed scripts shared across the integration suite (watch for order-dependent flakes)"
+      - "Inline construction in each test (clear for a small surface; verbose at scale)"
+    free_text_allowed: true
+    required: true
+    capture_rationale: true
+    importance: high
+    explainer:
+      what: >
+        How each test gets the data it needs to run — generated on the fly by a
+        factory, loaded from a committed file, seeded into a DB, or built inline.
+      why: >
+        Shared, static, or mutable test data is the #1 source of brittle,
+        order-dependent tests that break whenever the schema moves. A factory
+        with sensible defaults that each test overrides keeps tests readable and
+        resilient; static fixtures rot.
+      recommend_from:
+        - "DATA-MODEL.yaml — how many entities and how likely the schema is to evolve"
+        - "whether the suite is mostly unit (inline is fine) or integration-heavy (factories pay off)"
+      jargon:
+        "fixture": "the prepared data/state a test runs against"
+        "factory / builder": "a small helper that constructs a valid object with defaults you override per test — instead of hand-writing the data each time"
+        "golden / snapshot file": "a recorded expected output a test compares against; powerful for serializers, but a rubber-stamp if regenerated blindly"
+
+  - theme: global_policy
+    id: test_data_strategy
+    schema_path: test_data_strategy
+    question: "How is sensitive or large-volume test data handled?"
+    hint: "Optional. Covers PII-safe synthetic data, anonymized snapshots, golden files. Skip if not relevant."
+    suggested_answers:
+      - "Synthetic data only — never real PII in tests"
+      - "Anonymized production snapshot for a few integration cases"
+      - "Generated via property/factory libraries"
+      - "Not applicable"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: global_policy
+    id: ci_integration
+    schema_path: ci_integration
+    question: "How do the tiers run in CI, and which tiers gate a merge?"
+    hint: >
+      Optional. Captures the runner, parallelism, and which tiers block merge
+      vs. run nightly. Detailed pipeline config belongs in /sdlc:deploy.
+    suggested_answers:
+      - "unit+integration gate every PR; e2e runs on main; load nightly"
+      - "all tiers gate every PR"
+      - "unit gates PRs; everything else nightly"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: global_policy
+    id: environments
+    schema_path: environments
+    question: "What test environments exist beyond local (e.g. ephemeral preview, staging)?"
+    hint: "Optional list of {name, purpose}. Used by e2e tests to know where they run."
+    suggested_answers:
+      - "local + ephemeral CI containers only"
+      - "local + staging"
+      - "local + preview-per-PR + staging"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  # =========================================================================
+  # SYSTEM MODE — system_suite (critical per item, synthesis)
+  # =========================================================================
+  #
+  # The agent runs this theme as a per-test state machine:
+  #
+  #   for each candidate system test (from Phase 3 + user-added):
+  #     1. propose:   show tier, draft name, what it covers (WKF/FR/NFR)
+  #     2. challenge: confirm scope (involves_containers) + tier choice
+  #     3. detail:    fill directives, setup, acceptance, priority
+  #     4. approve:   confirm the test; set status: confirmed
+  #     5. next
+  #   then: run the scope-completeness sweep (references/coverage-and-defer.md)
+  #
+  # The questions below describe the FIELDS each per-test drill-down produces.
+
+  - theme: system_suite
+    id: tier
+    schema_path: test.tier      # rewritten per item to tests[<id>].tier
+    question: "Which tier is this system-level test?"
+    hint: "System file holds cross-container tiers. Load references/tiering-guidance.md for tier selection."
+    suggested_answers:
+      - e2e
+      - contract
+      - load
+      - security
+      - accessibility
+    free_text_allowed: false
+    required: true
+    importance: critical
+    explainer:
+      what: >
+        The KIND of test — which decides how slow/realistic it is and what the
+        codegen agent builds. The challenge step is "push down": prove each
+        thing at the cheapest tier that still gives confidence.
+      why: >
+        An end-to-end test per business rule is an anti-pattern: slow, and when
+        it fails it doesn't tell you WHERE. A unit test on the component that
+        owns the rule proves the same thing in milliseconds and points at the
+        line. Keep e2e for the happy-path journey wiring; use contract (not e2e)
+        to catch interface drift.
+      recommend_from:
+        - "what the candidate test actually verifies — a workflow (e2e), an interface (contract), or a rule (push to unit/integration in a container file)"
+        - "ARCH.yaml.edges — a cross-container `calls` edge is a contract test"
+      jargon:
+        "contract test": "pins the response/event shape between a provider and consumer so they can't drift apart — cheaper and clearer than an e2e"
+        "load test": "checks a latency/throughput NFR holds under volume"
+        "push down": "move a test to a lower (cheaper, faster, more precise) tier that still proves the same thing"
+
+  - theme: system_suite
+    id: name
+    schema_path: test.name
+    question: "One-line name for this test (the behaviour it proves)?"
+    hint: "Name for the behaviour, not the mechanism — the codegen agent uses it as the test title."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: system_suite
+    id: involves_containers
+    schema_path: test.involves_containers
+    question: "Which containers does this test exercise?"
+    hint: >
+      Pre-fill from the PRD workflow's containers / the edge's endpoints.
+      Validated against ARCH.yaml.containers[].container_id. A system test must
+      involve at least one container.
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: system_suite
+    id: covers
+    schema_path: test.covers
+    question: "Which upstream items does this test verify (WKF / FR / NFR / ACR)?"
+    hint: >
+      Reference upstream ids by stable prefix only. e2e tests typically cover a
+      WKF-NNN workflow; contract tests cover the FR/NFR behind the interface;
+      load/security tests cover an NFR-NNN. EVERY cross-container WKF-NNN must
+      be covered by some system test OR deferred (the workflow-coverage gate).
+      Validated for format + existence in PRD.yaml.
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: system_suite
+    id: directives
+    schema_path: test.directives
+    question: "Concrete steps for the codegen agent: arrange / act / assert, what to mock, which edge cases?"
+    hint: >
+      This is the executable design the Stage-14 codegen agent follows. Be
+      specific: the scenario, the inputs, the boundary the assertion checks,
+      and what (if anything) is stubbed. Vague directives produce vague tests.
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: system_suite
+    id: priority
+    schema_path: test.priority
+    question: "Priority — must, should, or could?"
+    hint: "Lets `task` and the codegen heal-loop order test work. `must` ⇒ part of the MVP exit gate."
+    suggested_answers:
+      - must
+      - should
+      - could
+    free_text_allowed: false
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: system_suite
+    id: setup
+    schema_path: test.setup
+    question: "Any non-obvious setup/teardown this test needs (seed data, running services, env)?"
+    hint: "Optional. Skip when the global fixture_strategy already covers it."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: system_suite
+    id: acceptance
+    schema_path: test.acceptance
+    question: "What observable outcome makes this test pass? (one machine-checkable sentence)"
+    hint: "The pass condition the verification stage keys on — phrase it as a concrete, observable assertion."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  # =========================================================================
+  # CONTAINER MODE — coverage_target
+  # =========================================================================
+
+  - theme: coverage_target
+    id: line_pct
+    schema_path: coverage_target.line_pct
+    question: "Line-coverage target for this container (blank ⇒ inherit the system floor)?"
+    hint: >
+      Pre-fill from TEST-STRATEGY.yaml.coverage_threshold (and any
+      per_container_overrides). Raise it for risk-bearing logic; lower it for
+      thin plumbing — but justify in the rationale.
+    suggested_answers:
+      - "inherit the system floor (the safe default — only override with a reason)"
+      - "90 (raise it — this container carries risk-bearing logic: money, auth, core rules)"
+      - "85 (a modest raise)"
+      - "70 (lower it — thin plumbing, an adapter, or generated code)"
+    free_text_allowed: true
+    required: true
+    capture_rationale: true
+    importance: high
+    explainer:
+      what: >
+        This container's coverage floor. Inherits the system threshold unless
+        you raise it (risk-bearing logic) or lower it (thin plumbing).
+      why: >
+        Same logic as the global floor — a backstop, not a target. The point of
+        a per-container override is to put the bar where the RISK is, not to
+        hit one number everywhere. Justify any deviation in the rationale.
+      recommend_from:
+        - "what this container does per ARCH__<container>.yaml — money/auth/core logic vs. adapter/gateway/generated code"
+        - "TEST-STRATEGY.yaml.coverage_threshold and any per_container_overrides already set for it"
+      jargon:
+        "inherit": "use the system-wide floor from TEST-STRATEGY.yaml unless you set a number here"
+
+  - theme: coverage_target
+    id: branch_pct
+    schema_path: coverage_target.branch_pct
+    question: "Branch-coverage target for this container, if any?"
+    hint: "Optional. Inherits the system branch floor when blank."
+    suggested_answers:
+      - "inherit"
+      - "80"
+      - "70"
+      - "not gated"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  # =========================================================================
+  # CONTAINER MODE — container_policy
+  # =========================================================================
+
+  - theme: container_policy
+    id: mock_policy
+    schema_path: mock_policy
+    question: "Does this container need a mock policy different from the global default?"
+    hint: "Null ⇒ inherit TEST-STRATEGY.yaml.mock_policy. Override only when the container's deps demand it."
+    suggested_answers:
+      - "inherit global policy (the safe default)"
+      - "use a real database via testcontainers here (this container leans on DB-specific behaviour)"
+      - "mock the upstream service this container calls (it's external / slow / out of your control)"
+      - "no mocks — this container is pure logic (nothing slow or external to fake)"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+    explainer:
+      what: >
+        Whether this container overrides the global mocking default. Same idea
+        as the system mock policy (mock only what's slow/external/uncontrolled;
+        use real cheap deps) — applied to THIS container's dependencies.
+      why: >
+        Override only when the container's deps genuinely differ from the global
+        assumption — e.g. it depends on Postgres-specific behaviour a mock or
+        SQLite would miss, or it's pure logic with nothing worth faking.
+      recommend_from:
+        - "this container's outgoing edges in ARCH.yaml (what it actually calls)"
+        - "TEST-STRATEGY.yaml.mock_policy (the default it inherits)"
+      jargon:
+        "inherit": "reuse the global mock policy from TEST-STRATEGY.yaml unless this container needs something different"
+
+  - theme: container_policy
+    id: fixture_strategy
+    schema_path: fixture_strategy
+    question: "Any container-specific fixture/test-data strategy?"
+    hint: "Null ⇒ inherit global. Override for container-specific seed data or builders."
+    suggested_answers:
+      - "inherit global strategy"
+      - "container-specific data factory"
+      - "committed fixture files for this container's schemas"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: container_policy
+    id: test_environment
+    schema_path: test_environment
+    question: "What runtime do this container's integration tests need (in-memory, testcontainers, emulator)?"
+    hint: "Drives what the codegen agent stands up before integration tests. Skip for pure-unit containers."
+    suggested_answers:
+      - "in-memory only (sqlite, in-process bus)"
+      - "testcontainers (real DB/queue in a container)"
+      - "cloud emulator (e.g. localstack, firebase emulator)"
+      - "none — unit tests only"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  # =========================================================================
+  # CONTAINER MODE — container_suite (critical per item, synthesis)
+  # =========================================================================
+  #
+  # Per-test state machine, same shape as system_suite. The questions below
+  # describe each per-test drill-down's FIELDS. After the per-item loop, run
+  # the scope-completeness sweep AND verify the coverage gate (every
+  # requirement / acceptance criterion / failure mode / security concern is
+  # covered or deferred) — see references/coverage-and-defer.md.
+
+  - theme: container_suite
+    id: tier
+    schema_path: test.tier
+    question: "Which tier is this test?"
+    hint: "Container file holds container-scoped tiers (unit/integration/property + container-specific load/security/a11y)."
+    suggested_answers:
+      - unit
+      - integration
+      - property
+      - contract
+      - security
+      - load
+      - accessibility
+    free_text_allowed: false
+    required: true
+    importance: critical
+    explainer:
+      what: >
+        The KIND of test for this component. Default to `unit` (one component in
+        isolation) and only climb to `integration` when the behaviour genuinely
+        needs two+ components wired together.
+      why: >
+        Higher tiers are slower and localize failures worse. Verifying a single
+        component's rule with an integration test (or worse, bubbling it up to a
+        system e2e) wastes time and clarity. Push down to a fast unit test
+        whenever it gives the same confidence.
+      recommend_from:
+        - "whether the candidate targets one component (unit) or spans several internal_edges (integration)"
+        - "ARCH__<container>.components[] and internal_edges"
+      jargon:
+        "unit test": "exercises one component/function in isolation, collaborators mocked — fastest, most precise"
+        "integration test": "exercises two+ components inside this container with real wiring — catches seam bugs a unit test can't"
+        "property test": "checks an invariant holds across many generated inputs, instead of a few hand-picked cases"
+
+  - theme: container_suite
+    id: name
+    schema_path: test.name
+    question: "One-line name for this test (the behaviour it proves)?"
+    hint: "Behaviour-first naming; the codegen agent uses it as the test title."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: container_suite
+    id: component_ref
+    schema_path: test.component_ref
+    question: "Which component does this test target (if it targets one)?"
+    hint: >
+      A components[].component_id from ARCH__<container>.yaml. Required for unit
+      tests (which target one component); optional for integration tests that
+      span several. Validated against the container's components.
+    suggested_answers: []
+    free_text_allowed: true
+    required_if: "test.tier == 'unit'"
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: container_suite
+    id: covers
+    schema_path: test.covers
+    question: "Which requirements does this test verify (FR / NFR / ACR)?"
+    hint: >
+      Reference PRD ids by stable prefix. Must be a subset of what the targeted
+      component/container declares in implements_requirements. EVERY requirement
+      the container implements must be covered by some test OR deferred (the
+      coverage gate). Validated for format + existence in PRD.yaml.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: container_suite
+    id: targets_failure_mode
+    schema_path: test.targets_failure_mode
+    question: "Does this test exercise a specific failure mode? (the ARCH failure_modes id)"
+    hint: >
+      For negative/resilience tests. References a failure_modes[].id from
+      ARCH__<container>.yaml (container- or component-level). Every failure_mode
+      id must be targeted by some test OR deferred. Validated against the ARCH
+      file.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: container_suite
+    id: targets_security_concern
+    schema_path: test.targets_security_concern
+    question: "Does this test exercise a specific security concern? (the ARCH security_concerns id)"
+    hint: >
+      For abuse-case tests. References a security_concerns[].id from
+      ARCH__<container>.yaml. Every security_concern id must be targeted by some
+      test OR deferred. Validated against the ARCH file.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: container_suite
+    id: directives
+    schema_path: test.directives
+    question: "Concrete steps for the codegen agent: arrange / act / assert, what to mock, edge cases?"
+    hint: >
+      The executable design the Stage-14 codegen agent follows. Name the inputs,
+      the boundary asserted, the collaborators stubbed, and the edge cases. For
+      property tests, state the invariant and the input space.
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: container_suite
+    id: priority
+    schema_path: test.priority
+    question: "Priority — must, should, or could?"
+    hint: "`must` tests are part of the container's done-gate; `should`/`could` can land in a later pass."
+    suggested_answers:
+      - must
+      - should
+      - could
+    free_text_allowed: false
+    required: true
+    confidence_field: false
+    importance: critical
+
+  - theme: container_suite
+    id: fixtures
+    schema_path: test.fixtures
+    question: "Specific fixtures/builders this test uses (beyond the container default)?"
+    hint: "Optional list. Skip when the inherited fixture_strategy covers it."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: container_suite
+    id: mocks
+    schema_path: test.mocks
+    question: "What exactly does this test mock or stub?"
+    hint: "Optional list of the collaborators faked. Empty ⇒ none (full real wiring)."
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: container_suite
+    id: acceptance
+    schema_path: test.acceptance
+    question: "What observable outcome makes this test pass? (one machine-checkable sentence)"
+    hint: "The concrete assertion the verification stage keys on."
+    suggested_answers: []
+    free_text_allowed: true
+    required: true
+    confidence_field: false
+    importance: critical

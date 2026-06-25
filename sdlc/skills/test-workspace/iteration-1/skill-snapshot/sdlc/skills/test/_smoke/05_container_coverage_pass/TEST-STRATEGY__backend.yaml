@@ -1,0 +1,53 @@
+# Container file — covers every required FR/NFR, the component acceptance, and
+# both risks (db-timeout, pii-leak). Expect: [OK] complete.
+metadata:
+  test_strategy_container_version: "1.0"
+  last_updated: "2026-06-02T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 66666666-6666-6666-6666-666666666666
+  status: complete
+container_id: backend
+overview: "Unit + integration tests for the user-management backend."
+inherits_from: docs/TEST-STRATEGY.yaml
+coverage_target:
+  line_pct: 85.0
+tests:
+  - tst_id: TST-001
+    name: "users-service creates a user"
+    tier: unit
+    description: "Happy-path create on the users service."
+    component_ref: users-service
+    directives: ["Arrange a valid payload; act create(); assert a persisted user with an id."]
+    covers: [FR-001]
+    priority: must
+    acceptance: "create() returns the new user with a non-null id."
+    status: confirmed
+  - tst_id: TST-002
+    name: "create latency under load"
+    tier: load
+    description: "Verifies the p95 latency NFR for the create path."
+    directives: ["Drive 500 rps for 60s; measure p95."]
+    covers: [NFR-001]
+    priority: should
+    acceptance: "p95 create latency < 200ms at 500 rps."
+    status: confirmed
+  - tst_id: TST-003
+    name: "db timeout is retried"
+    tier: integration
+    description: "Negative case for the db-timeout failure mode."
+    component_ref: users-service
+    directives: ["Inject a timeout on the first DB call; assert one retry then success."]
+    targets_failure_mode: db-timeout
+    priority: must
+    acceptance: "A single transient timeout results in a successful create after retry."
+    status: confirmed
+  - tst_id: TST-004
+    name: "no PII in logs"
+    tier: security
+    description: "Abuse case for the pii-leak concern."
+    directives: ["Create a user; scan emitted logs for the email value."]
+    targets_security_concern: pii-leak
+    priority: must
+    acceptance: "No log line contains the user's raw email."
+    status: confirmed
+test_strategy_warnings: []

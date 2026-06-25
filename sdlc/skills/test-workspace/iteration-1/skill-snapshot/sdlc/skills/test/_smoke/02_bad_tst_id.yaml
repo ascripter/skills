@@ -1,0 +1,25 @@
+# INVALID: status complete but tst_id 'TST-1' violates the TST-NNN format.
+# Expect: [FAIL].
+metadata:
+  test_strategy_version: "1.0"
+  last_updated: "2026-06-02T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 22222222-2222-2222-2222-222222222222
+  status: complete
+test_approach:
+  pyramid_targets: {unit: "~70%", integration: "~20%", e2e: "~10%"}
+coverage_threshold:
+  line_pct: 80.0
+mock_policy: "Mock at boundaries only."
+fixture_strategy: "Factories."
+tests:
+  - tst_id: TST-1
+    name: "bad id test"
+    tier: e2e
+    description: "has a malformed id"
+    directives: ["do a thing"]
+    covers: [WKF-001]
+    involves_containers: [backend]
+    priority: must
+    acceptance: "passes"
+    status: confirmed

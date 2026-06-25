@@ -1,0 +1,63 @@
+# Minimal UX fixture for the file_native paradigm eval. Three CLI commands.
+
+metadata:
+  ux_version: "1.2"
+  last_updated: "2026-05-27T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "dteval03-fn01-fn01-fn01-dteval03ux01"
+  monorepo: false
+  status: "complete"
+
+ux_warnings: []
+
+surface_family: cli
+surface_family_confidence: confirmed
+
+design_principles:
+  tenets:
+    - "Files first; everything is a readable, diffable artifact."
+
+navigation_model:
+  type: command_tree
+  top_level_nodes: [new, add-section, export]
+
+surface_inventory:
+  - id: SCR-001
+    surface_id: cmd-new
+    surface_type: cli_command
+    status: confirmed
+    traces_workflows: ["WKF-001"]
+    implements_requirements: ["FR-001"]
+    references_entities: ["ENT-001"]
+  - id: SCR-002
+    surface_id: cmd-add-section
+    surface_type: cli_command
+    status: confirmed
+    traces_workflows: ["WKF-002"]
+    implements_requirements: ["FR-002"]
+    references_entities: ["ENT-001", "ENT-002"]
+  - id: SCR-003
+    surface_id: cmd-export
+    surface_type: cli_command
+    status: confirmed
+    traces_workflows: ["WKF-003"]
+    implements_requirements: ["FR-003"]
+    references_entities: ["ENT-001"]
+
+component_library:
+  name: "Rich (Python CLI)"
+  name_confidence: confirmed
+
+accessibility:
+  wcag_target: not_applicable_cli
+  wcag_target_confidence: confirmed
+
+cli:
+  root_command: outline
+  root_command_confidence: confirmed
+  command_shape: verb_noun
+  arg_parsing_library: typer
+  arg_parsing_library_confidence: confirmed
+  output_formats:
+    supported: [plain, json]
+    default: "plain"

@@ -1,0 +1,31 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "dataeval1-dt01-dt01-dt01-dataevl1ux03"
+  status: "complete"
+
+id: SCR-002
+surface_id: cmd-run
+surface_type: cli_command
+cli_invocation: "pipe run [--resume]"
+
+layout:
+  cli_args:
+    - name: --resume
+      kind: option
+      required: false
+      help: "Resume an interrupted run on the active branch."
+
+states:
+  default: { description: "Next pipeline stage runs; prints the produced artifact path." }
+  error: { description: "Non-zero exit + stderr on stage failure." }
+
+interactions: []
+components: []
+
+accessibility_notes: inherit
+
+traces_workflows: ["WKF-002", "WKF-004"]
+implements_requirements: ["FR-002"]
+references_entities: ["ENT-001"]

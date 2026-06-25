@@ -1,0 +1,31 @@
+{
+  "run_id": "eval-con-t1-with_skill",
+  "expectations": [
+    {
+      "text": "validator exits 0 / status complete",
+      "passed": true,
+      "evidence": "metadata.status"
+    },
+    {
+      "text": "no test covers FR-005",
+      "passed": true,
+      "evidence": "FR-005 absent"
+    },
+    {
+      "text": "CON-DISC-1: tasks-controller negative/invalid-input test present",
+      "passed": true,
+      "evidence": "validation test on tasks-controller"
+    },
+    {
+      "text": "CON-DISC-2: digest-settings-controller >=2 tests",
+      "passed": true,
+      "evidence": "digest-settings-controller=2"
+    },
+    {
+      "text": "CON-DISC-3: tasks-controller >=2 tests",
+      "passed": true,
+      "evidence": "tasks-controller=4"
+    }
+  ],
+  "pass_rate": 1.0
+}

@@ -1,0 +1,93 @@
+metadata:
+  api_resource_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-api
+  session_id: "arceval1-ar01-ar01-ar01-archeval1ap01"
+  status: "complete"
+
+resource_id: tasks
+base_path: /v1/tasks
+primary_entity: Task
+traces_prd_features: ["FR-001", "FR-003"]
+traces_ux_surfaces: ["SCR-001", "SCR-002"]
+traces_prd_workflows: ["WKF-001"]
+
+endpoints:
+  - id: OPR-001
+    operation_id: list-tasks
+    method: GET
+    path: /v1/tasks
+    summary: "List tasks (paginated)"
+    parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema: { type: string }
+    responses:
+      "200":
+        description: ok
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/TaskList" }
+    security:
+      - bearer_jwt: ["read:tasks"]
+    idempotent: true
+  - id: OPR-002
+    operation_id: create-task
+    method: POST
+    path: /v1/tasks
+    summary: "Create a task"
+    responses:
+      "201":
+        description: created
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/Task" }
+    security:
+      - bearer_jwt: ["write:tasks"]
+    idempotent: false
+  - id: OPR-003
+    operation_id: update-task
+    method: PATCH
+    path: /v1/tasks/{id}
+    summary: "Update a task (e.g. mark done)"
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: ok
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/Task" }
+      "404":
+        description: not found
+        content:
+          application/problem+json:
+            schema: { $ref: "../API.yaml#/shared_schemas/Problem" }
+    security:
+      - bearer_jwt: ["write:tasks"]
+    idempotent: true
+
+schemas:
+  Task:
+    projects_from: Task
+    type: object
+    required: [id, title, status]
+    properties:
+      id: { type: string, format: uuid }
+      title: { type: string }
+      status: { type: string, enum: [open, in_progress, done] }
+  TaskList:
+    projects_from: null
+    type: object
+    required: [items]
+    properties:
+      items:
+        type: array
+        items: { $ref: "#/schemas/Task" }
+      next_cursor:
+        type: string
+        nullable: true

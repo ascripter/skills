@@ -1,0 +1,91 @@
+# Three entities. AuditLog is purely backend (no FR trace), so the api skill
+# should NOT propose a public resource for it — or, if it does, the user
+# should opt it into api_warnings as "internal-only".
+
+metadata:
+  data_model_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-data
+  session_id: "apieval1-ap01-ap01-ap01-apieval1dt01"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  Task:
+    description: "An engineering task."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      title: { type: string, nullable: false }
+      status: { type: string, nullable: false }
+    traces_prd_features: ["FR-001", "FR-003"]
+    traces_ux_surfaces: ["SCR-001", "SCR-002"]
+    traces_prd_workflows: ["WKF-001"]
+  Comment:
+    description: "A comment on a Task."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      task_id: { type: uuid, nullable: false, references: Task.id, on_delete: cascade }
+      body: { type: text, nullable: false }
+    traces_prd_features: ["FR-002"]
+    traces_ux_surfaces: ["SCR-003"]
+    traces_prd_workflows: ["WKF-002"]
+  AuditLog:
+    description: "Append-only audit log."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      payload: { type: jsonb, nullable: false }
+    traces_prd_features: []
+    traces_ux_surfaces: []
+  DigestRun:
+    description: "One execution of the weekly digest job (FR-004)."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      sent_at: { type: timestamptz, nullable: false }
+      recipient_count: { type: int, nullable: false }
+    traces_prd_features: ["FR-004"]
+    traces_ux_surfaces: []
+    traces_prd_workflows: []
+
+relationships:
+  - from_entity: Comment
+    from_field: task_id
+    to_entity: Task
+    to_field: id
+    cardinality: "1:N"
+    on_delete: cascade
+
+enums_and_lookups:
+  enums:
+    TaskStatus: [open, in_progress, done]
+
+indexes_and_queries:
+  access_patterns:
+    - description: "List tasks by status."
+      entity: Task
+      fields: [status]
+      read_or_write: read
+    - description: "List comments by task."
+      entity: Comment
+      fields: [task_id]
+      read_or_write: read
+
+integrity_and_constraints:
+  default_on_delete: restrict
+
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []

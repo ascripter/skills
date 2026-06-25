@@ -1,0 +1,111 @@
+# GOLD reference output for the backend-api container eval. Not staged as an
+# input — used only to self-test grade.py (a correct output should score green).
+metadata:
+  test_strategy_container_version: "1.0"
+  last_updated: "2026-05-28T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: "testbe01-tbe1-tbe1-tbe1-testbackendapi"
+  status: complete
+  changelog:
+    - "1.0 (2026-05-28): Initial backend-api container test strategy (gold)."
+container_id: backend-api
+overview: "Unit + integration suite for the backend-api container, with risk-driven negative cases."
+inherits_from: docs/TEST-STRATEGY.yaml
+coverage_target:
+  line_pct: 85.0
+  branch_pct: 75.0
+  rationale: "Slightly above the global floor — backend owns the domain logic and PII."
+tests:
+  - tst_id: TST-001
+    name: "tasks-controller creates a task"
+    tier: unit
+    description: "Happy-path create on the tasks controller."
+    component_ref: tasks-controller
+    directives:
+      - "Arrange a valid create payload."
+      - "Act: call create()."
+      - "Assert: 201 with a persisted task id."
+    covers: [FR-001]
+    priority: must
+    acceptance: "Creating a task returns 201 with a persisted task id."
+    status: confirmed
+  - tst_id: TST-002
+    name: "tasks-controller marks a task done"
+    tier: unit
+    description: "Status transition on the tasks controller."
+    component_ref: tasks-controller
+    directives:
+      - "Arrange an open task."
+      - "Act: mark it done."
+      - "Assert: status flips and persists across a read."
+    covers: [FR-003]
+    priority: must
+    acceptance: "Marking a task done flips its status and is reflected on next read."
+    status: confirmed
+  - tst_id: TST-003
+    name: "comments-controller adds a comment"
+    tier: unit
+    description: "Happy-path comment add."
+    component_ref: comments-controller
+    directives:
+      - "Arrange a task; act: add a comment; assert it is persisted and listed."
+    covers: [FR-002]
+    priority: must
+    acceptance: "A comment is persisted and returned on the task."
+    status: confirmed
+  - tst_id: TST-004
+    name: "digest-settings-controller saves and reads schedule"
+    tier: unit
+    description: "Digest enable/disable + send-time round trip."
+    component_ref: digest-settings-controller
+    directives:
+      - "Arrange settings payload; act: save; assert read-back matches; runs newest-first."
+    covers: [FR-004]
+    priority: must
+    acceptance: "Enabling the digest and setting a send time persists and reads back; runs listed newest-first."
+    status: confirmed
+  - tst_id: TST-005
+    name: "repository round-trips a task"
+    tier: integration
+    description: "Controller + repository against a real test Postgres."
+    component_ref: persistence-repository
+    directives:
+      - "Arrange a test DB; act: write then read a Task; assert equality."
+    covers: [FR-001]
+    priority: should
+    acceptance: "A written Task reads back identically."
+    status: confirmed
+  - tst_id: TST-006
+    name: "forged JWT is rejected"
+    tier: security
+    description: "Abuse case for the jwt-forgery concern."
+    component_ref: auth-middleware
+    directives:
+      - "Arrange a token signed by a wrong key / expired."
+      - "Act: call any protected endpoint."
+      - "Assert: 401, request not routed."
+    targets_security_concern: jwt-forgery
+    priority: must
+    acceptance: "A forged or expired token yields 401 and never reaches a controller."
+    status: confirmed
+  - tst_id: TST-007
+    name: "no PII in logs"
+    tier: security
+    description: "Abuse case for the pii-leak concern."
+    directives:
+      - "Act: create a user-bearing request; scan emitted logs for the email."
+    targets_security_concern: pii-in-logs
+    priority: must
+    acceptance: "No log line contains the raw email or comment body."
+    status: confirmed
+  - tst_id: TST-008
+    name: "postgres outage is handled"
+    tier: integration
+    description: "Negative case for the postgres-unavailable failure mode."
+    directives:
+      - "Inject a connection failure; assert retry/backoff then a clean 503."
+    targets_failure_mode: postgres-unavailable
+    priority: must
+    acceptance: "A DB outage surfaces as a retried, then graceful, 503 — never a crash."
+    status: confirmed
+test_strategy_warnings: []

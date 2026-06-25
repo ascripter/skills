@@ -1,0 +1,500 @@
+# docs/TEST-STRATEGY.yaml
+# System-level test strategy for tinytrack (web task tracker with weekly digest).
+# Produced by /sdlc:test (system mode). Covers cross-container e2e, contract,
+# load, security, and accessibility tests. Per-container unit/integration tests
+# belong in TEST-STRATEGY__<container>.yaml files (container mode).
+
+metadata:
+  test_strategy_version: "1.0"
+  last_updated: "2026-06-24T00:00:00Z"
+  generated_by: sdlc-test
+  session_id: "evalrun1-test-sys1-eval-teststrat0001"
+  status: complete
+  changelog:
+    - "1.0 (2026-06-24): Initial system test strategy for tinytrack (eval run)."
+  upstream_provenance:
+    - {file: docs/PRD.yaml, session_id: "arceval1-ar01-ar01-ar01-archeval1pr01", last_updated: "2026-05-26T00:00:00Z", sha256: "prd-fixture-sha1"}
+    - {file: docs/ARCH.yaml, session_id: "archcm01-arcm-arcm-arcm-archcontainr01", last_updated: "2026-05-26T00:00:00Z", sha256: "arch-fixture-sha1"}
+    - {file: docs/DATA-MODEL.yaml, session_id: "arceval1-ar01-ar01-ar01-archeval1dm01", last_updated: "2026-05-26T00:00:00Z", sha256: "data-fixture-sha1"}
+    - {file: docs/API.yaml, session_id: "arceval1-ar01-ar01-ar01-archeval1ap01", last_updated: "2026-05-26T00:00:00Z", sha256: "api-fixture-sha1"}
+    - {file: docs/UX.yaml, session_id: "arceval1-ar01-ar01-ar01-archeval1ux01", last_updated: "2026-05-26T00:00:00Z", sha256: "ux-fixture-sha1"}
+
+# ---------------------------------------------------------------------------
+# test_approach — test pyramid for a modular monolith with a scheduler.
+# A modular monolith + scheduler + frontend: unit tests dominate; integration
+# tests cover module wiring and DB access; e2e tests cover the 3 cross-container
+# workflows. Contract tests pin the frontend ↔ backend API boundary and the
+# backend ↔ identity-provider JWT boundary.
+# ---------------------------------------------------------------------------
+test_approach:
+  pyramid_targets:
+    unit: "~65%"
+    integration: "~20%"
+    e2e: "~10%"
+    contract: "~5%"
+  pyramid_targets_confidence: inferred
+  pyramid_rationale: >
+    Modular monolith with two engineers: unit tests are fast and cheap so they
+    carry the bulk of coverage. Integration tests verify module wiring and
+    Postgres persistence. E2e tests cover the three cross-container PRD
+    workflows (task CRUD, comment + close, digest config + review). Contract
+    tests pin the web-frontend ↔ backend-api boundary and the JWT validation
+    call to identity-provider so the two can evolve independently. Load and
+    security tests are small slices driven by NFR-001 and the JWT auth model.
+  ai_builder_notes: >
+    Use deterministic fixtures — no random data generators by default; seed
+    the Postgres test DB via migrations. Avoid time.sleep() in e2e tests;
+    wait for observable state changes. Mock the email provider (SES) at the
+    boundary in all non-email-specific tests. Each test must be independently
+    runnable (no shared mutable state). Contract tests use Pact or a
+    schema-snapshot approach — record the provider's response shape once, fail
+    if it drifts. The digest-worker e2e test MUST advance a fake clock rather
+    than sleeping 7 days.
+
+# ---------------------------------------------------------------------------
+# coverage_threshold — global floor inherited by every container.
+# ---------------------------------------------------------------------------
+coverage_threshold:
+  line_pct: 80.0
+  line_pct_confidence: inferred
+  branch_pct: 70.0
+  rationale: >
+    80% line / 70% branch is a sane floor for a two-engineer product with
+    medium reliability (PRD: reliability=high). Raise to 90/85 for the
+    digest-worker container (FR-005 is the product's highest-risk path —
+    PRD WRN-001 flags the idempotency gap). The frontend container may be
+    lowered to 70% line because most of its behaviour is tested via e2e
+    and accessibility tests rather than isolated unit tests.
+  per_container_overrides:
+    digest-worker: {line_pct: 90.0, branch_pct: 85.0}
+    web-frontend: {line_pct: 70.0}
+
+# ---------------------------------------------------------------------------
+# Global mock / fixture / data policy
+# ---------------------------------------------------------------------------
+mock_policy: >
+  Mock at the container boundary, not inside it. In unit tests, mock any
+  collaborator that crosses into another module or container (database
+  repositories, email provider, OIDC token endpoint). In integration tests,
+  use testcontainers Postgres for the real database; stub the email provider
+  and OIDC endpoints with a WireMock or nock stub. Never mock the domain
+  objects themselves. The digest-worker tests replace the real clock with a
+  controllable fake to avoid sleeping.
+mock_policy_confidence: inferred
+mock_policy_rationale: >
+  Modular monolith with Postgres + external OIDC + SES: the DB is cheap to
+  spin up with testcontainers; external services (email, identity) should be
+  stubbed to avoid flakiness and cost.
+
+fixture_strategy: >
+  Factory functions generate typed domain objects (Task, Comment, DigestRun)
+  with sensible defaults; callers override only the fields under test. A
+  shared beforeEach hook resets the Postgres schema between integration/e2e
+  test runs (truncate tables, not drop/recreate, for speed). Seed data lives
+  in checked-in SQL fixtures for scenario tests (e.g. the digest e2e seeds
+  a team with open tasks across three owners). Avoid sharing fixture state
+  between tests.
+fixture_strategy_confidence: inferred
+fixture_strategy_rationale: >
+  Factory + reset pattern gives isolation without the overhead of full DB
+  recreation per test. Checked-in SQL seeds make digest scenarios reproducible.
+
+test_data_strategy: >
+  No real PII in test fixtures. Use obviously-synthetic names (user@example.com,
+  team "Acme Test Team"). The weekly-digest e2e uses a fake clock so tests are
+  not time-dependent. Large-volume load tests generate data programmatically
+  and clean up after themselves.
+
+ci_integration: >
+  Unit + integration tests run on every PR (must pass to merge). E2e, contract,
+  load, security, and accessibility tests run nightly and on main-branch pushes.
+  The 80% line-coverage gate is enforced by the unit + integration stage; e2e
+  and above are additive. Load tests run against a staging environment, not the
+  CI sandbox.
+
+environments:
+  - name: local
+    purpose: Unit and integration tests; uses testcontainers Postgres, stubbed email and OIDC.
+  - name: ci-ephemeral
+    purpose: Same as local; spun up per PR by the CI runner.
+  - name: staging
+    purpose: E2e, load, security, and accessibility tests against a near-production replica.
+
+# ---------------------------------------------------------------------------
+# tests — the CROSS-CONTAINER system suite.
+# Tiers present: e2e (5), contract (4), load (1), security (2), accessibility (1)
+# Total: 13 TST-NNN items.
+#
+# WKF coverage:
+#   WKF-001 → TST-001 (e2e)
+#   WKF-002 → TST-002 (e2e)
+#   WKF-003 → TST-003 + TST-004 (e2e)
+# EDG-001   → TST-005 (e2e)
+# PRD WRN-001 (digest idempotency) → TST-006 (e2e/idempotency canary)
+# Contract tests → TST-007..TST-010
+# Load → TST-011
+# Security → TST-012..TST-013
+# ---------------------------------------------------------------------------
+tests:
+  # ---- WKF-001: Create and triage a task (e2e) ----
+  - tst_id: TST-001
+    name: "E2E — create and triage a task end to end"
+    tier: e2e
+    description: >
+      Exercises the full WKF-001 workflow: an authenticated user creates a task
+      via the web-frontend (POST /v1/tasks), sees it appear in the task-list
+      screen, opens the task-detail screen, and marks it as done (PATCH
+      /v1/tasks/{id}). Verifies that the frontend correctly calls the backend API
+      and that the backend persists to Postgres (FR-001, FR-003).
+    directives:
+      - "Arrange: seed a Postgres DB with one user/team; start web-frontend + backend-api containers in staging; obtain a valid JWT from the identity-provider stub."
+      - "Act: drive the browser (Playwright) through the task-list screen → create-task form → submit → observe new task card → open task-detail → mark done."
+      - "Assert: backend GET /v1/tasks returns the task with status=done; Postgres row has status='done'."
+      - "Teardown: truncate Task table."
+    covers:
+      - WKF-001
+      - FR-001
+      - FR-003
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Valid JWT obtained from OIDC stub; Postgres seeded with user+team rows."
+    acceptance: "Playwright test exits 0; GET /v1/tasks/{id} returns {status: 'done'}."
+    status: confirmed
+
+  # ---- WKF-002: Comment on a task and close it (e2e) ----
+  - tst_id: TST-002
+    name: "E2E — comment on a task and close it"
+    tier: e2e
+    description: >
+      Exercises WKF-002: user opens an existing task on the comments-panel
+      surface, posts a comment (POST /v1/tasks/{id}/comments), then closes
+      the task (PATCH /v1/tasks/{id} status=done). Verifies FR-002 (add
+      comment) and FR-003 (mark done) across the web-frontend → backend-api
+      boundary.
+    directives:
+      - "Arrange: seed a Postgres DB with one open task; obtain valid JWT."
+      - "Act: drive browser to task-detail screen; open comments panel; type comment text; submit; click 'Mark done'."
+      - "Assert: GET /v1/tasks/{task_id}/comments returns new comment; GET /v1/tasks/{task_id} returns {status: 'done'}."
+      - "Teardown: truncate Task + Comment tables."
+    covers:
+      - WKF-002
+      - FR-002
+      - FR-003
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Postgres seeded with one open task. Valid JWT."
+    acceptance: "Playwright test exits 0; both assertions verified via direct API calls."
+    status: confirmed
+
+  # ---- WKF-003: Configure weekly digest and review past runs (e2e) ----
+  - tst_id: TST-003
+    name: "E2E — configure weekly digest settings and confirm digest run recorded"
+    tier: e2e
+    description: >
+      Exercises WKF-003 (configure digest + review past runs): user navigates
+      to the digest-settings screen, enables the digest and sets a send time
+      (PUT /v1/digest-settings), then the digest-worker fires (via fake-clock
+      advance), and the user returns to the digest-settings screen to confirm
+      the DigestRun entry appears (FR-004, FR-005).
+    directives:
+      - "Arrange: seed a Postgres DB with a team + 3 open tasks across 2 owners; configure the fake clock to be 1 minute before Monday 08:00 team TZ."
+      - "Act: browser navigates to digest-settings; enables digest; sets send time; saves (PUT /v1/digest-settings). Advance fake clock past 08:00. Poll for DigestRun record."
+      - "Assert: GET /v1/digest-settings returns the DigestRun record with status=sent and correct task_count; email-provider stub received exactly 1 call per team."
+      - "Teardown: reset fake clock; truncate DigestRun + DigestSettings tables."
+    covers:
+      - WKF-003
+      - FR-004
+      - FR-005
+    involves_containers:
+      - web-frontend
+      - backend-api
+      - digest-worker
+    priority: must
+    setup: "Fake clock injectable into digest-worker. Email provider stub (nock/WireMock). Postgres seeded."
+    acceptance: "DigestRun row exists with status='sent'; email stub received exactly 1 invocation."
+    status: confirmed
+
+  # ---- WKF-003 supplemental: Review past runs list (e2e) ----
+  - tst_id: TST-004
+    name: "E2E — review past digest runs list"
+    tier: e2e
+    description: >
+      Supplements TST-003 by exercising the 'review past runs' half of WKF-003:
+      given a team that already has 3 DigestRun records, the digest-settings
+      screen renders the run history list with correct dates and task counts
+      (FR-004). Verifies the frontend correctly calls the digest-settings
+      resource GET endpoint and renders the results.
+    directives:
+      - "Arrange: seed Postgres with 3 DigestRun rows (different sent_at timestamps, varying task_count values)."
+      - "Act: browser navigates to digest-settings screen."
+      - "Assert: run-history list shows 3 rows in descending date order with correct task counts."
+    covers:
+      - WKF-003
+      - FR-004
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: should
+    setup: "Postgres seeded with 3 DigestRun rows."
+    acceptance: "Playwright assertion: run-history list contains 3 rows with expected sent_at and task_count values."
+    status: confirmed
+
+  # ---- EDG-001: Digest run when a team has zero open tasks (e2e) ----
+  - tst_id: TST-005
+    name: "E2E — digest run with zero open tasks sends empty-digest email"
+    tier: e2e
+    description: >
+      Exercises PRD EDG-001: the digest-worker fires for a team that has no
+      open tasks at all. The run should complete without error, record a
+      DigestRun with task_count=0, and still send (or deliberately skip) the
+      email per product decision. Tests the edge case path through FR-005 and
+      confirms the worker does not crash or produce a malformed email body.
+    directives:
+      - "Arrange: seed Postgres with a team + 0 open tasks; configure fake clock to Monday 08:00."
+      - "Act: advance fake clock to trigger digest-worker."
+      - "Assert: DigestRun row created with task_count=0 and status != error; email-provider stub receives 0 or 1 call (both are valid; assert no 5xx from worker)."
+      - "Note: if the product decision is 'skip email when 0 tasks', assert stub receives 0 calls and DigestRun.status=skipped."
+    covers:
+      - WKF-003
+      - FR-005
+    involves_containers:
+      - digest-worker
+      - backend-api
+    priority: must
+    setup: "Fake clock. Email stub. Postgres with team but no Task rows."
+    acceptance: "Worker process exits 0; DigestRun row present; no 5xx logged."
+    status: confirmed
+
+  # ---- PRD WRN-001: Digest idempotency across retries (e2e) ----
+  - tst_id: TST-006
+    name: "E2E — digest worker does not double-send on retry after transient email failure"
+    tier: e2e
+    description: >
+      Exercises PRD WRN-001 (digest send not idempotent across retries): the
+      email provider fails on the first attempt (5xx from stub), the
+      digest-worker retries, and the team receives exactly one digest email —
+      not two. This confirms FR-005 idempotency and prevents a known
+      double-send risk. Tests the idempotency guard in the digest-worker
+      (e.g. DigestRun deduplication by team + week key, or Idempotency-Key
+      header usage per API.idempotency spec).
+    directives:
+      - "Arrange: seed Postgres with team + open tasks; configure email stub to return 503 on first call then 200 on second; configure fake clock to Monday 08:00."
+      - "Act: trigger digest-worker run; allow it to retry after 503."
+      - "Assert: email-provider stub received exactly 2 HTTP calls (1 failed + 1 success); DigestRun table has exactly 1 row for this team+week; no duplicate email content."
+      - "Teardown: reset stub; truncate DigestRun."
+    covers:
+      - WKF-003
+      - FR-005
+    involves_containers:
+      - digest-worker
+      - backend-api
+    priority: must
+    setup: "Email provider stub supporting configurable failure-then-success sequence. Fake clock."
+    acceptance: "Exactly 1 DigestRun row for the triggered week; email stub call count = 2 (not 3+); no duplicate emails."
+    status: confirmed
+
+  # ---- Contract: web-frontend → backend-api (tasks resource) ----
+  - tst_id: TST-007
+    name: "Contract — web-frontend consumes backend-api tasks resource"
+    tier: contract
+    description: >
+      Pins the shape of the backend-api tasks resource responses so that the
+      web-frontend (consumer) and backend-api (provider) can evolve independently.
+      Covers list (GET /v1/tasks), create (POST /v1/tasks), and mark-done
+      (PATCH /v1/tasks/{id}) operations. Uses Pact or a schema-snapshot approach.
+    directives:
+      - "Arrange: run Pact consumer test in the web-frontend; record the expected response shape for GET /v1/tasks (paginated Task list), POST /v1/tasks (created Task), PATCH /v1/tasks/{id} (updated Task)."
+      - "Act: replay the Pact pact against the running backend-api provider."
+      - "Assert: provider responses match the recorded pact — all required fields present, correct types, no removed fields."
+    covers:
+      - FR-001
+      - FR-003
+      - WKF-001
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Pact broker or local pact file. Backend-api running with test DB."
+    acceptance: "Pact provider verification passes; no missing or type-mismatched fields."
+    status: confirmed
+
+  # ---- Contract: web-frontend → backend-api (comments resource) ----
+  - tst_id: TST-008
+    name: "Contract — web-frontend consumes backend-api comments resource"
+    tier: contract
+    description: >
+      Pins the comments resource API shape (POST /v1/tasks/{id}/comments,
+      GET /v1/tasks/{id}/comments). Ensures the comments-panel surface can
+      evolve its UI without breaking the provider contract.
+    directives:
+      - "Arrange: record Pact consumer interactions for GET and POST comments."
+      - "Act: replay against backend-api provider."
+      - "Assert: all comment fields (id, task_id, body, author, created_at) present with correct types."
+    covers:
+      - FR-002
+      - WKF-002
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Pact broker or local pact file."
+    acceptance: "Pact provider verification passes for comments resource."
+    status: confirmed
+
+  # ---- Contract: web-frontend → backend-api (digest-settings resource) ----
+  - tst_id: TST-009
+    name: "Contract — web-frontend consumes backend-api digest-settings resource"
+    tier: contract
+    description: >
+      Pins the digest-settings resource API shape (GET /v1/digest-settings,
+      PUT /v1/digest-settings). Also covers the DigestRun history list returned
+      in the response, verifying the shape the digest-settings screen expects.
+    directives:
+      - "Arrange: record Pact interactions for GET digest-settings (including run history) and PUT digest-settings."
+      - "Act: replay against backend-api provider."
+      - "Assert: digest settings and DigestRun list fields present and correctly typed."
+    covers:
+      - FR-004
+      - WKF-003
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Pact broker or local pact file. Backend seeded with 2 DigestRun rows."
+    acceptance: "Pact provider verification passes for digest-settings resource."
+    status: confirmed
+
+  # ---- Contract: backend-api → identity-provider (JWT validation) ----
+  - tst_id: TST-010
+    name: "Contract — backend-api validates bearer JWTs against identity-provider"
+    tier: contract
+    description: >
+      Pins the JWT validation contract between backend-api (consumer) and the
+      external OIDC identity-provider (provider). Verifies that backend-api
+      correctly validates a well-formed JWT (200 OK on the protected endpoint)
+      and rejects an expired/invalid JWT (401). The provider side is a stub
+      that issues test tokens.
+    directives:
+      - "Arrange: OIDC stub issues a valid JWT (RS256, correct aud/iss/exp) and an expired JWT."
+      - "Act: send both tokens to a backend-api protected endpoint (e.g. GET /v1/tasks)."
+      - "Assert: valid token → 200; expired token → 401 with RFC-7807 Problem body."
+    covers:
+      - FR-001
+      - FR-002
+      - FR-003
+      - FR-004
+    involves_containers:
+      - backend-api
+      - identity-provider
+    priority: must
+    setup: "OIDC stub with configurable token expiry."
+    acceptance: "Valid JWT → HTTP 200; expired/invalid JWT → HTTP 401; response body matches RFC-7807 schema."
+    status: confirmed
+
+  # ---- Load: NFR-001 task-list p95 < 300ms ----
+  - tst_id: TST-011
+    name: "Load — task-list GET p95 latency < 300ms under sustained load"
+    tier: load
+    description: >
+      Verifies NFR-001 (p95 task-list load < 300ms). Sends concurrent GET
+      /v1/tasks requests to the backend-api under a realistic load profile
+      (50 concurrent users, 5 minutes) and measures p95 response time. Runs
+      against the staging environment with a representative Postgres dataset
+      (1 000 tasks, 10 teams).
+    directives:
+      - "Arrange: seed staging Postgres with 1 000 Task rows across 10 teams; deploy backend-api to staging."
+      - "Act: run k6 (or Artillery) script — 50 VUs, 5-minute ramp; target GET /v1/tasks with valid JWTs."
+      - "Assert: p95 < 300ms; p99 < 1 000ms; error rate < 0.1%."
+    covers:
+      - NFR-001
+    involves_containers:
+      - backend-api
+    priority: must
+    setup: "Staging environment; seeded Postgres; k6 script with JWT generator."
+    acceptance: "k6 summary shows p95 latency <= 300ms with error_rate < 0.1%."
+    status: confirmed
+
+  # ---- Security: unauthenticated request rejected on all backend routes ----
+  - tst_id: TST-012
+    name: "Security — unauthenticated requests to backend-api are rejected with 401"
+    tier: security
+    description: >
+      Verifies the JWT auth model (PRD security_compliance.auth_model=jwt): any
+      request to the backend-api without a bearer token (or with a malformed
+      token) must receive HTTP 401 with an RFC-7807 error body. Tests all three
+      resource families (tasks, comments, digest-settings) to ensure no
+      endpoint accidentally bypasses auth.
+    directives:
+      - "Arrange: backend-api running with real OIDC validation (or OIDC stub in strict mode); no Authorization header."
+      - "Act: send GET, POST, PATCH, PUT, DELETE to each resource base path without a token; repeat with a token missing the 'Bearer ' prefix; repeat with a structurally valid but unsigned JWT."
+      - "Assert: every response is HTTP 401 with Content-Type: application/problem+json."
+    covers:
+      - FR-001
+      - FR-002
+      - FR-003
+      - FR-004
+    involves_containers:
+      - backend-api
+      - identity-provider
+    priority: must
+    setup: "Backend-api running; OIDC stub in strict validation mode."
+    acceptance: "All unauthenticated/malformed-token requests return HTTP 401 with RFC-7807 body; no 200/302/500."
+    status: confirmed
+
+  # ---- Security: rate limit enforced (429 on burst exceed) ----
+  - tst_id: TST-013
+    name: "Security — backend-api returns 429 + Retry-After when burst limit exceeded"
+    tier: security
+    description: >
+      Verifies the rate-limit policy (API.rate_limiting: 10 req/sec burst per user):
+      firing >10 requests/sec from the same user identity returns HTTP 429 with
+      a Retry-After header. Confirms the burst enforcement is in place and the
+      correct error shape is returned.
+    directives:
+      - "Arrange: backend-api running; one valid JWT for a single user."
+      - "Act: send 15 GET /v1/tasks requests in under 1 second using the same JWT."
+      - "Assert: at least 5 responses are HTTP 429; each 429 has a Retry-After header; no 5xx responses."
+    covers:
+      - FR-001
+    involves_containers:
+      - backend-api
+    priority: should
+    setup: "Backend-api with rate-limiting enabled; clock-based token bucket or sliding window."
+    acceptance: ">=5 HTTP 429 responses among the 15 requests; each carries a numeric Retry-After header."
+    status: confirmed
+
+  # ---- Accessibility: task-list screen WCAG AA ----
+  - tst_id: TST-014
+    name: "Accessibility — task-list screen meets WCAG AA"
+    tier: accessibility
+    description: >
+      Verifies PRD non_functional_requirements.accessibility=wcag_aa for the
+      primary UX surface (task-list). Runs axe-core against the rendered
+      task-list screen with 3 seeded tasks and asserts zero critical/serious
+      violations. Covers keyboard navigation (Tab order, Enter to open task).
+    directives:
+      - "Arrange: render task-list screen in a headless browser (Playwright) with 3 seeded tasks; inject axe-core."
+      - "Act: run axe.run() on the page; also Tab through the task cards and press Enter on the first one."
+      - "Assert: axe violations of severity 'critical' or 'serious' = 0; Tab reaches each task card; Enter opens task-detail."
+    covers:
+      - FR-001
+      - FR-003
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: should
+    setup: "Playwright + axe-core npm dependency. Backend seeded with 3 tasks."
+    acceptance: "axe.run() returns 0 critical/serious violations; keyboard navigation assertions pass."
+    status: confirmed
+
+container_strategies: []
+
+test_strategy_warnings:
+  - "WRN-001: PRD WRN-001 (digest send not idempotent across retries) is directly addressed by TST-006 (e2e idempotency canary). No deferral needed."
+  - "WRN-002: FR-006 (Slack notification of the digest) is a nice-to-have feature that is out of the current development scope; no system test authored here. Deferral: FR-006 has no ARCH container or API resource in this release — deferred to a future sprint."
+  - "WRN-003: PRD ACR (acceptance criteria: 'A digest email is sent every Monday 08:00 per team timezone') is verified by TST-003 via the fake-clock trigger; timezone handling detail deferred to the digest-worker container-mode test strategy."
+  - "WRN-004: PRD open_question 'Whether to self-host email or use SES' is unresolved; TST-006 uses a generic email-provider stub. If SES is chosen, add a contract test for the SES API boundary in the digest-worker container strategy."

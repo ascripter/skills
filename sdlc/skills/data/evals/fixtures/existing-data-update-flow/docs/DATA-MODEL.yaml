@@ -1,0 +1,54 @@
+# Stale DATA-MODEL: knows about FR-001 + FR-002 only, has the Task entity but
+# no Comment. No changelog yet. The eval re-runs sdlc-data and asserts the
+# update flow proposes the Comment entity, prepends a changelog entry, and
+# every emitted warning is WRN-NNN-prefixed.
+
+metadata:
+  data_model_version: "1.0"
+  last_updated: "2026-05-20T00:00:00Z"
+  generated_by: sdlc-data
+  session_id: "dteval02-dt02-dt02-dt02-stalestale01"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  primary_store: postgres
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+
+entities:
+  Task:
+    description: "An engineering task."
+    primary_key: id
+    fields:
+      id: { type: uuid, primary_key: true, nullable: false }
+      title: { type: string, nullable: false }
+      status: { type: string, nullable: false }
+      owner_id: { type: uuid, nullable: false }
+    traces_prd_features: ["FR-001", "FR-002"]
+    traces_ux_surfaces: ["SCR-001", "SCR-002"]
+
+relationships: []
+
+enums_and_lookups:
+  enums:
+    TaskStatus: [open, in_progress, done]
+
+indexes_and_queries:
+  access_patterns:
+    - description: "List tasks by owner."
+      entity: Task
+      fields: [owner_id]
+      read_or_write: read
+
+integrity_and_constraints:
+  default_on_delete: restrict
+
+data_classification:
+  pii_fields: []
+  regulated_fields: []
+  encrypted_at_rest: []

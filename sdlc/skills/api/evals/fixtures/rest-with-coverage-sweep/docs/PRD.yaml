@@ -1,0 +1,80 @@
+# Eval fixture for sdlc-api: full coverage + sweep canary.
+# PRD declares 4 FR + 2 WKF + 1 ENT. The DATA-MODEL has 4 entities
+# (Task, Comment, AuditLog, DigestRun). UX has 4 SCR surfaces.
+# FR-004 ("Send a weekly digest email") is a backend feature, not a user
+# workflow: it has NO core_workflow, NO UX surface, and is anchored only on
+# the DigestRun entity — so it should surface from the sweep as a candidate
+# cross-cutting resource (e.g. `digests` at /v1/digests), OR be explicitly
+# opted into non_api_features.
+
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "apieval1-ap01-ap01-ap01-apieval1ap01"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+problem_opportunity:
+  problem_statement: "Teams need a tiny issue tracker."
+
+users_personas:
+  primary_users:
+    - "PER-001: Engineering team leads"
+  user_goals:
+    - "GOL-001: Triage tasks daily"
+  user_frustrations:
+    - "PAN-001: Existing trackers are bloated"
+  expertise_level: intermediate
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Create and triage a task"
+    - "WKF-002: Comment on a task and close it"
+  primary_jobs_to_be_done:
+    - "JTB-001: Move tasks through the funnel quickly"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Create a Task"
+    - "FR-002: Add a Comment to a Task"
+    - "FR-003: Mark a Task done"
+    - "FR-004: Send a weekly digest email summarising open tasks per owner"
+
+technical_constraints:
+  primary_language: typescript
+  primary_language_confidence: confirmed
+  framework: ["nextjs"]
+  runtime_platform: web
+  runtime_platform_confidence: confirmed
+  deployment_target: cloud_aws
+
+product_identity:
+  name: "tinytrack"
+  slug: "tinytrack"
+  one_liner: "Featherweight issue tracker."
+
+non_functional_requirements:
+  scalability: medium
+  reliability: high
+  accessibility: wcag_aa
+
+data_model:
+  key_entities:
+    - "ENT-001: Task"
+  data_ownership: org_owned
+  data_volume_estimate: megabytes
+  storage_preferences:
+    - "postgres"
+
+security_compliance:
+  auth_model: jwt
+  data_sensitivity: internal
+  encryption_at_rest: true
+  audit_logging: true
+
+business_model:
+  monetization: subscription
+  license_type: proprietary

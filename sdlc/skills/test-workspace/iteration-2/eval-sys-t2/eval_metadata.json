@@ -1,0 +1,37 @@
+{
+  "eval_id": 1,
+  "eval_name": "system-workflow-coverage",
+  "prompt": "Run sdlc-test in SYSTEM mode (/sdlc:test) against the complete docs/ chain in this project (PRD.yaml, DATA-MODEL.yaml, ARCH.yaml, plus API.yaml + API__* and UX.yaml + UX__* enrichers \u2014 all status: complete). The product is a small web task tracker (tinytrack) with a weekly digest. Write docs/TEST-STRATEGY.yaml and run validate_schema.py until it validates. Cross-container workflows WKF-001/002/003 must each be covered by a system test (e2e or contract) or deferred via a WRN-NNN. The system file carries the global policy (pyramid_targets, coverage_threshold.line_pct, mock_policy, fixture_strategy). Do NOT author per-container unit tests here.",
+  "assertions": [
+    {
+      "id": "SYS-1",
+      "text": "validate_schema.py exits 0 and metadata.status == complete",
+      "priority": "must"
+    },
+    {
+      "id": "SYS-2",
+      "text": "WKF-001, WKF-002, WKF-003 each appear in a test's covers or are WRN-NNN deferred",
+      "priority": "must"
+    },
+    {
+      "id": "SYS-3",
+      "text": "Global policy present: pyramid_targets, coverage_threshold.line_pct, mock_policy, fixture_strategy",
+      "priority": "must"
+    },
+    {
+      "id": "SYS-DISC-1",
+      "text": "The digest double-send / idempotency risk (no duplicate email on retry) is addressed by some test OR a reasoned WRN-NNN deferral",
+      "priority": "must"
+    },
+    {
+      "id": "SYS-DISC-2",
+      "text": "The 'digest run when a team has zero open tasks' edge case is addressed by some test OR a reasoned WRN-NNN deferral",
+      "priority": "must"
+    },
+    {
+      "id": "SYS-COUNT",
+      "text": "METRIC: total number of TST-NNN tests in the system file",
+      "priority": "should"
+    }
+  ]
+}

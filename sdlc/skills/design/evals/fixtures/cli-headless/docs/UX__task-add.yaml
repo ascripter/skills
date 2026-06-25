@@ -1,0 +1,18 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-06-22T09:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "cccccccc-0000-0000-0000-000000000002"
+  status: "complete"
+
+id: SCR-001
+surface_id: task-add
+surface_type: cli_command
+cli_invocation: "taskline task add <title> [--priority=<n>]"
+layout:
+  cli_args:
+    - { name: title, kind: positional, type: string, required: true, description: "task title" }
+    - { name: priority, kind: option, long: "--priority", type: int, required: false, description: "1-5" }
+traces_workflows: ["WKF-001"]
+implements_requirements: ["FR-001"]
+references_entities: ["ENT-001"]

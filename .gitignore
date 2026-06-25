@@ -1,3 +1,6 @@
+# Demo project
+/docs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -11,7 +14,6 @@ __pycache__/
 build/
 develop-eggs/
 dist/
-docs/
 downloads/
 eggs/
 .eggs/

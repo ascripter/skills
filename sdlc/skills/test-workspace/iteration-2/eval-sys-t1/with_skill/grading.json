@@ -1,0 +1,26 @@
+{
+  "run_id": "eval-sys-t1-with_skill",
+  "expectations": [
+    {
+      "text": "validator exits 0 / status complete",
+      "passed": true,
+      "evidence": "metadata.status"
+    },
+    {
+      "text": "WKF-001/002/003 each covered",
+      "passed": true,
+      "evidence": "covers WKF set=['WKF-001', 'WKF-002', 'WKF-003']"
+    },
+    {
+      "text": "SYS-DISC-1: digest idempotency/double-send addressed",
+      "passed": true,
+      "evidence": "keyword match"
+    },
+    {
+      "text": "SYS-DISC-2: zero-open-tasks edge case addressed",
+      "passed": true,
+      "evidence": "keyword match"
+    }
+  ],
+  "pass_rate": 1.0
+}

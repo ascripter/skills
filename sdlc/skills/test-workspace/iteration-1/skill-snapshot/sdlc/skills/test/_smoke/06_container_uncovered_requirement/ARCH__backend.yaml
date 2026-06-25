@@ -1,0 +1,21 @@
+container_id: backend
+archetype: backend-api
+overview: "User-management backend API."
+failure_modes:
+  - id: db-timeout
+    description: "Database call times out under load."
+    likelihood: medium
+    impact: high
+    mitigation: "Retry with capped exponential backoff."
+security_concerns:
+  - id: pii-leak
+    threat: "User email leaks into application logs."
+    mitigation: "Redact PII fields in the log serializer."
+components:
+  - component_id: users-service
+    archetype: service
+    purpose: "Create and read users."
+    responsibilities: ["Validate and persist a new user."]
+    implements_requirements: [FR-001]
+    acceptance_criteria: ["create returns 201 with the new user id"]
+    status: confirmed

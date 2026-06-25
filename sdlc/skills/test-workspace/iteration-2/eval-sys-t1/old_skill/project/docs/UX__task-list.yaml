@@ -1,0 +1,44 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "arceval1-ar01-ar01-ar01-archeval1ux01"
+  status: "complete"
+
+id: SCR-001
+surface_id: task-list
+surface_type: screen
+
+layout:
+  regions:
+    - name: header
+      content: "Create-task button + status filter"
+    - name: list
+      content: "Paginated table of tasks"
+
+states:
+  default: { description: "Tasks rendered as a table." }
+  loading: { description: "Skeleton rows." }
+  empty: { description: "No tasks yet — prompt to create one." }
+  error: { description: "Inline alert with retry." }
+
+interactions:
+  - id: create-task
+    actor: user
+    trigger: click
+    trigger_target: "Create-task button"
+    effects: ["POST /v1/tasks", "prepend new row"]
+    target_surface: task-detail
+
+components: []
+
+validation_rules:
+  - field: title
+    rules: ["required", "max_length=140"]
+    error_message: "Title is required and must be ≤140 chars."
+
+accessibility_notes: "List is keyboard navigable."
+
+traces_workflows: ["WKF-001"]
+implements_requirements: ["FR-001"]
+references_entities: ["ENT-001"]

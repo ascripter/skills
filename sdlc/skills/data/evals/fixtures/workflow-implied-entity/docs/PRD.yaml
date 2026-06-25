@@ -1,0 +1,81 @@
+# Eval fixture for sdlc-data: WKF-implied entity sweep canary.
+#
+# PRD declares 4 workflows + 1 key entity. WKF-003 ("switch git branch and
+# continue work") implies a BranchSession-style entity that no FR or ENT-NNN
+# names directly. Without the scope-completeness sweep the data skill would
+# never propose it; with the sweep it surfaces as a concrete candidate.
+
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "dteval01-dt01-dt01-dt01-dteval01dt01"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+problem_opportunity:
+  problem_statement: "Solo developers run a small local pipeline tool and need to keep per-branch work isolated when switching git branches mid-run."
+  who_has_pain: ["solo developers"]
+  current_workarounds: ["manually copying state files"]
+
+users_personas:
+  primary_users:
+    - "PER-001: Solo developers using a CLI workflow tool"
+  user_goals:
+    - "GOL-001: Keep work isolated per git branch"
+  user_frustrations:
+    - "PAN-001: State leaks across branches"
+  expertise_level: intermediate
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Initialize a new project at the current directory"
+    - "WKF-002: Run the next pipeline stage and surface its artifact"
+    - "WKF-003: Switch git branch and continue work on a separate isolated stream"
+    - "WKF-004: Resume an interrupted run on the active branch"
+  primary_jobs_to_be_done:
+    - "JTB-001: Move from idea to artifact with reliable per-branch isolation"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: `myapp init` creates a fresh project directory"
+    - "FR-002: `myapp run` invokes the next pipeline stage"
+    - "FR-003: Per-branch state isolation via per-branch identifiers in the local store"
+
+technical_constraints:
+  primary_language: python
+  primary_language_confidence: confirmed
+  framework: ["typer"]
+  runtime_platform: cli
+  runtime_platform_confidence: confirmed
+  deployment_target: self_hosted
+
+product_identity:
+  name: "myapp"
+  slug: "myapp"
+  one_liner: "Local pipeline runner with per-branch isolation."
+
+non_functional_requirements:
+  scalability: small
+  reliability: high
+  accessibility: none_yet
+
+data_model:
+  # PRD names ONE entity. WKF-003 (and FR-003) imply a BranchSession entity
+  # that should surface only via the sweep — not the direct upstream signal.
+  key_entities:
+    - "ENT-001: Project — a directory tracked by the pipeline runner"
+  data_ownership: user_owned
+  data_volume_estimate: kilobytes
+  storage_preferences:
+    - "sqlite"
+
+security_compliance:
+  auth_model: none
+  data_sensitivity: internal
+
+business_model:
+  monetization: open_source
+  license_type: mit

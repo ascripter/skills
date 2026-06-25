@@ -1,0 +1,66 @@
+# Eval fixture for sdlc-api: api_kind: none early-skip path.
+# PRD declares runtime_platform: cli + an open-source local tool. The api
+# skill should pick api_kind: none in Phase 4, skip themes 2-11, and write
+# a minimal API.yaml with rationale + initialized changelog + empty
+# resource_inventory.
+
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "apieval2-ap02-ap02-ap02-apieval2ap02"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+problem_opportunity:
+  problem_statement: "Tinkerers want a tiny local notes CLI."
+
+users_personas:
+  primary_users:
+    - "PER-001: Tinkerers comfortable with the shell"
+  user_goals:
+    - "GOL-001: Jot a note in 2 keystrokes"
+  user_frustrations:
+    - "PAN-001: Note apps require leaving the terminal"
+  expertise_level: intermediate
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Add a note inline"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: `notes add <body>` appends a note to the local store"
+
+technical_constraints:
+  primary_language: python
+  primary_language_confidence: confirmed
+  runtime_platform: cli
+  runtime_platform_confidence: confirmed
+  deployment_target: self_hosted
+
+product_identity:
+  name: "notes"
+  slug: "notes"
+  one_liner: "Local notes CLI."
+
+non_functional_requirements:
+  scalability: small
+  reliability: best_effort
+  accessibility: none_yet
+
+data_model:
+  key_entities:
+    - "ENT-001: Note"
+  data_ownership: user_owned
+  data_volume_estimate: kilobytes
+
+security_compliance:
+  auth_model: none
+  data_sensitivity: internal
+
+business_model:
+  monetization: open_source
+  license_type: mit

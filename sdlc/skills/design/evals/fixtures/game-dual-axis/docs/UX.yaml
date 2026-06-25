@@ -1,0 +1,70 @@
+metadata:
+  ux_version: "1.1"
+  last_updated: "2026-06-22T09:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "aaaaaaaa-0000-0000-0000-000000000002"
+  monorepo: false
+  status: "complete"
+
+ux_warnings: []
+
+surface_family: web
+surface_family_confidence: confirmed
+
+design_principles:
+  tenets:
+    - "Instant play — no loading walls"
+    - "Readable HUD over a busy canvas"
+    - "Tactile, juicy feedback on every action"
+
+navigation_model:
+  type: hybrid
+  top_level_nodes:
+    - "main-menu"
+    - "game"
+    - "settings"
+
+surface_inventory:
+  - id: SCR-001
+    surface_id: main-menu
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__main-menu.yaml
+    traces_workflows: ["WKF-001"]
+    implements_requirements: ["FR-003"]
+    references_entities: ["ENT-001"]
+  - id: SCR-002
+    surface_id: game-canvas
+    surface_type: page
+    status: confirmed
+    file_path: docs/UX__game-canvas.yaml
+    traces_workflows: ["WKF-002"]
+    implements_requirements: ["FR-001", "FR-002"]
+    references_entities: ["ENT-002", "ENT-003", "ENT-004"]
+  - id: SCR-003
+    surface_id: settings
+    surface_type: modal
+    status: confirmed
+    file_path: docs/UX__settings.yaml
+    traces_workflows: ["WKF-003"]
+    implements_requirements: ["FR-004"]
+    references_entities: []
+
+component_library:
+  name: "React + Tailwind (menus & HUD); custom layer over PixiJS (canvas)"
+  name_confidence: confirmed
+  theming_approach: tailwind_utility
+
+state_patterns:
+  default: "Render last-seen menu state immediately"
+  error: "Inline toast in menus; in-canvas banner for game/load errors"
+  error_confidence: confirmed
+
+content_rules:
+  tone: "Punchy + atmospheric"
+  tone_confidence: confirmed
+
+accessibility:
+  wcag_target: none_yet
+  wcag_target_confidence: confirmed
+  motion_preferences: true

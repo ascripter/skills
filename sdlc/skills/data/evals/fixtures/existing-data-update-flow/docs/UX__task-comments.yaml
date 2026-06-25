@@ -1,0 +1,38 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "dataeval2-dt02-dt02-dt02-dataevl2ux04"
+  status: "complete"
+
+id: SCR-003
+surface_id: task-comments
+surface_type: panel
+parent_surface: task-detail
+
+layout:
+  regions:
+    - name: thread
+      content: "Chronological comment list"
+    - name: composer
+      content: "New-comment textarea + submit"
+
+states:
+  default: { description: "Comments rendered chronologically." }
+  empty: { description: "No comments yet." }
+  error: { description: "Inline alert with retry." }
+
+interactions:
+  - id: add-comment
+    actor: user
+    trigger: submit
+    trigger_target: "Composer submit"
+    effects: ["POST /tasks/:id/comments", "append to thread"]
+
+components: []
+
+accessibility_notes: "Composer is keyboard reachable."
+
+traces_workflows: ["WKF-003"]
+implements_requirements: ["FR-003"]
+references_entities: ["ENT-002"]

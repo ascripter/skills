@@ -1,0 +1,18 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-06-22T09:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "aaaaaaaa-0000-0000-0000-000000000002"
+  status: "complete"
+
+id: SCR-002
+surface_id: game-canvas
+surface_type: page
+route: "/play"
+layout:
+  region_tree:
+    - { id: canvas, role: content }
+    - { id: hud, role: overlay }
+traces_workflows: ["WKF-002"]
+implements_requirements: ["FR-001", "FR-002"]
+references_entities: ["ENT-002", "ENT-003", "ENT-004"]

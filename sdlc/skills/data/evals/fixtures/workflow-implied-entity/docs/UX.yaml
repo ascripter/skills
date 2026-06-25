@@ -1,0 +1,77 @@
+# Minimal UX fixture for the workflow-implied-entity eval. Three CLI commands;
+# every WKF is traced.
+
+metadata:
+  ux_version: "1.2"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "dteval01-dt01-dt01-dt01-dteval01ux01"
+  monorepo: false
+  status: "complete"
+
+ux_warnings: []
+
+surface_family: cli
+surface_family_confidence: confirmed
+
+design_principles:
+  tenets:
+    - "Local-first, branch-isolated."
+
+navigation_model:
+  type: command_tree
+  top_level_nodes: [init, run, switch]
+
+surface_inventory:
+  - id: SCR-001
+    surface_id: cmd-init
+    surface_type: cli_command
+    status: confirmed
+    file_path: docs/UX__cmd-init.yaml
+    traces_workflows: ["WKF-001"]
+    implements_requirements: ["FR-001"]
+    references_entities: ["ENT-001"]
+  - id: SCR-002
+    surface_id: cmd-run
+    surface_type: cli_command
+    status: confirmed
+    file_path: docs/UX__cmd-run.yaml
+    traces_workflows: ["WKF-002", "WKF-004"]
+    implements_requirements: ["FR-002"]
+    references_entities: ["ENT-001"]
+  - id: SCR-003
+    surface_id: cmd-switch
+    surface_type: cli_command
+    status: confirmed
+    file_path: docs/UX__cmd-switch.yaml
+    traces_workflows: ["WKF-003"]
+    implements_requirements: ["FR-003"]
+    references_entities: ["ENT-001"]
+
+component_library:
+  name: "Rich (Python CLI)"
+  name_confidence: confirmed
+
+state_patterns:
+  error: "Errors to stderr; non-zero exit per semantic code."
+  error_confidence: confirmed
+
+content_rules:
+  tone: "Technical, terse."
+  tone_confidence: confirmed
+
+accessibility:
+  wcag_target: not_applicable_cli
+  wcag_target_confidence: confirmed
+
+cli:
+  root_command: myapp
+  root_command_confidence: confirmed
+  command_shape: verb_noun
+  arg_parsing_library: typer
+  arg_parsing_library_confidence: confirmed
+  arg_conventions: gnu
+  help_text_format: auto_generated
+  output_formats:
+    supported: [plain, json]
+    default: "plain"

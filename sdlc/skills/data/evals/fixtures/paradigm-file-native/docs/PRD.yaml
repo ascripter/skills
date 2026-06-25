@@ -1,0 +1,81 @@
+# Eval fixture for sdlc-data: file_native paradigm recommendation + production.
+#
+# Signals point hard at file_native: single-user CLI, kilobytes of data,
+# storage_preferences explicitly want diffable git-friendly YAML files and
+# "no database server". The skill should recommend `file_native`, drop the
+# relational themes, and produce identity_conventions + pydantic_type fields.
+
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-05-27T00:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "dteval03-fn01-fn01-fn01-dteval03fn01"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+problem_opportunity:
+  problem_statement: "Writers keep notes and outline drafts as files they want to read, hand-edit, and version in git — a database would get in the way."
+  who_has_pain: ["solo technical writers"]
+  current_workarounds: ["scattered markdown files with no structure"]
+
+users_personas:
+  primary_users:
+    - "PER-001: Solo writers using a local CLI"
+  user_goals:
+    - "GOL-001: Keep structured drafts as human-readable, git-diffable files"
+  user_frustrations:
+    - "PAN-001: Opaque binary stores they can't hand-edit or diff"
+  expertise_level: intermediate
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Create a new outline document from a template"
+    - "WKF-002: Add sections to an outline and save it as a serialized file"
+    - "WKF-003: Export an outline bundle for sharing"
+  primary_jobs_to_be_done:
+    - "JTB-001: Turn rough ideas into a structured, versionable outline file"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: `outline new` writes a fresh outline document to disk"
+    - "FR-002: `outline add-section` appends a section to an outline"
+    - "FR-003: `outline export` bundles an outline and its sections into one file"
+
+technical_constraints:
+  primary_language: python
+  primary_language_confidence: confirmed
+  framework: ["typer", "pydantic"]
+  runtime_platform: cli
+  runtime_platform_confidence: confirmed
+  deployment_target: self_hosted
+
+product_identity:
+  name: "outline"
+  slug: "outline"
+  one_liner: "A CLI that keeps structured outlines as diffable YAML files."
+
+non_functional_requirements:
+  scalability: small
+  reliability: high
+  accessibility: none_yet
+
+data_model:
+  key_entities:
+    - "ENT-001: Outline — a document holding an ordered set of sections"
+    - "ENT-002: Section — one part of an outline"
+  data_ownership: user_owned
+  data_volume_estimate: kilobytes
+  storage_preferences:
+    - "serialized YAML files on the filesystem"
+    - "no database server"
+    - "git-friendly and hand-editable"
+
+security_compliance:
+  auth_model: none
+  data_sensitivity: internal
+
+business_model:
+  monetization: open_source
+  license_type: mit

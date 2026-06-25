@@ -1,0 +1,415 @@
+metadata:
+  test_strategy_version: "1.0"
+  last_updated: "2026-06-25T00:00:00Z"
+  generated_by: sdlc-test
+  session_id: "eval-sys-t3-0000-0000-0000-evalsyst3sys1"
+  status: complete
+  changelog:
+    - "1.0 (2026-06-25): Initial system test strategy produced by sdlc-test (system mode)."
+  upstream_provenance:
+    - {file: docs/PRD.yaml, session_id: "arceval1-ar01-ar01-ar01-archeval1pr01", last_updated: "2026-05-26T00:00:00Z", sha256: "placeholder-prd00"}
+    - {file: docs/DATA-MODEL.yaml, session_id: "arceval1-ar01-ar01-ar01-archeval1dm01", last_updated: "2026-05-26T00:00:00Z", sha256: "placeholder-dat00"}
+    - {file: docs/ARCH.yaml, session_id: "archcm01-arcm-arcm-arcm-archcontainr01", last_updated: "2026-05-26T00:00:00Z", sha256: "placeholder-arc00"}
+    - {file: docs/API.yaml, session_id: "arceval1-ar01-ar01-ar01-archeval1ap01", last_updated: "2026-05-26T00:00:00Z", sha256: "placeholder-api00"}
+    - {file: docs/UX.yaml, session_id: "arceval1-ar01-ar01-ar01-archeval1ux01", last_updated: "2026-05-26T00:00:00Z", sha256: "placeholder-ux000"}
+
+# ---------------------------------------------------------------------------
+# test_approach — modular monolith on TypeScript (Next.js + Fastify).
+# A backend API + scheduled worker + frontend. The modular-monolith pattern
+# means integration tests are cheaply achievable inside each module, so the
+# split stays near the 70/20/10 default. Contract tests are important because
+# web-frontend calls backend-api over HTTP and the digest-worker is a
+# separate deployment unit.
+# ---------------------------------------------------------------------------
+test_approach:
+  pyramid_targets:
+    unit: "~70%"
+    integration: "~20%"
+    e2e: "~10%"
+  pyramid_targets_confidence: inferred
+  pyramid_rationale: >
+    Modular monolith with TypeScript. Most logic is pure enough for fast unit
+    tests. Integration covers the repository/DB boundary cheaply via
+    testcontainers. E2e and contract cover the HTTP seam between
+    web-frontend and backend-api, and the scheduled digest path.
+  ai_builder_notes: >
+    Keep tests deterministic: freeze time for digest-schedule assertions, stub
+    the email provider (never send real mail), and never share mutable
+    state between test files. Prefer factory helpers over raw SQL fixtures.
+    Contract tests should run in CI without a running backend: use Pact or
+    equivalent offline consumer-driven contracts.
+
+# ---------------------------------------------------------------------------
+# coverage_threshold — 80 % line is the standard floor for a TypeScript
+# web product at this stage. The digest-worker handles email delivery and
+# DigestRun recording (reliability=high) so it deserves a higher bar; that
+# will be set in its container file.
+# ---------------------------------------------------------------------------
+coverage_threshold:
+  line_pct: 80.0
+  line_pct_confidence: inferred
+  branch_pct: null
+  rationale: >
+    80 % line coverage is an industry-standard floor for a two-engineer team
+    building a reliability=high, subscription-based SaaS. Branch coverage is
+    left to per-container files where the module owner is in the best position
+    to set the bar.
+
+# ---------------------------------------------------------------------------
+# Global mock / fixture / data policy
+# ---------------------------------------------------------------------------
+mock_policy: >
+  Prefer real wiring within a container boundary; fake only external dependencies
+  (email provider, OIDC identity-provider, and the production database in unit
+  tests). In unit tests mock collaborators at module boundaries. In integration
+  tests use testcontainers (Postgres) for the DB; inject a fake SMTP/SES client.
+  Never mock the class-under-test itself.
+mock_policy_confidence: inferred
+mock_policy_rationale: >
+  The modular monolith keeps most logic in a single deployable, so in-process
+  integration is cheap and trustworthy. Faking only the outer I/O boundary
+  (DB, email, identity) keeps tests realistic without requiring live external
+  services in CI.
+
+fixture_strategy: >
+  Use factory functions (e.g. createTask(), createUser()) seeded with
+  deterministic data to build test fixtures programmatically. For integration
+  tests, spin up a fresh testcontainers Postgres instance per test suite and
+  apply migrations before the first test. Digest-worker tests use a fixed
+  clock (2026-01-05T08:00:00Z, a Monday) injected via dependency injection.
+fixture_strategy_confidence: inferred
+fixture_strategy_rationale: >
+  Factory functions keep fixture definitions close to the model and reduce
+  coupling to the schema. Testcontainers avoid the shared-state problems of
+  a persistent test DB while remaining identical to the production database.
+
+test_data_strategy: >
+  No real PII in test data. All user identities are synthetic (test@tinytrack.dev
+  pattern). DigestRun fixtures are seeded with a fixed number of open tasks (0,
+  1, 5) to cover edge cases including WKF edge case EDG-001 (zero open tasks).
+  Sensitive fields (JWT secrets, SMTP credentials) are environment variables
+  injected at runtime; the test suite reads them from .env.test and never
+  commits them.
+
+ci_integration: >
+  Unit + integration tests gate every PR merge (must pass, coverage ≥ 80%).
+  E2e + contract tests run nightly and on main-branch pushes. Load and
+  accessibility tests run weekly. Security tests run on every release candidate.
+  Test runner: Vitest for TS unit/integration; Playwright for e2e; k6 for load.
+
+environments:
+  - name: ci
+    purpose: PR gate — unit + integration only; testcontainers for Postgres.
+  - name: staging
+    purpose: Nightly e2e, contract, load, and security runs against a live
+      deployment with synthetic data. Mirrors production configuration.
+
+# ---------------------------------------------------------------------------
+# tests — CROSS-CONTAINER suite
+# Source: WKF-001/002/003 (all cross-container per ARCH traces_prd_workflows),
+# ARCH.edges calls (web-frontend → backend-api × 3 resources + backend-api →
+# identity-provider), NFR-001 (load), and UX accessibility NFR (wcag_aa).
+# ---------------------------------------------------------------------------
+tests:
+
+  # --- E2E: WKF-001 — Create and triage a task ---
+  - tst_id: TST-001
+    name: "E2E: user creates and triages a task (WKF-001)"
+    tier: e2e
+    description: >
+      Verifies the full WKF-001 path: a logged-in user creates a new task via
+      the web-frontend, the backend-api persists it to Postgres, and the
+      task-list screen reflects the new item. Covers FR-001 (create and list
+      tasks) end-to-end across web-frontend and backend-api.
+    directives:
+      - "Arrange: start the full stack (web-frontend + backend-api + Postgres) with a seeded authenticated user."
+      - "Act: POST /v1/tasks via the UI (Playwright click-through on the task-list screen)."
+      - "Assert: the response status is 201; the task-list screen shows the new task within 300 ms (NFR-001)."
+      - "Also assert: the task persists across a page reload."
+    covers:
+      - WKF-001
+      - FR-001
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Seed one authenticated user via factory; clear tasks table before test."
+    acceptance: "The new task appears in the task-list within 300 ms of creation with status 'open'."
+    status: confirmed
+
+  # --- E2E: WKF-002 — Comment on a task and close it ---
+  - tst_id: TST-002
+    name: "E2E: user comments on a task and closes it (WKF-002)"
+    tier: e2e
+    description: >
+      Verifies the full WKF-002 path: a logged-in user opens an existing task,
+      adds a comment, then marks it done. Exercises web-frontend (task-detail
+      + comments-panel screens) calling backend-api comments and tasks
+      resources. Covers FR-002 (add comments) and FR-003 (mark done).
+    directives:
+      - "Arrange: seed one open task and one authenticated user."
+      - "Act 1: POST /v1/tasks/{task_id}/comments via the comments-panel UI."
+      - "Assert 1: comment appears on the task-detail screen."
+      - "Act 2: PATCH /v1/tasks/{task_id} { status: done } via the UI."
+      - "Assert 2: task status is 'done' in the task-list and task-detail screens."
+    covers:
+      - WKF-002
+      - FR-002
+      - FR-003
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Seed one open task and one authenticated user."
+    acceptance: "After the PATCH, GET /v1/tasks/{task_id} returns status 'done' and the comment is persisted."
+    status: confirmed
+
+  # --- E2E: WKF-003 — Configure digest and review past runs ---
+  - tst_id: TST-003
+    name: "E2E: user configures weekly digest and reviews past runs (WKF-003)"
+    tier: e2e
+    description: >
+      Verifies the front-half of WKF-003: a logged-in user navigates to the
+      digest-settings screen, enables the weekly digest for Monday 08:00, saves
+      the configuration, and can view a seeded past DigestRun. Covers FR-004
+      across web-frontend and backend-api.
+    directives:
+      - "Arrange: seed an authenticated user and two past DigestRun records."
+      - "Act: navigate to the digest-settings screen; enable digest; set day=Monday, time=08:00; save."
+      - "Assert 1: GET /v1/digest-settings returns enabled=true, send_day='monday', send_time='08:00'."
+      - "Assert 2: past runs are listed on the digest-settings screen."
+    covers:
+      - WKF-003
+      - FR-004
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Seed two DigestRun records with known task counts."
+    acceptance: "GET /v1/digest-settings returns the updated schedule; past runs list is non-empty."
+    status: confirmed
+
+  # --- E2E: WKF-003 digest-worker send path ---
+  - tst_id: TST-004
+    name: "E2E: digest-worker sends weekly digest email and records DigestRun (WKF-003 worker path)"
+    tier: e2e
+    description: >
+      Verifies the back-half of WKF-003 (automated weekly send, FR-005): the
+      digest-worker fires on a frozen clock (Monday 08:00), reads open tasks
+      from Postgres, calls the fake SES adapter, and writes a DigestRun record.
+      Covers EDG-001 (zero open tasks produces an email with no items — not
+      skipped). Exercises digest-worker and backend-api (shared DB).
+    directives:
+      - "Arrange: testcontainers Postgres with 3 open tasks for user-A and 0 for user-B; freeze clock to 2026-01-05T08:00:00Z (Monday)."
+      - "Act: invoke the digest-worker job handler directly (unit-invocation, not via cron) with a fake SES client."
+      - "Assert 1: fake SES client received exactly 2 sendEmail calls (one per user with digest enabled)."
+      - "Assert 2: user-A email body lists 3 tasks by owner."
+      - "Assert 3: a DigestRun record is written to Postgres with sent_at=2026-01-05T08:00:00Z."
+      - "Assert 4: user-B email body says 'No open tasks this week' (EDG-001)."
+    covers:
+      - WKF-003
+      - FR-005
+    involves_containers:
+      - digest-worker
+      - backend-api
+    priority: must
+    setup: "Testcontainers Postgres with migrations; inject fakeSESClient; inject frozen clock."
+    acceptance: "fakeSESClient.calls.length === 2; DigestRun is persisted with correct metadata."
+    status: confirmed
+
+  # --- Contract: web-frontend → backend-api (tasks resource) ---
+  - tst_id: TST-005
+    name: "Contract: web-frontend consumes tasks resource (list-tasks, create-task, patch-task)"
+    tier: contract
+    description: >
+      Pins the tasks resource contract (operations list-tasks, create-task,
+      patch-task-status) so web-frontend and backend-api can evolve
+      independently. Consumer-driven contract test: web-frontend drives the
+      expected request/response shape; backend-api must satisfy it.
+    directives:
+      - "Consumer (web-frontend): define Pact interactions for GET /v1/tasks (200 + cursor envelope), POST /v1/tasks (201 + Task body), PATCH /v1/tasks/{id} (200 + updated Task)."
+      - "Provider (backend-api): run pact:verify against the published pact; no live DB required (use provider state hooks)."
+      - "Assert: pact:verify exits 0 for all three interactions."
+    covers:
+      - WKF-001
+      - FR-001
+      - FR-003
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Pact broker (or local file) for contract exchange; provider state hooks seed test tasks."
+    acceptance: "pact:verify exits 0 with all interactions verified."
+    status: confirmed
+
+  # --- Contract: web-frontend → backend-api (comments resource) ---
+  - tst_id: TST-006
+    name: "Contract: web-frontend consumes comments resource (list-comments, create-comment)"
+    tier: contract
+    description: >
+      Pins the comments resource contract for WKF-002. Consumer-driven:
+      web-frontend defines the expected request/response shape for
+      GET /v1/tasks/{id}/comments and POST /v1/tasks/{id}/comments;
+      backend-api verifies.
+    directives:
+      - "Consumer: define Pact interactions for GET /v1/tasks/{id}/comments (200 + comment list) and POST (201 + Comment body)."
+      - "Provider: pact:verify with provider state hook that seeds one task."
+      - "Assert: pact:verify exits 0."
+    covers:
+      - WKF-002
+      - FR-002
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Provider state hook seeds one task for the comment operations."
+    acceptance: "pact:verify exits 0 for both comment interactions."
+    status: confirmed
+
+  # --- Contract: web-frontend → backend-api (digest-settings resource) ---
+  - tst_id: TST-007
+    name: "Contract: web-frontend consumes digest-settings resource (get, put)"
+    tier: contract
+    description: >
+      Pins the digest-settings resource contract for the settings half of
+      WKF-003. Consumer-driven: web-frontend defines GET /v1/digest-settings
+      (200 + DigestSettings body) and PUT /v1/digest-settings (200 + updated
+      body); backend-api verifies.
+    directives:
+      - "Consumer: Pact interactions for GET and PUT /v1/digest-settings."
+      - "Provider: pact:verify with state hook that seeds default digest settings."
+      - "Assert: pact:verify exits 0."
+    covers:
+      - WKF-003
+      - FR-004
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: must
+    setup: "Provider state hook seeds default digest settings row."
+    acceptance: "pact:verify exits 0 for GET and PUT interactions."
+    status: confirmed
+
+  # --- Contract: backend-api → identity-provider (JWT validation) ---
+  - tst_id: TST-008
+    name: "Contract: backend-api validates bearer JWT against identity-provider"
+    tier: contract
+    description: >
+      Pins the JWT validation contract between backend-api and the external
+      OIDC identity-provider. Verifies that the backend rejects an expired
+      JWT, a JWT with an unknown issuer, and accepts a valid signed JWT with
+      the expected claims.
+    directives:
+      - "Arrange: pre-generate three JWTs via a local key-pair that mimics the OIDC provider: (a) valid, (b) expired, (c) wrong issuer."
+      - "Act: send each to a protected backend-api endpoint (GET /v1/tasks)."
+      - "Assert valid: 200 response."
+      - "Assert expired: 401 with WWW-Authenticate header."
+      - "Assert wrong issuer: 401."
+    covers:
+      - FR-001
+    involves_containers:
+      - backend-api
+      - identity-provider
+    priority: must
+    setup: "Local RS256 key-pair; no live OIDC provider required — backend configured with test JWKS URL pointing at a local mock."
+    acceptance: "Valid JWT → 200; expired JWT → 401; wrong-issuer JWT → 401."
+    status: confirmed
+
+  # --- Load: NFR-001 p95 task-list < 300 ms ---
+  - tst_id: TST-009
+    name: "Load: task-list endpoint p95 latency < 300 ms under concurrent load"
+    tier: load
+    description: >
+      Verifies NFR-001: p95 response time for GET /v1/tasks is under 300 ms
+      when 50 concurrent virtual users hit the endpoint continuously for
+      2 minutes. Run against the staging environment with 1 000 seeded tasks.
+    directives:
+      - "Tool: k6."
+      - "Scenario: 50 VUs ramp up over 30 s, sustain for 90 s, ramp down 30 s."
+      - "Target: GET /v1/tasks with a valid Bearer JWT."
+      - "Seed: 1 000 tasks in Postgres before the run."
+      - "Assert: k6 threshold p(95) < 300 ms; error rate < 1%."
+    covers:
+      - NFR-001
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: should
+    setup: "Staging environment; 1 000 task records seeded; valid test JWT injected."
+    acceptance: "k6 exits 0: p(95) < 300 ms and http_req_failed < 1%."
+    status: confirmed
+
+  # --- Security: unauthenticated access rejected system-wide ---
+  - tst_id: TST-010
+    name: "Security: unauthenticated requests to backend-api are rejected with 401"
+    tier: security
+    description: >
+      Verifies that every backend-api resource rejects requests without a valid
+      Bearer JWT. Exercises the JWT-validation middleware from the security
+      dimension of the auth model (PRD.security_compliance.auth_model=jwt).
+    directives:
+      - "Arrange: run backend-api with testcontainers Postgres; no Authorization header."
+      - "Act: send GET /v1/tasks, GET /v1/tasks/{id}/comments, GET /v1/digest-settings without any token."
+      - "Assert: all three return 401 with a WWW-Authenticate header."
+      - "Repeat with an invalid (malformed) token — assert 401."
+    covers:
+      - FR-001
+      - FR-002
+      - FR-004
+    involves_containers:
+      - backend-api
+    priority: must
+    setup: "backend-api running with a test JWKS endpoint; no seeded credentials."
+    acceptance: "All three unauthenticated calls return 401; no 500 errors."
+    status: confirmed
+
+  # --- Accessibility: WCAG AA on task-list surface ---
+  - tst_id: TST-011
+    name: "Accessibility: task-list screen meets WCAG AA (axe audit)"
+    tier: accessibility
+    description: >
+      Verifies that the task-list UX surface (SCR-001) meets WCAG 2.1 AA as
+      required by PRD.non_functional_requirements.accessibility=wcag_aa.
+      Uses axe-playwright to run an automated accessibility audit during an
+      e2e session.
+    directives:
+      - "Arrange: load the task-list screen with 5 seeded tasks in Playwright."
+      - "Act: run axe().analyze() on the full page."
+      - "Assert: zero critical or serious violations."
+      - "Also check keyboard navigation: Tab through task rows, Enter to open detail."
+    covers:
+      - FR-001
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: should
+    setup: "Full stack in staging or local docker-compose; 5 seeded tasks."
+    acceptance: "axe().analyze() returns 0 critical/serious violations; keyboard navigation reaches every task row."
+    status: confirmed
+
+  # --- Accessibility: WCAG AA on digest-settings surface ---
+  - tst_id: TST-012
+    name: "Accessibility: digest-settings screen meets WCAG AA (axe audit)"
+    tier: accessibility
+    description: >
+      Verifies that the digest-settings UX surface (SCR-004) meets WCAG 2.1 AA.
+      Run alongside TST-011 in the same Playwright session to share setup cost.
+    directives:
+      - "Arrange: navigate to the digest-settings screen with one past DigestRun seeded."
+      - "Act: run axe().analyze() on the page."
+      - "Assert: zero critical or serious violations."
+    covers:
+      - FR-004
+    involves_containers:
+      - web-frontend
+      - backend-api
+    priority: should
+    setup: "Same session as TST-011; navigate to /digest-settings."
+    acceptance: "axe().analyze() returns 0 critical/serious violations."
+    status: confirmed
+
+container_strategies: []
+
+test_strategy_warnings:
+  - "WRN-001: FR-006 (Slack notification of digest) is a nice-to-have and has no ARCH container; no test seeded. Deferred to a future iteration when the Slack integration container is specified."
+  - "WRN-002: docs/INDEX.yaml not present (project has not run /sdlc:setup); upstream files were read in full."

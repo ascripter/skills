@@ -1,0 +1,49 @@
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-06-22T08:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "cccccccc-0000-0000-0000-000000000001"
+  monorepo: false
+  status: "complete"
+
+product_identity:
+  name: "taskline"
+  one_liner: "A scriptable CLI for capturing and exporting tasks from the terminal."
+  slug: "taskline"
+  idea_text: "A fast, no-frills command-line task tool for developers. Pure CLI — no GUI, no web surface. Output is plain/table/JSON for piping into other tools."
+
+problem_opportunity:
+  problem_statement: "Developers who live in the terminal context-switch to GUI task apps just to jot or export a task. They want a scriptable CLI that stays out of the way."
+  problem_statement_confidence: confirmed
+
+users_personas:
+  primary_users:
+    - "PER-001: Developers who live in the terminal and script their workflows."
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Add a task from the command line."
+    - "WKF-002: List and filter tasks."
+    - "WKF-003: Export tasks to CSV."
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Add a task with a title and optional priority."
+    - "FR-002: List and filter tasks, with table/json/plain output."
+    - "FR-003: Export tasks to CSV."
+
+technical_constraints:
+  primary_language: python
+  primary_language_confidence: confirmed
+  runtime_platform: cli
+  runtime_platform_confidence: confirmed
+  framework: ["click"]
+
+data_model:
+  key_entities:
+    - "ENT-001: Task — a single task with title, priority, and done state."
+
+non_functional_requirements:
+  accessibility: none_yet
+  other:
+    - "NFR-001: Every command is fully scriptable (machine-readable output, stable exit codes)."

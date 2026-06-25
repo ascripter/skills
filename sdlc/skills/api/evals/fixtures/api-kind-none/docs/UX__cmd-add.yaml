@@ -1,0 +1,35 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "apieval2-ap02-ap02-ap02-apieval2ux02"
+  status: "complete"
+
+id: SCR-001
+surface_id: cmd-add
+surface_type: cli_command
+cli_invocation: "notes add <text>"
+
+layout:
+  cli_args:
+    - name: text
+      kind: positional
+      required: true
+      help: "The note body to append."
+    - name: --tag
+      kind: option
+      required: false
+      help: "Optional tag to attach."
+
+states:
+  default: { description: "Note appended; prints the new note id." }
+  error: { description: "Non-zero exit + stderr message on failure." }
+
+interactions: []
+components: []
+
+accessibility_notes: inherit
+
+traces_workflows: ["WKF-001"]
+implements_requirements: ["FR-001"]
+references_entities: ["ENT-001"]

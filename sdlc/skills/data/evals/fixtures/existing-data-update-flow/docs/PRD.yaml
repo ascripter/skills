@@ -1,0 +1,79 @@
+# Eval fixture for sdlc-data: update-flow on stale DATA-MODEL.
+# PRD lists 3 FR-NNN and 2 ENT-NNN; the on-disk DATA-MODEL.yaml only knows
+# the first two FRs and the first entity. The skill must:
+#   (a) detect the stale state,
+#   (b) propose the missing Comment entity (drawn from FR-003),
+#   (c) prepend a metadata.changelog entry summarising the update,
+#   (d) emit any new data_warnings as WRN-NNN-prefixed entries.
+
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "dteval02-dt02-dt02-dt02-dteval02dt02"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+problem_opportunity:
+  problem_statement: "Engineering teams need a tiny issue tracker."
+
+users_personas:
+  primary_users:
+    - "PER-001: Engineering leads"
+  user_goals:
+    - "GOL-001: Add and triage tasks quickly"
+  user_frustrations:
+    - "PAN-001: Existing trackers are heavy"
+  expertise_level: intermediate
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Create a task"
+    - "WKF-002: Mark a task done"
+    - "WKF-003: Add a comment to a task"
+  primary_jobs_to_be_done:
+    - "JTB-001: Triage tasks without leaving the terminal"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Create a Task with title, status, owner"
+    - "FR-002: Mark a Task done"
+    - "FR-003: Add a Comment to a Task with author and body"
+
+technical_constraints:
+  primary_language: python
+  primary_language_confidence: confirmed
+  runtime_platform: server
+  runtime_platform_confidence: confirmed
+  deployment_target: cloud_aws
+
+product_identity:
+  name: "tinytrack"
+  slug: "tinytrack"
+  one_liner: "Featherweight engineering task tracker."
+
+non_functional_requirements:
+  scalability: medium
+  reliability: high
+  accessibility: wcag_aa
+
+data_model:
+  key_entities:
+    - "ENT-001: Task — an issue with id, title, status, owner_id"
+    - "ENT-002: Comment — a comment attached to a Task"
+  data_ownership: org_owned
+  data_volume_estimate: megabytes
+  storage_preferences:
+    - "postgres"
+
+security_compliance:
+  auth_model: jwt
+  data_sensitivity: internal
+  encryption_at_rest: true
+  audit_logging: true
+
+business_model:
+  monetization: subscription
+  license_type: proprietary

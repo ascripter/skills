@@ -1,0 +1,33 @@
+{
+  "eval_id": 1,
+  "eval_name": "system-workflow-coverage",
+  "prompt": "Run sdlc-test in SYSTEM mode (/sdlc:test) against the complete docs/ chain in this project (PRD.yaml, DATA-MODEL.yaml, ARCH.yaml, plus API.yaml + API__* and UX.yaml + UX__* enrichers — all status: complete). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; accept inferred pre-fills as proposed; skip optional themes at the gate. Then write docs/TEST-STRATEGY.yaml and run validate_schema.py until it validates. The product is a small web app task tracker (tinytrack) with a weekly digest. KEY CANARIES: (1) Workflow coverage is GATED — WKF-001 (create/triage a task), WKF-002 (comment + close), and WKF-003 (configure digest + review runs) are each traced by >=2 ARCH containers (web-frontend + backend-api; WKF-003 also digest-worker), so each MUST be covered by at least one system test (e2e or contract) whose `covers` names it, OR deferred via a WRN-NNN. The validator HARD-fails on an uncovered cross-container workflow. (2) The system file carries the GLOBAL policy every container inherits: test_approach.pyramid_targets, coverage_threshold.line_pct, mock_policy and fixture_strategy are all required. (3) Every test is a unique TST-NNN item with non-empty directives, a `covers` list of FR/NFR/ACR/WKF ids that resolve to PRD, `involves_containers` that resolve to ARCH container_ids, a priority and an acceptance line. Do NOT author per-container unit tests here — those belong in container mode.",
+  "assertions": [
+    {"id": "S1", "text": "docs/TEST-STRATEGY.yaml exists and can be parsed as valid YAML", "priority": "must"},
+    {"id": "S2", "text": "metadata.status == 'complete'", "priority": "must"},
+    {"id": "S3", "text": "metadata.changelog contains at least one entry", "priority": "must"},
+    {"id": "S4", "text": "test_approach.pyramid_targets is present and non-empty", "priority": "must"},
+    {"id": "S5", "text": "coverage_threshold.line_pct is present and is a number", "priority": "must"},
+    {"id": "S6", "text": "mock_policy is present and non-empty", "priority": "must"},
+    {"id": "S7", "text": "fixture_strategy is present and non-empty", "priority": "must"},
+    {"id": "S8", "text": "Every tst_id in tests[] matches the pattern TST-\\d{3,} and is unique across the file", "priority": "must"},
+    {"id": "S9", "text": "Every test item has a non-empty directives list (at least one directive string)", "priority": "must"},
+    {"id": "S10", "text": "Every test item has a non-empty covers list", "priority": "must"},
+    {"id": "S11", "text": "Every entry in every test's covers[] is a recognizable PRD id (matches FR-\\d+, NFR-\\d+, WKF-\\d+, ACR-\\d+, or JTB-\\d+)", "priority": "must"},
+    {"id": "S12", "text": "Every entry in every test's involves_containers[] matches a container_id that exists in ARCH.yaml containers[]", "priority": "must"},
+    {"id": "S13", "text": "Every test item has a non-empty priority field", "priority": "must"},
+    {"id": "S14", "text": "Every test item has a non-empty acceptance field", "priority": "must"},
+    {"id": "S15", "text": "WKF-001 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]", "priority": "must"},
+    {"id": "S16", "text": "WKF-002 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]", "priority": "must"},
+    {"id": "S17", "text": "WKF-003 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]", "priority": "must"},
+    {"id": "S18", "text": "Every entry in test_strategy_warnings[] matches the pattern ^WRN-\\d{3,}:\\s+.+", "priority": "must"},
+    {"id": "S19", "text": "No test in the system file is tier 'unit' (unit tests belong in container mode, not system mode)", "priority": "must"},
+    {"id": "S20", "text": "validate_schema.py exits with code 0 when run against docs/TEST-STRATEGY.yaml", "priority": "must"},
+    {"id": "S21", "text": "The prd_warnings WRN-001 (digest idempotency / double-send risk on FR-005) is addressed: either a system-level test's covers[] includes FR-005 or a note about double-send, OR a WRN-NNN deferral in test_strategy_warnings[] references the idempotency / double-send risk", "priority": "must"},
+    {"id": "S22", "text": "The PRD edge case EDG-001 (digest run with zero open tasks) is addressed: either a test's description or acceptance references the zero-task scenario, OR a WRN-NNN deferral in test_strategy_warnings[] names EDG-001 or the zero-open-tasks condition", "priority": "must"},
+    {"id": "S23", "text": "The system tests[] list contains more than one test (the suite is not collapsed to a single test covering everything)", "priority": "must"},
+    {"id": "S24", "text": "WKF-001, WKF-002, and WKF-003 are each covered by distinct tests (no single test is the only entry covering all three workflows at once)", "priority": "should"},
+    {"id": "S25", "text": "At least one test uses tier 'e2e' (cross-container workflow tests warrant e2e tier)", "priority": "should"},
+    {"id": "S26", "text": "NFR-001 (p95 task-list latency) is addressed by at least one test whose covers[] includes NFR-001, or deferred via a WRN-NNN", "priority": "should"}
+  ]
+}

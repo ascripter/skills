@@ -1,0 +1,137 @@
+# Pre-existing, complete SYSTEM test strategy. Used as an INPUT fixture for:
+#   * the container-mode eval (so the container file can inherit global policy
+#     cleanly), and
+#   * the --next eval (its presence is the "system is already done" signal that
+#     makes the resolver advance to the next ready container instead of
+#     re-running system mode).
+#
+# Covers every cross-container workflow (WKF-001/002/003 are each traced by >=2
+# ARCH containers) so the system-level workflow-coverage gate is green.
+# container_strategies is intentionally empty: no container has been drilled yet.
+metadata:
+  test_strategy_version: "1.0"
+  last_updated: "2026-06-25T00:00:00Z"
+  generated_by: sdlc-test
+  session_id: "testsys1-tsys-tsys-tsys-teststrategy01"
+  status: complete
+  changelog:
+    - "1.0 (2026-05-27): Initial system test strategy (test-eval input fixture)."
+
+test_approach:
+  pyramid_targets: {unit: "~70%", integration: "~20%", e2e: "~10%"}
+  pyramid_targets_confidence: inferred
+  pyramid_rationale: >
+    Modular monolith with a thin SPA: most behaviour is unit-testable in the
+    backend domain layer; a small band of cross-container e2e/contract tests
+    pins the workflows that span the web app, the API and the digest worker.
+  ai_builder_notes: >
+    Prefer fast in-process unit tests; reserve e2e for the three PRD workflows.
+
+coverage_threshold:
+  line_pct: 80.0
+  line_pct_confidence: inferred
+  branch_pct: 70.0
+  rationale: "80/70 floor for an internal team tool; money/PII paths trend higher."
+
+mock_policy: >
+  Mock only at process/network boundaries (the OIDC provider, the email
+  provider); use real in-process domain code and a real test Postgres.
+mock_policy_confidence: inferred
+
+fixture_strategy: >
+  Typed data factories per entity (Task, Comment, DigestRun); a seeded
+  test database reset between suites.
+fixture_strategy_confidence: inferred
+
+test_data_strategy: >
+  Deterministic factories with explicit ids; no reliance on wall-clock time
+  (inject a clock for the digest scheduler).
+
+ci_integration: >
+  Run unit + integration on every PR; e2e + contract on merge to main; fail
+  the build below the coverage floor.
+
+environments:
+  - name: ci
+    purpose: "Ephemeral containers (Postgres, mock OIDC) spun up per run."
+  - name: staging
+    purpose: "Near-prod environment for the nightly e2e + digest-send check."
+
+tests:
+  - tst_id: TST-001
+    name: "Create and triage a task (e2e)"
+    tier: e2e
+    description: "Drives WKF-001 across the web app and the backend API."
+    directives:
+      - "Arrange: authenticated user, empty board."
+      - "Act: create a task via the UI, then move it across the triage states."
+      - "Assert: the task persists and the board reflects each state change."
+    covers: [WKF-001]
+    involves_containers: [web-frontend, backend-api]
+    priority: must
+    setup: "Fresh test DB; mock OIDC issues a valid token."
+    acceptance: "A created task is visible and its state transitions persist."
+    status: confirmed
+
+  - tst_id: TST-002
+    name: "Comment on a task and close it (e2e)"
+    tier: e2e
+    description: "Drives WKF-002 across the web app and the backend API."
+    directives:
+      - "Arrange: an open task owned by the user."
+      - "Act: add a comment, then mark the task done."
+      - "Assert: the comment appears and the task is closed."
+    covers: [WKF-002]
+    involves_containers: [web-frontend, backend-api]
+    priority: must
+    acceptance: "A comment is persisted and the task closes."
+    status: confirmed
+
+  - tst_id: TST-003
+    name: "Configure the weekly digest and review past runs (e2e)"
+    tier: e2e
+    description: "Drives WKF-003 across the web app, backend API and digest worker."
+    directives:
+      - "Arrange: a team with open tasks; clock pinned to a Monday 08:00."
+      - "Act: enable the digest with a send time, trigger the worker, review runs."
+      - "Assert: a DigestRun is recorded and listed in the settings screen."
+    covers: [WKF-003]
+    involves_containers: [web-frontend, backend-api, digest-worker]
+    priority: must
+    setup: "Mock email provider; injected clock."
+    acceptance: "Enabling the digest produces a recorded run visible in the UI."
+    status: confirmed
+
+  - tst_id: TST-004
+    name: "Tasks API response contract"
+    tier: contract
+    description: "Pins the tasks resource response shape the web app depends on."
+    directives:
+      - "Arrange: seeded tasks."
+      - "Act: call GET/POST on the tasks resource."
+      - "Assert: responses match the API__tasks schema (status, fields, types)."
+    covers: [FR-001]
+    involves_containers: [web-frontend, backend-api]
+    priority: should
+    acceptance: "The tasks endpoints conform to the published contract."
+    status: confirmed
+
+  - tst_id: TST-005
+    name: "Task-list latency under load"
+    tier: load
+    description: "Verifies the p95 task-list latency NFR."
+    directives:
+      - "Arrange: a board with a realistic task volume."
+      - "Act: drive sustained read load against the task-list path."
+      - "Assert: p95 latency stays within the NFR budget."
+    covers: [NFR-001]
+    involves_containers: [backend-api]
+    priority: should
+    acceptance: "p95 task-list load < 300ms under the target load."
+    status: confirmed
+
+container_strategies:
+  - container_id: backend-api
+    file_path: docs/TEST-STRATEGY__backend-api.yaml
+
+test_strategy_warnings: []

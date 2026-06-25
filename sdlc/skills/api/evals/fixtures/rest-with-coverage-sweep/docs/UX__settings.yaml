@@ -1,0 +1,33 @@
+# Generic settings surface: no FR trace, no entity, no workflow. It exists to
+# test the api skill's surface-routing canary (route to an admin/settings
+# resource OR record a WRN deferral) — NOT to surface the backend digest.
+
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "apieval1-ap01-ap01-ap01-apieval1ux05"
+  status: "complete"
+
+id: SCR-004
+surface_id: settings
+surface_type: screen
+route: /settings
+
+layout:
+  regions:
+    - name: form
+      content: "App preferences (theme, notifications)"
+
+states:
+  default: { description: "Preferences form rendered." }
+  error: { description: "Inline alert with retry." }
+
+interactions: []
+components: []
+
+accessibility_notes: "Form is keyboard navigable."
+
+traces_workflows: []
+implements_requirements: []
+references_entities: []

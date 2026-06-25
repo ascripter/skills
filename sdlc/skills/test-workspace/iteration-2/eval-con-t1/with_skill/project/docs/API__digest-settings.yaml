@@ -1,0 +1,63 @@
+metadata:
+  api_resource_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-api
+  session_id: "arceval1-ar01-ar01-ar01-archeval1ap01"
+  status: "complete"
+
+resource_id: digest-settings
+base_path: /v1/digest-settings
+primary_entity: DigestRun
+traces_prd_features: ["FR-004"]
+traces_ux_surfaces: ["SCR-004"]
+traces_prd_workflows: ["WKF-003"]
+
+endpoints:
+  - id: OPR-006
+    operation_id: get-digest-settings
+    method: GET
+    path: /v1/digest-settings
+    summary: "Read digest schedule + recent runs"
+    responses:
+      "200":
+        description: ok
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/DigestSettings" }
+    security:
+      - bearer_jwt: ["read:tasks"]
+    idempotent: true
+  - id: OPR-007
+    operation_id: update-digest-settings
+    method: PATCH
+    path: /v1/digest-settings
+    summary: "Enable/disable the digest and set send time"
+    responses:
+      "200":
+        description: ok
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/DigestSettings" }
+    security:
+      - bearer_jwt: ["write:tasks"]
+    idempotent: true
+
+schemas:
+  DigestSettings:
+    projects_from: null
+    type: object
+    required: [enabled]
+    properties:
+      enabled: { type: boolean }
+      send_time_local: { type: string }
+      recent_runs:
+        type: array
+        items: { $ref: "#/schemas/DigestRun" }
+  DigestRun:
+    projects_from: DigestRun
+    type: object
+    required: [id, sent_at, recipient_count]
+    properties:
+      id: { type: string, format: uuid }
+      sent_at: { type: string, format: date-time }
+      recipient_count: { type: integer }

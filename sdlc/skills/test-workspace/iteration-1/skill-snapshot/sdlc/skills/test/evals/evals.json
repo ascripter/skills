@@ -1,0 +1,69 @@
+{
+  "skill_name": "sdlc-test",
+  "evals": [
+    {
+      "id": 1,
+      "name": "system-workflow-coverage",
+      "prompt": "Run sdlc-test in SYSTEM mode (/sdlc:test) against the complete docs/ chain in this project (PRD.yaml, DATA-MODEL.yaml, ARCH.yaml, plus API.yaml + API__* and UX.yaml + UX__* enrichers — all status: complete). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; accept inferred pre-fills as proposed; skip optional themes at the gate. Then write docs/TEST-STRATEGY.yaml and run validate_schema.py until it validates. The product is a small web task tracker (tinytrack) with a weekly digest. KEY CANARIES: (1) Workflow coverage is GATED — WKF-001 (create/triage a task), WKF-002 (comment + close), and WKF-003 (configure digest + review runs) are each traced by >=2 ARCH containers (web-frontend + backend-api; WKF-003 also digest-worker), so each MUST be covered by at least one system test (e2e or contract) whose `covers` names it, OR deferred via a WRN-NNN. The validator HARD-fails on an uncovered cross-container workflow. (2) The system file carries the GLOBAL policy every container inherits: test_approach.pyramid_targets, coverage_threshold.line_pct, mock_policy and fixture_strategy are all required. (3) Every test is a unique TST-NNN item with non-empty directives, a `covers` list of FR/NFR/ACR/WKF ids that resolve to PRD, `involves_containers` that resolve to ARCH container_ids, a priority and an acceptance line. Do NOT author per-container unit tests here — those belong in container mode.",
+      "expected_output": "docs/TEST-STRATEGY.yaml with test_approach.pyramid_targets set, coverage_threshold.line_pct set, mock_policy and fixture_strategy set, and a tests[] list of system-scoped tests (tiers in e2e/contract/load/security/accessibility). WKF-001, WKF-002 and WKF-003 each appear in some test's `covers` OR are deferred via a WRN-NNN in test_strategy_warnings. Every tst_id matches TST-NNN and is unique; every `covers` entry is an FR/NFR/ACR/WKF id resolving to a PRD id; every `involves_containers` entry is an ARCH container_id; every test_strategy_warnings entry starts with WRN-NNN. metadata.status == complete and metadata.changelog has >=1 entry. validate_schema.py exits 0 with [OK] complete (workflow coverage + ID formats + trace integrity all pass).",
+      "files": [
+        "evals/fixtures/web-app/docs/PRD.yaml",
+        "evals/fixtures/web-app/docs/DATA-MODEL.yaml",
+        "evals/fixtures/web-app/docs/UX.yaml",
+        "evals/fixtures/web-app/docs/UX__task-list.yaml",
+        "evals/fixtures/web-app/docs/UX__task-detail.yaml",
+        "evals/fixtures/web-app/docs/UX__comments-panel.yaml",
+        "evals/fixtures/web-app/docs/UX__digest-settings.yaml",
+        "evals/fixtures/web-app/docs/API.yaml",
+        "evals/fixtures/web-app/docs/API__tasks.yaml",
+        "evals/fixtures/web-app/docs/API__comments.yaml",
+        "evals/fixtures/web-app/docs/API__digest-settings.yaml",
+        "evals/fixtures/web-app/docs/ARCH.yaml"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "container-coverage-gate",
+      "prompt": "Run sdlc-test in CONTAINER mode for the `backend-api` container (equivalent to `/sdlc:test backend-api`). The project has a complete, validator-clean upstream chain (PRD.yaml, DATA-MODEL.yaml, ARCH.yaml + ARCH__backend-api.yaml, all status: complete) and an existing complete docs/TEST-STRATEGY.yaml whose global policy (pyramid, coverage floor, mock/fixture defaults) this container inherits. For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; accept inferred pre-fills as proposed; skip optional themes at the gate. Decompose backend-api's components into a unit/integration suite plus the risk-driven negative cases, then write docs/TEST-STRATEGY__backend-api.yaml and run validate_schema.py until it validates. KEY CANARIES (the trace-or-defer coverage gate — each HARD-fails if violated): (1) backend-api implements FR-001..FR-004; every one must appear in some test's `covers` OR be deferred via a WRN-NNN. (2) backend-api does NOT implement FR-005 (that belongs to digest-worker) — a test whose `covers` names FR-005 is rejected because it is not in the container's/components' implements_requirements. (3) Components `tasks-controller` and `digest-settings-controller` each declare acceptance_criteria — each must be targeted by >=1 test via `component_ref` (or deferred). (4) Every unit-tier test MUST set `component_ref` to a real components[].component_id from ARCH__backend-api.yaml. (5) The failure_modes id `postgres-unavailable` must be exercised by a test (`targets_failure_mode`) or deferred; the security_concerns ids `jwt-forgery` and `pii-in-logs` must each be exercised (`targets_security_concern`) or deferred. (6) Every tst_id is TST-NNN, unique within this file.",
+      "expected_output": "docs/TEST-STRATEGY__backend-api.yaml with container_id: backend-api, an overview, a coverage_target, and a non-empty tests[] list. FR-001..FR-004 each appear in some test's `covers` (or are deferred via WRN-NNN); no test covers FR-005. tasks-controller and digest-settings-controller are each named by some test's `component_ref` (or deferred). Every unit-tier test has a `component_ref` resolving to a component in ARCH__backend-api.yaml. postgres-unavailable, jwt-forgery and pii-in-logs are each exercised by a test's targets_failure_mode/targets_security_concern (or deferred). Every tst_id matches TST-NNN and is unique; every test_strategy_warnings entry starts with WRN-NNN; metadata.status == complete with >=1 changelog entry. backend-api is registered in TEST-STRATEGY.yaml.container_strategies[]. validate_schema.py exits 0 with [OK] complete (requirement + acceptance + risk coverage, component_ref/targets integrity, ID formats all pass).",
+      "files": [
+        "evals/fixtures/web-app/docs/PRD.yaml",
+        "evals/fixtures/web-app/docs/DATA-MODEL.yaml",
+        "evals/fixtures/web-app/docs/UX.yaml",
+        "evals/fixtures/web-app/docs/UX__task-list.yaml",
+        "evals/fixtures/web-app/docs/UX__task-detail.yaml",
+        "evals/fixtures/web-app/docs/UX__comments-panel.yaml",
+        "evals/fixtures/web-app/docs/UX__digest-settings.yaml",
+        "evals/fixtures/web-app/docs/API.yaml",
+        "evals/fixtures/web-app/docs/API__tasks.yaml",
+        "evals/fixtures/web-app/docs/API__comments.yaml",
+        "evals/fixtures/web-app/docs/API__digest-settings.yaml",
+        "evals/fixtures/web-app-container/docs/ARCH.yaml",
+        "evals/fixtures/web-app-container/docs/ARCH__backend-api.yaml",
+        "evals/fixtures/next-resolver/docs/TEST-STRATEGY.yaml"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "next-advances-to-container",
+      "prompt": "Run sdlc-test in --next mode (equivalent to `/sdlc:test --next`). Starting state: docs/TEST-STRATEGY.yaml already exists and is complete (system mode is done); the testable container `backend-api` is READY (docs/ARCH__backend-api.yaml exists) but has NO docs/TEST-STRATEGY__backend-api.yaml yet; the other testable containers (web-frontend, digest-worker) are NOT ready (no ARCH__<container>.yaml on disk). The --next resolver must therefore: (a) NOT re-run system mode (TEST-STRATEGY.yaml already exists), (b) skip web-frontend and digest-worker as not-ready, and (c) advance to backend-api as the next ready, testable, un-specified container. When the resolver asks for confirmation, choose 'Start backend-api'. Then run the backend-api container interview: pick the recommended (position-1) option for multiple-choice, one-line plausible free-text, accept inferred pre-fills, skip optional themes. Write docs/TEST-STRATEGY__backend-api.yaml and run validate_schema.py until it validates. KEY CANARIES: (1) The resolver advances to backend-api and produces docs/TEST-STRATEGY__backend-api.yaml — it must NOT create a different container's file and must NOT rewrite the existing system tests. (2) The same container coverage gate as explicit container mode applies: cover FR-001..FR-004 (or defer); target the two acceptance components tasks-controller + digest-settings-controller (or defer); exercise postgres-unavailable + jwt-forgery + pii-in-logs (or defer); every unit test has a component_ref; no test covers FR-005. (3) On first completion backend-api is registered in TEST-STRATEGY.yaml.container_strategies[]; the system file's existing tests (TST-001..TST-005) are left intact and its metadata.status stays complete.",
+      "expected_output": "docs/TEST-STRATEGY__backend-api.yaml created (container_id: backend-api, status complete) — NOT a system rewrite and NOT a different container's file. Its coverage passes the trace-or-defer gate (FR-001..FR-004, the two acceptance components, postgres-unavailable, jwt-forgery, pii-in-logs each covered or deferred; no covers FR-005; every unit test carries component_ref). The pre-existing docs/TEST-STRATEGY.yaml still has its 5 system tests (TST-001..TST-005) and metadata.status == complete, now with backend-api registered under container_strategies[]. validate_schema.py exits 0 with [OK] complete.",
+      "files": [
+        "evals/fixtures/web-app/docs/PRD.yaml",
+        "evals/fixtures/web-app/docs/DATA-MODEL.yaml",
+        "evals/fixtures/web-app/docs/UX.yaml",
+        "evals/fixtures/web-app/docs/UX__task-list.yaml",
+        "evals/fixtures/web-app/docs/UX__task-detail.yaml",
+        "evals/fixtures/web-app/docs/UX__comments-panel.yaml",
+        "evals/fixtures/web-app/docs/UX__digest-settings.yaml",
+        "evals/fixtures/web-app/docs/API.yaml",
+        "evals/fixtures/web-app/docs/API__tasks.yaml",
+        "evals/fixtures/web-app/docs/API__comments.yaml",
+        "evals/fixtures/web-app/docs/API__digest-settings.yaml",
+        "evals/fixtures/web-app-container/docs/ARCH.yaml",
+        "evals/fixtures/web-app-container/docs/ARCH__backend-api.yaml",
+        "evals/fixtures/next-resolver/docs/TEST-STRATEGY.yaml"
+      ]
+    }
+  ]
+}

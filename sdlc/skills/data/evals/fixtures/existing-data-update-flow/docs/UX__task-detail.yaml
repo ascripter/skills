@@ -1,0 +1,38 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "dataeval2-dt02-dt02-dt02-dataevl2ux03"
+  status: "complete"
+
+id: SCR-002
+surface_id: task-detail
+surface_type: screen
+route: /tasks/:id
+
+layout:
+  regions:
+    - name: header
+      content: "Task title + done toggle"
+    - name: body
+      content: "Description + comments panel"
+
+states:
+  default: { description: "Task fields editable inline." }
+  loading: { description: "Skeleton fields." }
+  error: { description: "Inline alert with retry." }
+
+interactions:
+  - id: mark-done
+    actor: user
+    trigger: click
+    trigger_target: "Done toggle"
+    effects: ["PATCH /tasks/:id"]
+
+components: []
+
+accessibility_notes: "All controls keyboard reachable."
+
+traces_workflows: ["WKF-002"]
+implements_requirements: ["FR-002"]
+references_entities: ["ENT-001"]

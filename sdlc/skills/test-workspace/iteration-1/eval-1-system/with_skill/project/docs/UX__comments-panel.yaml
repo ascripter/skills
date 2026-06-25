@@ -1,0 +1,43 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "arceval1-ar01-ar01-ar01-archeval1ux01"
+  status: "complete"
+
+id: SCR-003
+surface_id: comments-panel
+surface_type: panel
+
+layout:
+  regions:
+    - name: thread
+      content: "Chronological comment list"
+    - name: composer
+      content: "New-comment textarea + submit"
+
+states:
+  default: { description: "Comment thread rendered." }
+  empty: { description: "No comments yet." }
+  error: { description: "Inline alert." }
+
+interactions:
+  - id: add-comment
+    actor: user
+    trigger: submit
+    trigger_target: composer
+    effects: ["POST /v1/tasks/{id}/comments", "append to thread"]
+    target_surface: null
+
+components: []
+
+validation_rules:
+  - field: body
+    rules: ["required", "max_length=5000"]
+    error_message: "Comment body is required."
+
+accessibility_notes: "Composer is labelled."
+
+traces_workflows: ["WKF-002"]
+implements_requirements: ["FR-002"]
+references_entities: ["ENT-002"]

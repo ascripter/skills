@@ -1,0 +1,40 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "arceval1-ar01-ar01-ar01-archeval1ux01"
+  status: "complete"
+
+id: SCR-002
+surface_id: task-detail
+surface_type: screen
+
+layout:
+  regions:
+    - name: header
+      content: "Title, status toggle (mark done)"
+    - name: body
+      content: "Description + embedded comments panel"
+
+states:
+  default: { description: "Task detail with status control." }
+  loading: { description: "Skeleton." }
+  error: { description: "Inline alert." }
+
+interactions:
+  - id: mark-done
+    actor: user
+    trigger: click
+    trigger_target: "Mark-done toggle"
+    effects: ["PATCH /v1/tasks/{id}"]
+    target_surface: null
+
+components: []
+
+validation_rules: []
+
+accessibility_notes: "Status toggle is a labelled switch."
+
+traces_workflows: ["WKF-001", "WKF-002"]
+implements_requirements: ["FR-002", "FR-003"]
+references_entities: ["ENT-001"]

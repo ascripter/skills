@@ -1,0 +1,154 @@
+# Container deep-dive for `backend-api`, used as an INPUT fixture for the
+# sdlc-test container-mode + --next evals. It is arch-validator-clean against
+# the sibling docs/ chain (PRD/UX/DATA/API/ARCH).
+#
+# test canaries embedded here (the trace-or-defer coverage gate must account
+# for every one of these or defer it via a WRN-NNN):
+#   * implements_requirements FR-001..FR-004 (parent backend-api) — every one
+#     must be covered by some test or deferred.
+#   * components tasks-controller and digest-settings-controller declare
+#     acceptance_criteria — each must be targeted by a test (component_ref) or
+#     deferred.
+#   * failure_modes: postgres-unavailable — must be exercised (targets_failure_mode)
+#     or deferred.
+#   * security_concerns: jwt-forgery, pii-in-logs — each must be exercised
+#     (targets_security_concern) or deferred.
+#   * FR-005 is NOT owned by backend-api (it's digest-worker's) — a test here
+#     whose `covers` names FR-005 must be rejected by the validator.
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "archcm01-arcm-arcm-arcm-archcontainr02"
+  status: complete
+  changelog:
+    - "1.0 (2026-05-26): Initial container deep-dive (test-eval input fixture)."
+
+container_id: backend-api
+archetype: backend-api
+overview: >
+  Fastify REST API serving the tasks, comments and digest-settings resources.
+  Validates bearer JWTs, applies domain rules, and persists to Postgres.
+
+tech_stack:
+  language: TypeScript
+  language_confidence: inferred
+  framework: Fastify
+  runtime_version: "node 20"
+  package_manager: pnpm
+
+persistence_bindings:
+  - store_id: postgres
+    access: read_write
+    via: Prisma
+
+api_surface:
+  - resource_id: tasks
+  - resource_id: comments
+  - resource_id: digest-settings
+
+deployment:
+  shape: long_running_service
+  shape_confidence: inferred
+  hosting: "AWS Fargate"
+
+observability:
+  logs: "stdout json"
+  metrics: prometheus
+
+failure_modes:
+  - id: postgres-unavailable
+    description: "Postgres connection pool exhausted or DB unreachable."
+    likelihood: low
+    impact: high
+    mitigation: "Connection retries with backoff; readiness probe fails fast."
+
+security_concerns:
+  - id: jwt-forgery
+    threat: "A forged or expired bearer token is accepted, granting access."
+    mitigation: "Verify signature against the OIDC JWKS and enforce exp/aud/iss claims."
+  - id: pii-in-logs
+    threat: "User email or comment body is written to application logs."
+    mitigation: "Structured logging allow-list; redact PII fields before emit."
+
+components:
+  - component_id: auth-middleware
+    archetype: middleware
+    purpose: "Validates bearer JWTs on every request before routing."
+    responsibilities:
+      - "Verify JWT signature against the OIDC provider JWKS."
+      - "Reject unauthenticated requests with 401."
+    status: confirmed
+
+  - component_id: tasks-controller
+    archetype: controller
+    purpose: "Handles task create/read/update endpoints."
+    responsibilities:
+      - "Map HTTP requests to the tasks use-cases."
+    traces_api_resources: [tasks]
+    traces_data_entities: [Task]
+    implements_requirements: [FR-001, FR-003]
+    traces_prd_workflows: [WKF-001]
+    acceptance_criteria:
+      - "Creating a task returns 201 with a persisted task id."
+      - "Marking a task done flips its status and is reflected on next read."
+    status: confirmed
+
+  - component_id: comments-controller
+    archetype: controller
+    purpose: "Handles comment endpoints on a task."
+    responsibilities:
+      - "Map HTTP requests to the comments use-cases."
+    traces_api_resources: [comments]
+    traces_data_entities: [Comment]
+    implements_requirements: [FR-002]
+    traces_prd_workflows: [WKF-002]
+    status: confirmed
+
+  - component_id: digest-settings-controller
+    archetype: controller
+    purpose: "Reads/updates the weekly digest schedule + recent runs."
+    responsibilities:
+      - "Map HTTP requests to the digest-settings use-cases."
+    traces_api_resources: [digest-settings]
+    traces_data_entities: [DigestRun]
+    implements_requirements: [FR-004]
+    traces_prd_workflows: [WKF-003]
+    acceptance_criteria:
+      - "Enabling the digest and setting a send time persists and reads back."
+      - "Recent digest runs are listed newest-first."
+    status: confirmed
+
+  - component_id: persistence-repository
+    archetype: repository
+    purpose: "Single data-access layer over Postgres for all domain entities."
+    responsibilities:
+      - "Read and write Task, Comment and DigestRun rows."
+    traces_data_entities: [Task, Comment, DigestRun]
+    status: confirmed
+
+internal_edges:
+  - from: auth-middleware
+    to: tasks-controller
+    type: calls
+  - from: tasks-controller
+    to: persistence-repository
+    type: writes
+    via_entity: Task
+  - from: comments-controller
+    to: persistence-repository
+    type: writes
+    via_entity: Comment
+  - from: digest-settings-controller
+    to: persistence-repository
+    type: reads
+    via_entity: DigestRun
+
+external_edges:
+  - from: auth-middleware
+    to: identity-provider
+    type: calls
+    note: "Fetches JWKS / validates tokens against the external OIDC provider."
+
+arch_warnings:
+  - "WRN-001: tasks-controller create has no documented input-validation rule (e.g. title required / max length); malformed or oversized payloads may reach the persistence layer. Worth a negative/validation test or an explicit decision."

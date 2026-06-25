@@ -1,0 +1,17 @@
+metadata:
+  status: complete
+containers:
+  - container_id: backend
+    archetype: backend-api
+    external: false
+    implements_requirements: [FR-001, NFR-001]
+    traces_prd_workflows: [WKF-001]
+    acceptance_criteria: []
+  - container_id: web
+    archetype: web-frontend
+    external: false
+    implements_requirements: [FR-002]
+    traces_prd_workflows: [WKF-001]
+    acceptance_criteria: []
+edges:
+  - {from: web, to: backend, type: calls}

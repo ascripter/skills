@@ -1,0 +1,39 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "dataeval2-dt02-dt02-dt02-dataevl2ux02"
+  status: "complete"
+
+id: SCR-001
+surface_id: task-list
+surface_type: screen
+route: /tasks
+
+layout:
+  regions:
+    - name: header
+      content: "Create-task button"
+    - name: list
+      content: "Table of tasks"
+
+states:
+  default: { description: "Tasks rendered as a table." }
+  empty: { description: "No tasks yet." }
+  error: { description: "Inline alert with retry." }
+
+interactions:
+  - id: create-task
+    actor: user
+    trigger: click
+    trigger_target: "Create-task button"
+    effects: ["POST /tasks", "prepend new row"]
+    target_surface: task-detail
+
+components: []
+
+accessibility_notes: "List is keyboard navigable."
+
+traces_workflows: ["WKF-001"]
+implements_requirements: ["FR-001"]
+references_entities: ["ENT-001"]

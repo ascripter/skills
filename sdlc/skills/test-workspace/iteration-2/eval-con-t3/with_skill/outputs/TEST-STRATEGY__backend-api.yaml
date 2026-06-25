@@ -1,0 +1,468 @@
+metadata:
+  test_strategy_container_version: "1.0"
+  last_updated: "2026-06-25T00:00:00Z"
+  generated_by: sdlc-test
+  session_id: "bkapi001-test-test-test-testbackend01"
+  status: complete
+  changelog:
+    - "1.0 (2026-06-25): Initial container test strategy for backend-api."
+  upstream_provenance:
+    - file: docs/ARCH__backend-api.yaml
+      session_id: "archcm01-arcm-arcm-arcm-archcontainr02"
+      last_updated: "2026-05-26T00:00:00Z"
+      sha256: "a1b2c3d4e5f6a7b8"
+    - file: docs/PRD.yaml
+      session_id: "arceval1-ar01-ar01-ar01-archeval1pr01"
+      last_updated: "2026-05-26T00:00:00Z"
+      sha256: "b2c3d4e5f6a7b8c9"
+    - file: docs/ARCH.yaml
+      session_id: "archcm01-arcm-arcm-arcm-archcontainr01"
+      last_updated: "2026-05-26T00:00:00Z"
+      sha256: "c3d4e5f6a7b8c9d0"
+
+container_id: backend-api
+overview: >
+  The backend-api container is a Fastify REST API (TypeScript/Node 20) serving
+  tasks, comments, and digest-settings over bearer-JWT-authenticated HTTP.
+  This strategy covers the unit suite per component, integration tests over the
+  internal component wiring and the Postgres boundary, and risk-driven negative
+  cases for the two security concerns and the postgres-unavailable failure mode.
+  Global policy (pyramid 70/20/10, 80% line coverage, mock/fixture defaults) is
+  inherited from docs/TEST-STRATEGY.yaml.
+inherits_from: docs/TEST-STRATEGY.yaml
+
+coverage_target:
+  line_pct: 85.0
+  line_pct_confidence: inferred
+  branch_pct: 75.0
+  rationale: >
+    Raised slightly above the system 80/70 floor: this container handles JWT
+    validation and PII-adjacent data, so higher branch coverage is warranted on
+    the auth and serialization paths.
+
+mock_policy: >
+  Mock only at the container boundary: the OIDC JWKS endpoint is mocked with a
+  static key pair; the Postgres connection is a real testcontainers Postgres
+  instance for integration tests, and in-memory stubs for unit tests.
+fixture_strategy: >
+  Typed factories for Task, Comment, and DigestRun; a shared test database
+  reset between each integration test suite. Inherit the global entity factories
+  from TEST-STRATEGY.yaml fixture_strategy.
+test_environment: "testcontainers postgres (integration tier); vitest in-process (unit tier)"
+
+tests:
+  # -------------------------------------------------------------------------
+  # auth-middleware — JWT validation (unit)
+  # -------------------------------------------------------------------------
+  - tst_id: TST-001
+    name: "auth-middleware: valid JWT is accepted"
+    tier: unit
+    description: >
+      Verifies that a well-formed, unexpired bearer token with correct aud/iss
+      claims is passed through to the route handler.
+    component_ref: auth-middleware
+    directives:
+      - "Arrange: stub the JWKS fetch to return a known public key; generate a valid signed JWT."
+      - "Act: call the middleware with a request carrying the valid bearer token."
+      - "Assert: middleware calls next() without error; req.user is populated."
+    covers: []
+    priority: must
+    mocks:
+      - "OIDC JWKS endpoint (static key pair)"
+    acceptance: "Middleware calls next() and attaches the decoded user payload."
+    status: confirmed
+
+  - tst_id: TST-002
+    name: "auth-middleware: missing Authorization header returns 401"
+    tier: unit
+    description: >
+      Verifies that a request without an Authorization header is rejected with
+      HTTP 401 before reaching any route handler.
+    component_ref: auth-middleware
+    directives:
+      - "Arrange: a request with no Authorization header."
+      - "Act: invoke the middleware."
+      - "Assert: response status is 401; next() is never called."
+    covers: []
+    priority: must
+    mocks:
+      - "OIDC JWKS endpoint (not reached)"
+    acceptance: "Response status 401; route handler not invoked."
+    status: confirmed
+
+  - tst_id: TST-003
+    name: "auth-middleware: expired JWT returns 401"
+    tier: unit
+    description: >
+      Verifies that a token whose exp claim is in the past is rejected with 401.
+    component_ref: auth-middleware
+    directives:
+      - "Arrange: generate a JWT with exp set to one hour ago; stub JWKS."
+      - "Act: invoke the middleware with that token."
+      - "Assert: response status is 401."
+    covers: []
+    priority: must
+    mocks:
+      - "OIDC JWKS endpoint (static key pair)"
+    acceptance: "Response status 401 for expired token."
+    status: confirmed
+
+  # -------------------------------------------------------------------------
+  # tasks-controller — FR-001 (Create/list tasks), FR-003 (Mark done)
+  # -------------------------------------------------------------------------
+  - tst_id: TST-004
+    name: "tasks-controller: create task returns 201 with persisted id"
+    tier: unit
+    description: >
+      Verifies the acceptance criterion: creating a task via POST /tasks returns
+      HTTP 201 with a body containing the persisted task id (FR-001).
+    component_ref: tasks-controller
+    directives:
+      - "Arrange: stub persistence-repository.createTask to return a Task with id='t-1'."
+      - "Act: POST /tasks with a valid title payload."
+      - "Assert: response status 201; body.id === 't-1'."
+    covers:
+      - FR-001
+    priority: must
+    mocks:
+      - "persistence-repository (in-memory stub)"
+    acceptance: "Response 201 with body.id equal to the persisted task id."
+    status: confirmed
+
+  - tst_id: TST-005
+    name: "tasks-controller: list tasks returns array"
+    tier: unit
+    description: >
+      Verifies that GET /tasks returns a 200 response with an array of task
+      objects (FR-001).
+    component_ref: tasks-controller
+    directives:
+      - "Arrange: stub repository.listTasks to return two Task objects."
+      - "Act: GET /tasks."
+      - "Assert: response 200; body is an array of length 2."
+    covers:
+      - FR-001
+    priority: must
+    mocks:
+      - "persistence-repository (in-memory stub)"
+    acceptance: "Response 200 with an array body."
+    status: confirmed
+
+  - tst_id: TST-006
+    name: "tasks-controller: mark task done flips status"
+    tier: unit
+    description: >
+      Verifies the acceptance criterion: PATCH /tasks/:id marking a task done
+      flips its status; a subsequent GET reflects the change (FR-003).
+    component_ref: tasks-controller
+    directives:
+      - "Arrange: stub repository to return a task with status='open'; stub updateTask to flip to 'done'."
+      - "Act: PATCH /tasks/:id with {status: 'done'}."
+      - "Assert: response 200; updateTask called with status='done'."
+    covers:
+      - FR-003
+    priority: must
+    mocks:
+      - "persistence-repository (in-memory stub)"
+    acceptance: "Response 200; repository updateTask called with done status."
+    status: confirmed
+
+  - tst_id: TST-007
+    name: "tasks-controller: create task with missing title returns 400"
+    tier: unit
+    description: >
+      Negative case seeded from ARCH arch_warnings WRN-001: input with no title
+      must be rejected before reaching the repository layer.
+    component_ref: tasks-controller
+    directives:
+      - "Arrange: a POST /tasks payload with title omitted."
+      - "Act: invoke the controller."
+      - "Assert: response 400; repository.createTask is never called."
+    covers:
+      - FR-001
+    priority: should
+    mocks:
+      - "persistence-repository (in-memory stub, not reached)"
+    acceptance: "Response 400; repository not invoked."
+    status: confirmed
+
+  # -------------------------------------------------------------------------
+  # comments-controller — FR-002
+  # -------------------------------------------------------------------------
+  - tst_id: TST-008
+    name: "comments-controller: add comment to task returns 201"
+    tier: unit
+    description: >
+      Verifies POST /tasks/:id/comments creates a comment and returns 201
+      (FR-002).
+    component_ref: comments-controller
+    directives:
+      - "Arrange: stub repository.createComment to return a Comment with id='c-1'."
+      - "Act: POST /tasks/t-1/comments with a valid body."
+      - "Assert: response 201; body.id === 'c-1'."
+    covers:
+      - FR-002
+    priority: must
+    mocks:
+      - "persistence-repository (in-memory stub)"
+    acceptance: "Response 201 with comment id."
+    status: confirmed
+
+  - tst_id: TST-009
+    name: "comments-controller: list comments for task returns array"
+    tier: unit
+    description: >
+      Verifies GET /tasks/:id/comments returns an array of comments for the task
+      (FR-002).
+    component_ref: comments-controller
+    directives:
+      - "Arrange: stub repository.listComments to return two Comment objects."
+      - "Act: GET /tasks/t-1/comments."
+      - "Assert: response 200; body is an array of length 2."
+    covers:
+      - FR-002
+    priority: must
+    mocks:
+      - "persistence-repository (in-memory stub)"
+    acceptance: "Response 200 with array body."
+    status: confirmed
+
+  # -------------------------------------------------------------------------
+  # digest-settings-controller — FR-004
+  # -------------------------------------------------------------------------
+  - tst_id: TST-010
+    name: "digest-settings-controller: enable digest and set send time persists and reads back"
+    tier: unit
+    description: >
+      Verifies the acceptance criterion: enabling the digest and setting a send
+      time persists correctly and reads back (FR-004).
+    component_ref: digest-settings-controller
+    directives:
+      - "Arrange: stub repository.updateDigestSettings to return the updated settings."
+      - "Act: PATCH /digest-settings with {enabled: true, sendTime: '08:00'}."
+      - "Assert: response 200; updateDigestSettings called with correct params."
+    covers:
+      - FR-004
+    priority: must
+    mocks:
+      - "persistence-repository (in-memory stub)"
+    acceptance: "Response 200; repository called with enabled=true, sendTime='08:00'."
+    status: confirmed
+
+  - tst_id: TST-011
+    name: "digest-settings-controller: recent digest runs listed newest-first"
+    tier: unit
+    description: >
+      Verifies the acceptance criterion: GET /digest-settings/runs returns
+      DigestRun entries ordered newest-first (FR-004).
+    component_ref: digest-settings-controller
+    directives:
+      - "Arrange: stub repository.listDigestRuns to return runs with timestamps [t2 > t1]."
+      - "Act: GET /digest-settings/runs."
+      - "Assert: response 200; body[0].runAt > body[1].runAt."
+    covers:
+      - FR-004
+    priority: must
+    mocks:
+      - "persistence-repository (in-memory stub)"
+    acceptance: "Response 200 with runs sorted newest-first."
+    status: confirmed
+
+  # -------------------------------------------------------------------------
+  # persistence-repository — integration over real Postgres
+  # -------------------------------------------------------------------------
+  - tst_id: TST-012
+    name: "persistence-repository: Task round-trip write and read"
+    tier: integration
+    description: >
+      Verifies that a Task written via the repository is read back with all
+      fields intact (covers FR-001 and FR-003 persistence path).
+    component_ref: persistence-repository
+    directives:
+      - "Arrange: testcontainers Postgres with Prisma migrations applied."
+      - "Act: call createTask then readTask with the returned id."
+      - "Assert: read entity matches the written fields exactly."
+    covers:
+      - FR-001
+      - FR-003
+    priority: must
+    setup: "testcontainers Postgres; Prisma migrate deploy"
+    fixtures:
+      - "Task factory"
+    acceptance: "Read Task matches written Task field-for-field."
+    status: confirmed
+
+  - tst_id: TST-013
+    name: "persistence-repository: Comment round-trip write and read"
+    tier: integration
+    description: >
+      Verifies that a Comment linked to a Task is persisted and retrieved
+      correctly (FR-002 persistence path).
+    component_ref: persistence-repository
+    directives:
+      - "Arrange: testcontainers Postgres; create a parent Task first."
+      - "Act: createComment referencing the task id, then listComments for that task."
+      - "Assert: the comment appears in the list with matching body and author."
+    covers:
+      - FR-002
+    priority: must
+    setup: "testcontainers Postgres; Prisma migrate deploy"
+    fixtures:
+      - "Task factory"
+      - "Comment factory"
+    acceptance: "Comment appears in listComments with correct fields."
+    status: confirmed
+
+  - tst_id: TST-014
+    name: "persistence-repository: DigestRun write and list"
+    tier: integration
+    description: >
+      Verifies that a DigestRun is written and returned by listDigestRuns
+      (FR-004 persistence path).
+    component_ref: persistence-repository
+    directives:
+      - "Arrange: testcontainers Postgres."
+      - "Act: createDigestRun, then listDigestRuns."
+      - "Assert: the run appears in the list."
+    covers:
+      - FR-004
+    priority: must
+    setup: "testcontainers Postgres; Prisma migrate deploy"
+    fixtures:
+      - "DigestRun factory"
+    acceptance: "DigestRun appears in listDigestRuns."
+    status: confirmed
+
+  # -------------------------------------------------------------------------
+  # Integration: internal wiring (auth-middleware → tasks-controller)
+  # -------------------------------------------------------------------------
+  - tst_id: TST-015
+    name: "auth-middleware → tasks-controller: unauthenticated request blocked before controller"
+    tier: integration
+    description: >
+      Verifies the real middleware-to-controller wiring: an unauthenticated
+      request does not reach the tasks-controller handler.
+    component_ref: auth-middleware
+    directives:
+      - "Arrange: start the Fastify app with real middleware registration; no Authorization header."
+      - "Act: POST /tasks."
+      - "Assert: response 401; tasks-controller handler never invoked (spy confirms)."
+    covers: []
+    priority: must
+    mocks:
+      - "OIDC JWKS endpoint"
+      - "persistence-repository (stub)"
+    acceptance: "Response 401; task handler not reached."
+    status: confirmed
+
+  # -------------------------------------------------------------------------
+  # Failure mode: postgres-unavailable
+  # -------------------------------------------------------------------------
+  - tst_id: TST-016
+    name: "postgres-unavailable: API returns 503 and does not crash"
+    tier: integration
+    description: >
+      Drives the postgres-unavailable failure mode: when Postgres is
+      unreachable the API must return 503 (not 500/crash) and the readiness
+      probe endpoint must report unhealthy.
+    component_ref: persistence-repository
+    directives:
+      - "Arrange: start the app with a Postgres URL pointing at a closed port."
+      - "Act: POST /tasks (authenticated); also call GET /health/ready."
+      - "Assert: /tasks returns 503; /health/ready returns 503 or 200 with status=unhealthy."
+    targets_failure_mode: postgres-unavailable
+    covers:
+      - FR-001
+    priority: must
+    setup: "No Postgres listening on the configured port."
+    acceptance: "HTTP 503 on data-path requests; readiness probe reflects unhealthy."
+    status: confirmed
+
+  # -------------------------------------------------------------------------
+  # Security concern: jwt-forgery
+  # -------------------------------------------------------------------------
+  - tst_id: TST-017
+    name: "jwt-forgery: token signed with unknown key is rejected"
+    tier: security
+    description: >
+      Verifies that a bearer token signed with a private key not registered in
+      the OIDC JWKS is rejected with 401, addressing the jwt-forgery threat.
+    component_ref: auth-middleware
+    directives:
+      - "Arrange: generate a self-signed JWT using a fresh RSA key pair that is NOT in the JWKS stub."
+      - "Act: send a request with that token as the bearer."
+      - "Assert: response 401."
+    targets_security_concern: jwt-forgery
+    covers: []
+    priority: must
+    mocks:
+      - "OIDC JWKS endpoint (returns only the registered key; attacker key absent)"
+    acceptance: "Response 401 for a forged/unknown-key token."
+    status: confirmed
+
+  - tst_id: TST-018
+    name: "jwt-forgery: none-algorithm token is rejected"
+    tier: security
+    description: >
+      Verifies that a JWT with alg=none (unsigned) is rejected with 401,
+      a classic JWT bypass attempt.
+    component_ref: auth-middleware
+    directives:
+      - "Arrange: craft a JWT header/payload with alg='none' and no signature."
+      - "Act: send request with that bearer token."
+      - "Assert: response 401."
+    targets_security_concern: jwt-forgery
+    covers: []
+    priority: must
+    mocks:
+      - "OIDC JWKS endpoint"
+    acceptance: "Response 401 for alg=none token."
+    status: confirmed
+
+  # -------------------------------------------------------------------------
+  # Security concern: pii-in-logs
+  # -------------------------------------------------------------------------
+  - tst_id: TST-019
+    name: "pii-in-logs: user email does not appear in structured log output"
+    tier: security
+    description: >
+      Verifies the pii-in-logs mitigation: a request carrying a JWT with an
+      email claim does not cause the email to appear in any emitted log line.
+    component_ref: auth-middleware
+    directives:
+      - "Arrange: instrument the logger to capture all emitted log entries; issue a JWT with email='user@example.com'."
+      - "Act: make an authenticated POST /tasks request."
+      - "Assert: none of the captured log entries contains 'user@example.com'."
+    targets_security_concern: pii-in-logs
+    covers: []
+    priority: must
+    mocks:
+      - "OIDC JWKS endpoint"
+      - "persistence-repository (stub)"
+      - "Logger (capture output)"
+    acceptance: "No log entry contains the user email string."
+    status: confirmed
+
+  - tst_id: TST-020
+    name: "pii-in-logs: comment body does not appear in structured log output"
+    tier: security
+    description: >
+      Verifies that comment body content (which may be PII) is not logged
+      anywhere in the request lifecycle.
+    component_ref: comments-controller
+    directives:
+      - "Arrange: instrument logger capture; authenticated request."
+      - "Act: POST /tasks/t-1/comments with body='private sensitive note'."
+      - "Assert: no captured log entry contains 'private sensitive note'."
+    targets_security_concern: pii-in-logs
+    covers:
+      - FR-002
+    priority: should
+    mocks:
+      - "OIDC JWKS endpoint"
+      - "persistence-repository (stub)"
+      - "Logger (capture output)"
+    acceptance: "No log entry contains the comment body string."
+    status: confirmed
+
+test_strategy_warnings: []

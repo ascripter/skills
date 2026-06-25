@@ -1,0 +1,154 @@
+# Eval fixture for sdlc-arch: a small web app with an operational (digest)
+# job. The whole upstream chain (PRD + UX + UX__* + DATA + API + API__*)
+# validates `complete` so the arch skill will actually run.
+#
+# arch canaries embedded here:
+#   * FR-005 ("automatically send weekly digest email") is a MUST-HAVE with NO
+#     API resource and NO UX surface -> arch must infer a scheduler/worker
+#     container and record FR-005 in its implements_requirements (feature
+#     coverage HARD-fails otherwise). This is the scope-completeness-sweep /
+#     operational-container test. (FR-004, the digest *settings*, does have an
+#     API resource + surface — only the automated send is API-less.)
+#   * auth_model: jwt -> arch should auto-propose an (external) identity
+#     provider container.
+#   * conventions.nfr_propagation + conventions.artifact_ids exercise the new
+#     Phase-2 "read PRD.conventions" behavior.
+
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "arceval1-ar01-ar01-ar01-archeval1pr01"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+problem_opportunity:
+  problem_statement: "Small teams need a featherweight issue tracker with a weekly digest."
+  who_has_pain:
+    - "Engineering team leads"
+  current_workarounds:
+    - "Spreadsheets and manual Friday status emails"
+  why_now: "Existing trackers are too heavy for 5-person teams."
+
+users_personas:
+  primary_users:
+    - "PER-001: Engineering team leads"
+  secondary_users:
+    - "PER-002: Individual contributors"
+  user_goals:
+    - "GOL-001: Triage tasks daily"
+    - "GOL-002: Get a weekly summary without manual effort"
+  user_frustrations:
+    - "PAN-001: Existing trackers are bloated"
+  expertise_level: intermediate
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Create and triage a task"
+    - "WKF-002: Comment on a task and close it"
+    - "WKF-003: Configure the weekly digest and review past runs"
+  primary_jobs_to_be_done:
+    - "JTB-001: Move tasks through the funnel quickly"
+  secondary_jobs:
+    - "JTB-002: Stay informed without checking the app daily"
+  edge_cases:
+    - "EDG-001: Digest run when a team has zero open tasks"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Create and list Tasks"
+    - "FR-002: Add Comments to a Task"
+    - "FR-003: Mark a Task done"
+    - "FR-004: Configure the weekly digest (enable/disable, send time) and review past runs"
+    - "FR-005: Automatically send the weekly digest email every Monday summarising open tasks per owner"
+  nice_to_have_features:
+    - "FR-006: Slack notification of the digest"
+  out_of_scope:
+    - "OOS-001: Real-time collaborative editing"
+  integrations_required:
+    - "INT-001: Transactional email provider (e.g. SES)"
+
+technical_constraints:
+  primary_language: typescript
+  primary_language_confidence: confirmed
+  framework: ["nextjs", "fastify"]
+  runtime_platform: web
+  runtime_platform_confidence: confirmed
+  deployment_target: cloud_aws
+  deployment_target_confidence: confirmed
+
+product_identity:
+  name: "tinytrack"
+  slug: "tinytrack"
+  one_liner: "Featherweight issue tracker with a weekly digest."
+
+non_functional_requirements:
+  performance_targets:
+    - "NFR-001: p95 task-list load < 300ms"
+  scalability: medium
+  reliability: high
+  availability_sla: "99.9%"
+  accessibility: wcag_aa
+
+data_model:
+  key_entities:
+    - "ENT-001: Task"
+    - "ENT-002: Comment"
+    - "ENT-003: DigestRun"
+  data_ownership: org_owned
+  data_volume_estimate: megabytes
+  storage_preferences:
+    - "postgres"
+
+security_compliance:
+  auth_model: jwt
+  data_sensitivity: internal
+  regulatory_requirements: []
+  encryption_at_rest: true
+  audit_logging: true
+
+business_model:
+  monetization: subscription
+  license_type: proprietary
+
+stakeholders:
+  product_owner: "Team lead"
+  primary_contributors:
+    - "Two full-stack engineers"
+
+milestones:
+  mvp_scope: "Task CRUD + comments + a working weekly digest job."
+
+success_metrics:
+  primary_kpis:
+    - "Weekly active teams"
+  acceptance_criteria:
+    - "A digest email is sent every Monday 08:00 per team timezone"
+
+risks_assumptions:
+  top_risks:
+    - "Email deliverability"
+  key_assumptions:
+    - "Teams want a push summary"
+
+open_questions:
+  undecided_decisions:
+    - "Whether to self-host email or use SES"
+
+conventions:
+  artifact_ids:
+    binding: true
+    description: "Canonical cross-stage IDs. Downstream artifacts reference these prefixes verbatim."
+    id_types:
+      FR: "Functional Requirement"
+      WKF: "Core workflow"
+      NFR: "Non-Functional Requirement"
+      ENT: "Domain entity"
+  nfr_propagation:
+    binding: true
+    description: "How NFR fields must shape the architecture stage."
+    map:
+      "non_functional_requirements.reliability=high": "ARCH: backend deployment_unit must support restart + health checks (long_running_service or container)."
+      "security_compliance.auth_model=jwt": "ARCH: identity_and_auth.token_strategy must be jwt; propose an identity-provider container."

@@ -1,0 +1,44 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "arceval1-ar01-ar01-ar01-archeval1ux01"
+  status: "complete"
+
+id: SCR-004
+surface_id: digest-settings
+surface_type: screen
+
+layout:
+  regions:
+    - name: schedule
+      content: "Toggle digest on/off + pick send time"
+    - name: history
+      content: "Table of past DigestRun rows (sent_at, recipient_count)"
+
+states:
+  default: { description: "Settings form + past runs." }
+  loading: { description: "Skeleton." }
+  empty: { description: "No digest runs yet." }
+  error: { description: "Inline alert." }
+
+interactions:
+  - id: toggle-digest
+    actor: user
+    trigger: change
+    trigger_target: "Digest enabled switch"
+    effects: ["PATCH /v1/digest-settings"]
+    target_surface: null
+
+components: []
+
+validation_rules: []
+
+accessibility_notes: "Switch is labelled; history table has a caption."
+
+# The settings surface lets the user CONFIGURE the digest (WKF-003); the
+# actual weekly SEND (FR-004) is a backend job with no surface — that is the
+# arch operational-container canary.
+traces_workflows: ["WKF-003"]
+implements_requirements: ["FR-004"]
+references_entities: ["ENT-003"]

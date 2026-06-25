@@ -1,0 +1,31 @@
+metadata:
+  ux_surface_version: "1.1"
+  last_updated: "2026-05-25T00:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "dataeval1-dt01-dt01-dt01-dataevl1ux02"
+  status: "complete"
+
+id: SCR-001
+surface_id: cmd-init
+surface_type: cli_command
+cli_invocation: "pipe init"
+
+layout:
+  cli_args:
+    - name: --force
+      kind: option
+      required: false
+      help: "Re-initialize even if a project already exists here."
+
+states:
+  default: { description: "Project initialized at the current directory." }
+  error: { description: "Non-zero exit if a project already exists." }
+
+interactions: []
+components: []
+
+accessibility_notes: inherit
+
+traces_workflows: ["WKF-001"]
+implements_requirements: ["FR-001"]
+references_entities: ["ENT-001"]

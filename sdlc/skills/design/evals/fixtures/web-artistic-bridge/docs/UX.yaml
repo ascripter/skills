@@ -1,0 +1,76 @@
+metadata:
+  ux_version: "1.1"
+  last_updated: "2026-06-22T09:00:00Z"
+  generated_by: sdlc-ux
+  session_id: "bbbbbbbb-0000-0000-0000-000000000002"
+  monorepo: false
+  status: "complete"
+
+ux_warnings: []
+
+surface_family: web
+surface_family_confidence: confirmed
+device_targets: ["mobile", "desktop"]
+
+design_principles:
+  tenets:
+    - "Cozy and low-pressure, never clinical"
+    - "Celebrate streaks; soften misses"
+    - "One primary action per screen"
+  inspiration_refs:
+    - "Duolingo (playful streaks)"
+
+navigation_model:
+  type: sitemap
+  top_level_nodes:
+    - "dashboard"
+    - "garden"
+
+surface_inventory:
+  - id: SCR-001
+    surface_id: dashboard
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__dashboard.yaml
+    traces_workflows: ["WKF-002"]
+    implements_requirements: ["FR-002"]
+    references_entities: ["ENT-001", "ENT-002"]
+  - id: SCR-002
+    surface_id: garden
+    surface_type: screen
+    status: confirmed
+    file_path: docs/UX__garden.yaml
+    traces_workflows: ["WKF-003"]
+    implements_requirements: ["FR-003"]
+    references_entities: ["ENT-003"]
+  - id: SCR-003
+    surface_id: habit-editor
+    surface_type: modal
+    status: confirmed
+    file_path: docs/UX__habit-editor.yaml
+    traces_workflows: ["WKF-001"]
+    implements_requirements: ["FR-001"]
+    references_entities: ["ENT-001"]
+
+component_library:
+  name: "shadcn/ui"
+  name_confidence: confirmed
+  theming_approach: design_tokens_dtcg
+  theming_approach_confidence: confirmed
+
+state_patterns:
+  default: "Show today's habits with their current streaks"
+  empty: "Friendly illustrated empty state inviting the first habit"
+  error: "Inline field errors + a gentle toast"
+  error_confidence: confirmed
+  success: "Plant grows + a soft confirmation toast"
+
+content_rules:
+  tone: "Friendly + warm"
+  tone_confidence: confirmed
+
+accessibility:
+  wcag_target: wcag_aa
+  wcag_target_confidence: confirmed
+  color_contrast_minimum: "4.5:1"
+  motion_preferences: true

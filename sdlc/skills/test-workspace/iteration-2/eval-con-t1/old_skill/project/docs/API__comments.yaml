@@ -1,0 +1,76 @@
+metadata:
+  api_resource_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-api
+  session_id: "arceval1-ar01-ar01-ar01-archeval1ap01"
+  status: "complete"
+
+resource_id: comments
+base_path: /v1/tasks/{task_id}/comments
+primary_entity: Comment
+traces_prd_features: ["FR-002"]
+traces_ux_surfaces: ["SCR-003"]
+traces_prd_workflows: ["WKF-002"]
+
+endpoints:
+  - id: OPR-004
+    operation_id: list-comments
+    method: GET
+    path: /v1/tasks/{task_id}/comments
+    summary: "List comments for a task"
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: ok
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/CommentList" }
+    security:
+      - bearer_jwt: ["read:tasks"]
+    idempotent: true
+  - id: OPR-005
+    operation_id: create-comment
+    method: POST
+    path: /v1/tasks/{task_id}/comments
+    summary: "Add a comment to a task"
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "201":
+        description: created
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/Comment" }
+      "404":
+        description: not found
+        content:
+          application/problem+json:
+            schema: { $ref: "../API.yaml#/shared_schemas/Problem" }
+    security:
+      - bearer_jwt: ["write:tasks"]
+    idempotent: false
+
+schemas:
+  Comment:
+    projects_from: Comment
+    type: object
+    required: [id, task_id, body]
+    properties:
+      id: { type: string, format: uuid }
+      task_id: { type: string, format: uuid }
+      body: { type: string }
+  CommentList:
+    projects_from: null
+    type: object
+    required: [items]
+    properties:
+      items:
+        type: array
+        items: { $ref: "#/schemas/Comment" }

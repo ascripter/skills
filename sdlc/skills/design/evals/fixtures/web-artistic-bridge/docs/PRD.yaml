@@ -1,0 +1,53 @@
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-06-22T08:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "bbbbbbbb-0000-0000-0000-000000000001"
+  monorepo: false
+  status: "complete"
+
+product_identity:
+  name: "Sprout"
+  one_liner: "A cozy habit tracker that grows a hand-drawn garden as your streaks grow."
+  slug: "sprout"
+  idea_text: "A gentle, illustrated habit tracker. The whole product leans on a warm, hand-drawn storybook aesthetic — every habit you keep grows a hand-illustrated plant in your garden. It's a normal web app (forms, lists, settings) but the look is bespoke illustration, not a stock component theme."
+
+problem_opportunity:
+  problem_statement: "Habit trackers feel like spreadsheets and shame users into churn. People keep habits longer when the experience is warm, rewarding, and emotionally pleasant rather than clinical."
+  problem_statement_confidence: confirmed
+
+users_personas:
+  primary_users:
+    - "PER-001: People building gentle daily habits who bounce off cold, data-heavy trackers."
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Create or edit a habit."
+    - "WKF-002: Check in for the day and extend a streak."
+    - "WKF-003: Watch the hand-drawn garden grow as streaks build."
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Create, edit, and archive habits."
+    - "FR-002: One-tap daily check-in with streak tracking."
+    - "FR-003: A hand-illustrated garden view where each plant grows with its habit's streak."
+    - "FR-004: Gentle, non-nagging reminders."
+
+technical_constraints:
+  primary_language: typescript
+  primary_language_confidence: confirmed
+  runtime_platform: web
+  runtime_platform_confidence: confirmed
+  framework: ["React", "Tailwind", "shadcn/ui"]
+
+data_model:
+  key_entities:
+    - "ENT-001: Habit — a recurring intention the user tracks."
+    - "ENT-002: CheckIn — a single day's completion of a habit."
+    - "ENT-003: Plant — the hand-illustrated visual that represents a habit's streak in the garden."
+
+non_functional_requirements:
+  accessibility: wcag_aa
+  other:
+    - "NFR-010: Meet WCAG AA contrast even with the warm, low-contrast illustrated palette."
+    - "NFR-011: Respect prefers-reduced-motion for the garden's growth animations."

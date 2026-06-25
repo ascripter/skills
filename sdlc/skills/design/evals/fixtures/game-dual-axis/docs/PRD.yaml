@@ -1,0 +1,55 @@
+metadata:
+  prd_version: "1.1"
+  last_updated: "2026-06-22T08:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "aaaaaaaa-0000-0000-0000-000000000001"
+  monorepo: false
+  status: "complete"
+
+product_identity:
+  name: "Dungeonlet"
+  one_liner: "A bite-sized pixel-art roguelike you play in the browser."
+  slug: "dungeonlet"
+  idea_text: "A fast, atmospheric 2D dungeon-crawler — pick a hero, descend procedurally generated floors, fight in real time on a canvas, all wrapped in a retro pixel aesthetic. Menus and HUD are a normal component UI; the dungeon itself is a sprite-driven canvas."
+
+problem_opportunity:
+  problem_statement: "Most roguelikes demand long sessions and a download. Players want a quick, atmospheric run in a browser tab during a break, with the genre's depth but none of the setup."
+  problem_statement_confidence: confirmed
+
+users_personas:
+  primary_users:
+    - "PER-001: Casual gamers who want a satisfying 5–10 minute run on a coffee break."
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Start a new run from the main menu (pick a hero, begin descent)."
+    - "WKF-002: Fight through a dungeon floor in real time on the game canvas."
+    - "WKF-003: Adjust audio and display settings."
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Procedural dungeon-floor generation."
+    - "FR-002: Real-time combat rendered on a 2D canvas (sprites, tiles, vfx)."
+    - "FR-003: Main menu, hero select, and a settings panel (component UI)."
+    - "FR-004: Sound effects and a looping music track."
+
+technical_constraints:
+  primary_language: typescript
+  primary_language_confidence: confirmed
+  runtime_platform: web
+  runtime_platform_confidence: confirmed
+  framework: ["PixiJS (canvas)", "React/Tailwind (menus & HUD)"]
+
+data_model:
+  key_entities:
+    - "ENT-001: Hero — the player-controlled character (sprite, stats, abilities)."
+    - "ENT-002: Enemy — hostile actors that spawn on each floor (sprite, AI)."
+    - "ENT-003: DungeonFloor — a procedurally generated level (tileset, layout)."
+    - "ENT-004: Item — pickups and equipment shown as icons in the HUD."
+
+non_functional_requirements:
+  accessibility: none_yet
+  performance_targets:
+    - "NFR-001: Maintain 60fps on the canvas on a mid-range laptop."
+  other:
+    - "NFR-010: Respect prefers-reduced-motion in menus and HUD transitions."
