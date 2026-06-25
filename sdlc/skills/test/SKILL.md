@@ -42,6 +42,36 @@ The test strategy is not prose. Every test is a typed `TST-NNN` item with
 line. The validator enforces a **trace-or-defer coverage contract** so no
 requirement, acceptance criterion, or named risk silently goes untested.
 
+## This skill is the *complete* test design — nothing downstream fans it out
+
+`test` is the **terminal authority on which tests exist.** Downstream, `task`
+maps **one `TST-NNN` → exactly one test task → one authored test** — a strict
+1:1 expansion, never a fan-out. The Stage-14 codegen agent writes the single
+test that a `TST-NNN` describes and nothing more. So **every individual test
+you want the project to have must be enumerated here, each as its own
+`TST-NNN`.** If a feature warrants a happy-path test plus three edge cases plus
+an auth-rejection case, that is *five* `TST-NNN` items in this artifact — not
+one "test FR-012" item that a later stage is trusted to split apart. There is
+no later stage that splits it. (This is the exact trap to avoid: assuming
+`/sdlc:task` will "fan out" a single test into many. It won't — it realizes one
+task per `TST-NNN`.)
+
+This reframes the coverage gate. The trace-or-defer contract
+(`references/coverage-and-defer.md`) requires *at least one* test per upstream
+item — that is a **floor, not a quota.** One test per FR turns the validator
+green while leaving the actual behaviour barely exercised. The real job is to
+ask, for each feature and each named risk, *how many tests does this behaviour
+actually need* — then write them all. The mechanics:
+
+- **Phase 3 seeding** (`references/test-discovery.md`) decomposes each feature
+  into its full test cluster and mines the upstream sources a one-test-per-FR
+  pass skips — including every upstream artifact's `*_warnings`/`WRN-NNN` and
+  enumerated edge cases.
+- **The per-item flow** (`references/interview-mechanics.md`) proposes that
+  *cluster* of candidate tests for an item, not a single token test.
+- **The sweep + per-feature sufficiency check** (`references/coverage-and-defer.md`)
+  is the safety net before any suite closes.
+
 ## What this skill does (at a glance)
 
 The skill runs in **one of two interview modes**, dispatched on the
@@ -301,7 +331,13 @@ Source candidates, in priority order:
    `load` tests; auth/PII/residency NFRs seed system-level `security` tests;
    `accessibility` NFRs (+ UX surfaces) seed `accessibility` tests. Tag
    `⚠ inferred`.
-4. **Global policy** — pre-fill `pyramid_targets` (default `~70/20/10`
+4. **Upstream warnings + enumerated edge cases** — scan every upstream
+   artifact's `*_warnings`/`WRN-NNN` (PRD, DATA-MODEL, ARCH, API, UX) and PRD
+   `use_cases.edge_cases` / `success_metrics.acceptance_criteria` /
+   `risks_assumptions` for behaviour a test should pin (a cross-container edge
+   case → an e2e/contract test). Tag `⚠ inferred`. See
+   `references/test-discovery.md` → "Upstream warnings & enumerated edge cases".
+5. **Global policy** — pre-fill `pyramid_targets` (default `~70/20/10`
    unit/integration/e2e, adjusted by `references/tiering-guidance.md` for the
    architecture pattern), `coverage_threshold`, `mock_policy`,
    `fixture_strategy`. Tag `⚠ inferred`.
@@ -320,13 +356,25 @@ Source candidates, in priority order:
 4. **`failure_modes` + `security_concerns`** (container + component) — each
    seeds a negative / abuse-case test (`covers` or `targets_*`). Tag `✓ found`.
 5. **DATA entities the components trace** — repository/serializer components
-   seed round-trip and (de)serialization tests. Tag `⚠ inferred`.
+   seed round-trip and (de)serialization tests; DATA invariants/constraints
+   seed `property` and validation tests. Tag `⚠ inferred`.
+6. **Upstream warnings + enumerated edge cases** — scan the relevant
+   `*_warnings`/`WRN-NNN` and DATA invariants/constraints for behaviour scoped
+   to this container that a test should pin. Tag `⚠ inferred`. See
+   `references/test-discovery.md` → "Upstream warnings & enumerated edge cases".
+
+**Seed the full cluster, not one test per item.** Each component/requirement
+usually warrants several tests (happy path, one per acceptance criterion,
+boundary/edge, invalid-input/error, each failure mode and security concern) —
+`references/test-discovery.md` → "How many tests does a feature need?" is the
+decomposition. Remember nothing downstream multiplies these for you.
 
 Present the draft. Each `⚠ inferred` candidate gets its own AskUserQuestion
 call. Persist confirmations to `state.sessions[<key>].defined_tests`. The test
 suite is a `critical synthesis: true` theme: **after the per-item loop closes
 in Phase 6, run the scope-completeness sweep** (seed from ALL upstream ID
-families + project-type heuristics), per `references/coverage-and-defer.md`.
+families — including `*_warnings` and edge cases — + project-type heuristics),
+per `references/coverage-and-defer.md`.
 
 ### Phase 4 — Structural questions
 
@@ -468,7 +516,11 @@ and ID-format failures force `metadata.status: draft`; upstream-status issues
 emit warnings only. The full check list (and the merge logic + recovery flow
 on `[FAIL]`) lives in `references/merge-validate.md`; in summary:
 
-**Coverage** (block complete — trace-or-defer, see `references/coverage-and-defer.md`):
+**Coverage** (block complete — trace-or-defer, see `references/coverage-and-defer.md`).
+The validator enforces the *floor*: ≥1 test (or a deferral) per gated item.
+Passing it is necessary, not sufficient — run the per-feature sufficiency check
+in `references/coverage-and-defer.md` so a green gate doesn't hide a feature
+tested only on its happy path.
 
 - **System workflow coverage** — every cross-container PRD `WKF-NNN` is in
   some system test's `covers` OR deferred via a `test_strategy_warnings`
@@ -652,7 +704,11 @@ The test interview can be long. Keep it humane:
   `backend-api` suite — 14 unit, 5 integration, 3 negative. Coverage gate:
   green. Next: `web-frontend`.").
 - Always call out that candidate tests were synthesized from PRD + ARCH +
-  DATA + API — don't pretend they came from nowhere.
+  DATA + API (including upstream warnings and enumerated edge cases) — don't
+  pretend they came from nowhere.
+- When a feature gets only one test, say so and ask whether its edge/error
+  cases need their own tests — one test per feature is a floor, not the goal,
+  and no downstream stage will add the rest.
 - For each negative test, name the failure mode / security concern it
   exercises so the user sees the risk→test link.
 - After all themes, congratulate briefly and move to write & validate.

@@ -4,7 +4,7 @@
     {
       "id": 1,
       "name": "system-workflow-coverage",
-      "prompt": "Run sdlc-test in SYSTEM mode (/sdlc:test) against the complete docs/ chain in this project (PRD.yaml, DATA-MODEL.yaml, ARCH.yaml, plus API.yaml + API__* and UX.yaml + UX__* enrichers — all status: complete). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; accept inferred pre-fills as proposed; skip optional themes at the gate. Then write docs/TEST-STRATEGY.yaml and run validate_schema.py until it validates. The product is a small web task tracker (tinytrack) with a weekly digest. KEY CANARIES: (1) Workflow coverage is GATED — WKF-001 (create/triage a task), WKF-002 (comment + close), and WKF-003 (configure digest + review runs) are each traced by >=2 ARCH containers (web-frontend + backend-api; WKF-003 also digest-worker), so each MUST be covered by at least one system test (e2e or contract) whose `covers` names it, OR deferred via a WRN-NNN. The validator HARD-fails on an uncovered cross-container workflow. (2) The system file carries the GLOBAL policy every container inherits: test_approach.pyramid_targets, coverage_threshold.line_pct, mock_policy and fixture_strategy are all required. (3) Every test is a unique TST-NNN item with non-empty directives, a `covers` list of FR/NFR/ACR/WKF ids that resolve to PRD, `involves_containers` that resolve to ARCH container_ids, a priority and an acceptance line. Do NOT author per-container unit tests here — those belong in container mode.",
+      "prompt": "Run sdlc-test in SYSTEM mode (/sdlc:test) against the complete docs/ chain in this project (PRD.yaml, DATA-MODEL.yaml, ARCH.yaml, plus API.yaml + API__* and UX.yaml + UX__* enrichers — all status: complete). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; accept inferred pre-fills as proposed; skip optional themes at the gate. Then write docs/TEST-STRATEGY.yaml and run validate_schema.py until it validates. The product is a small web app task tracker (tinytrack) with a weekly digest. KEY CANARIES: (1) Workflow coverage is GATED — WKF-001 (create/triage a task), WKF-002 (comment + close), and WKF-003 (configure digest + review runs) are each traced by >=2 ARCH containers (web-frontend + backend-api; WKF-003 also digest-worker), so each MUST be covered by at least one system test (e2e or contract) whose `covers` names it, OR deferred via a WRN-NNN. The validator HARD-fails on an uncovered cross-container workflow. (2) The system file carries the GLOBAL policy every container inherits: test_approach.pyramid_targets, coverage_threshold.line_pct, mock_policy and fixture_strategy are all required. (3) Every test is a unique TST-NNN item with non-empty directives, a `covers` list of FR/NFR/ACR/WKF ids that resolve to PRD, `involves_containers` that resolve to ARCH container_ids, a priority and an acceptance line. Do NOT author per-container unit tests here — those belong in container mode.",
       "expected_output": "docs/TEST-STRATEGY.yaml with test_approach.pyramid_targets set, coverage_threshold.line_pct set, mock_policy and fixture_strategy set, and a tests[] list of system-scoped tests (tiers in e2e/contract/load/security/accessibility). WKF-001, WKF-002 and WKF-003 each appear in some test's `covers` OR are deferred via a WRN-NNN in test_strategy_warnings. Every tst_id matches TST-NNN and is unique; every `covers` entry is an FR/NFR/ACR/WKF id resolving to a PRD id; every `involves_containers` entry is an ARCH container_id; every test_strategy_warnings entry starts with WRN-NNN. metadata.status == complete and metadata.changelog has >=1 entry. validate_schema.py exits 0 with [OK] complete (workflow coverage + ID formats + trace integrity all pass).",
       "files": [
         "evals/fixtures/web-app/docs/PRD.yaml",
@@ -19,6 +19,138 @@
         "evals/fixtures/web-app/docs/API__comments.yaml",
         "evals/fixtures/web-app/docs/API__digest-settings.yaml",
         "evals/fixtures/web-app/docs/ARCH.yaml"
+      ],
+      "assertions": [
+        {
+          "id": "S1",
+          "text": "docs/TEST-STRATEGY.yaml exists and can be parsed as valid YAML",
+          "priority": "must"
+        },
+        {
+          "id": "S2",
+          "text": "metadata.status == 'complete'",
+          "priority": "must"
+        },
+        {
+          "id": "S3",
+          "text": "metadata.changelog contains at least one entry",
+          "priority": "must"
+        },
+        {
+          "id": "S4",
+          "text": "test_approach.pyramid_targets is present and non-empty",
+          "priority": "must"
+        },
+        {
+          "id": "S5",
+          "text": "coverage_threshold.line_pct is present and is a number",
+          "priority": "must"
+        },
+        {
+          "id": "S6",
+          "text": "mock_policy is present and non-empty",
+          "priority": "must"
+        },
+        {
+          "id": "S7",
+          "text": "fixture_strategy is present and non-empty",
+          "priority": "must"
+        },
+        {
+          "id": "S8",
+          "text": "Every tst_id in tests[] matches the pattern TST-\\d{3,} and is unique across the file",
+          "priority": "must"
+        },
+        {
+          "id": "S9",
+          "text": "Every test item has a non-empty directives list (at least one directive string)",
+          "priority": "must"
+        },
+        {
+          "id": "S10",
+          "text": "Every test item has a non-empty covers list",
+          "priority": "must"
+        },
+        {
+          "id": "S11",
+          "text": "Every entry in every test's covers[] is a recognizable PRD id (matches FR-\\d+, NFR-\\d+, WKF-\\d+, ACR-\\d+, or JTB-\\d+)",
+          "priority": "must"
+        },
+        {
+          "id": "S12",
+          "text": "Every entry in every test's involves_containers[] matches a container_id that exists in ARCH.yaml containers[]",
+          "priority": "must"
+        },
+        {
+          "id": "S13",
+          "text": "Every test item has a non-empty priority field",
+          "priority": "must"
+        },
+        {
+          "id": "S14",
+          "text": "Every test item has a non-empty acceptance field",
+          "priority": "must"
+        },
+        {
+          "id": "S15",
+          "text": "WKF-001 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "S16",
+          "text": "WKF-002 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "S17",
+          "text": "WKF-003 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "S18",
+          "text": "Every entry in test_strategy_warnings[] matches the pattern ^WRN-\\d{3,}:\\s+.+",
+          "priority": "must"
+        },
+        {
+          "id": "S19",
+          "text": "No test in the system file is tier 'unit' (unit tests belong in container mode, not system mode)",
+          "priority": "must"
+        },
+        {
+          "id": "S20",
+          "text": "validate_schema.py exits with code 0 when run against docs/TEST-STRATEGY.yaml",
+          "priority": "must"
+        },
+        {
+          "id": "S21",
+          "text": "The prd_warnings WRN-001 (digest idempotency / double-send risk on FR-005) is addressed: either a system-level test's covers[] includes FR-005 or a note about double-send, OR a WRN-NNN deferral in test_strategy_warnings[] references the idempotency / double-send risk",
+          "priority": "must"
+        },
+        {
+          "id": "S22",
+          "text": "The PRD edge case EDG-001 (digest run with zero open tasks) is addressed: either a test's description or acceptance references the zero-task scenario, OR a WRN-NNN deferral in test_strategy_warnings[] names EDG-001 or the zero-open-tasks condition",
+          "priority": "must"
+        },
+        {
+          "id": "S23",
+          "text": "The system tests[] list contains more than one test (the suite is not collapsed to a single test covering everything)",
+          "priority": "must"
+        },
+        {
+          "id": "S24",
+          "text": "WKF-001, WKF-002, and WKF-003 are each covered by distinct tests (no single test is the only entry covering all three workflows at once)",
+          "priority": "should"
+        },
+        {
+          "id": "S25",
+          "text": "At least one test uses tier 'e2e' (cross-container workflow tests warrant e2e tier)",
+          "priority": "should"
+        },
+        {
+          "id": "S26",
+          "text": "NFR-001 (p95 task-list latency) is addressed by at least one test whose covers[] includes NFR-001, or deferred via a WRN-NNN",
+          "priority": "should"
+        }
       ]
     },
     {
@@ -41,6 +173,148 @@
         "evals/fixtures/web-app-container/docs/ARCH.yaml",
         "evals/fixtures/web-app-container/docs/ARCH__backend-api.yaml",
         "evals/fixtures/next-resolver/docs/TEST-STRATEGY.yaml"
+      ],
+      "assertions": [
+        {
+          "id": "C1",
+          "text": "docs/TEST-STRATEGY__backend-api.yaml exists and can be parsed as valid YAML",
+          "priority": "must"
+        },
+        {
+          "id": "C2",
+          "text": "container_id == 'backend-api'",
+          "priority": "must"
+        },
+        {
+          "id": "C3",
+          "text": "metadata.status == 'complete'",
+          "priority": "must"
+        },
+        {
+          "id": "C4",
+          "text": "metadata.changelog contains at least one entry",
+          "priority": "must"
+        },
+        {
+          "id": "C5",
+          "text": "overview is present and non-empty",
+          "priority": "must"
+        },
+        {
+          "id": "C6",
+          "text": "coverage_target is present (at minimum coverage_target.line_pct is set)",
+          "priority": "must"
+        },
+        {
+          "id": "C7",
+          "text": "Every tst_id in tests[] matches the pattern TST-\\d{3,} and is unique within this file",
+          "priority": "must"
+        },
+        {
+          "id": "C8",
+          "text": "FR-001 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "C9",
+          "text": "FR-002 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "C10",
+          "text": "FR-003 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "C11",
+          "text": "FR-004 appears in at least one test's covers[] OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "C12",
+          "text": "No test has FR-005 in its covers[] (FR-005 is not owned by backend-api)",
+          "priority": "must"
+        },
+        {
+          "id": "C13",
+          "text": "tasks-controller appears in at least one test's component_ref OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "C14",
+          "text": "digest-settings-controller appears in at least one test's component_ref OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "C15",
+          "text": "Every test with tier == 'unit' has a component_ref field that matches a component_id in ARCH__backend-api.yaml components[]",
+          "priority": "must"
+        },
+        {
+          "id": "C16",
+          "text": "postgres-unavailable appears as targets_failure_mode in at least one test OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "C17",
+          "text": "jwt-forgery appears as targets_security_concern in at least one test OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "C18",
+          "text": "pii-in-logs appears as targets_security_concern in at least one test OR is deferred via a WRN-NNN entry in test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "C19",
+          "text": "Every entry in test_strategy_warnings[] matches the pattern ^WRN-\\d{3,}:\\s+.+",
+          "priority": "must"
+        },
+        {
+          "id": "C20",
+          "text": "validate_schema.py exits with code 0 when run against docs/TEST-STRATEGY__backend-api.yaml",
+          "priority": "must"
+        },
+        {
+          "id": "C21",
+          "text": "backend-api is registered under TEST-STRATEGY.yaml container_strategies[] (the system file is updated to record the new container strategy)",
+          "priority": "must"
+        },
+        {
+          "id": "C22",
+          "text": "digest-settings-controller is targeted by at least 2 tests via component_ref (its two declared acceptance criteria are tested separately, not collapsed into one test)",
+          "priority": "must"
+        },
+        {
+          "id": "C23",
+          "text": "At least one test covers the tasks-controller input-validation gap from arch_warnings WRN-001 (a negative or invalid-input test on tasks-controller that is distinct from the happy-path and failure-mode tests)",
+          "priority": "must"
+        },
+        {
+          "id": "C24",
+          "text": "The prd_warnings WRN-001 (digest idempotency / double-send risk on FR-005) is addressed: either a test references the idempotency / retry behavior, OR a WRN-NNN deferral in test_strategy_warnings[] names the double-send risk or FR-005 idempotency",
+          "priority": "must"
+        },
+        {
+          "id": "C25",
+          "text": "The PRD edge case EDG-001 (digest run with zero open tasks) is addressed: either a test's description or acceptance references the zero-task scenario, OR a WRN-NNN deferral in test_strategy_warnings[] names EDG-001 or the zero-open-tasks condition",
+          "priority": "must"
+        },
+        {
+          "id": "C26",
+          "text": "The tests[] list contains more than 8 items (thoroughness improvement over old skill's one-test-per-FR pattern — the full cluster including happy path, per-acceptance-criterion, boundary, invalid-input, failure-mode and security tests)",
+          "priority": "should"
+        },
+        {
+          "id": "C27",
+          "text": "tasks-controller is targeted by at least 2 tests via component_ref (at minimum its two acceptance criteria — 201-with-id and status-flip-persists — are tested separately)",
+          "priority": "should"
+        },
+        {
+          "id": "C28",
+          "text": "At least one test has a tier other than 'unit' (e.g. integration or security), confirming the suite is not all-unit",
+          "priority": "should"
+        }
       ]
     },
     {
@@ -63,6 +337,143 @@
         "evals/fixtures/web-app-container/docs/ARCH.yaml",
         "evals/fixtures/web-app-container/docs/ARCH__backend-api.yaml",
         "evals/fixtures/next-resolver/docs/TEST-STRATEGY.yaml"
+      ],
+      "assertions": [
+        {
+          "id": "N1",
+          "text": "docs/TEST-STRATEGY__backend-api.yaml exists and can be parsed as valid YAML",
+          "priority": "must"
+        },
+        {
+          "id": "N2",
+          "text": "docs/TEST-STRATEGY__backend-api.yaml has container_id == 'backend-api' (not any other container)",
+          "priority": "must"
+        },
+        {
+          "id": "N3",
+          "text": "No file named docs/TEST-STRATEGY__web-frontend.yaml or docs/TEST-STRATEGY__digest-worker.yaml was created (resolver skipped non-ready containers)",
+          "priority": "must"
+        },
+        {
+          "id": "N4",
+          "text": "docs/TEST-STRATEGY.yaml still contains exactly the pre-existing system tests TST-001 through TST-005 (none removed or renumbered)",
+          "priority": "must"
+        },
+        {
+          "id": "N5",
+          "text": "docs/TEST-STRATEGY.yaml metadata.status is still 'complete' after the --next run (system file was not partially overwritten)",
+          "priority": "must"
+        },
+        {
+          "id": "N6",
+          "text": "backend-api is registered under TEST-STRATEGY.yaml container_strategies[] after the run",
+          "priority": "must"
+        },
+        {
+          "id": "N7",
+          "text": "docs/TEST-STRATEGY__backend-api.yaml metadata.status == 'complete'",
+          "priority": "must"
+        },
+        {
+          "id": "N8",
+          "text": "validate_schema.py exits with code 0 when run against docs/TEST-STRATEGY__backend-api.yaml",
+          "priority": "must"
+        },
+        {
+          "id": "N9",
+          "text": "FR-001 appears in at least one test's covers[] in TEST-STRATEGY__backend-api.yaml OR is deferred via a WRN-NNN entry in its test_strategy_warnings[]",
+          "priority": "must"
+        },
+        {
+          "id": "N10",
+          "text": "FR-002 appears in at least one test's covers[] in TEST-STRATEGY__backend-api.yaml OR is deferred via a WRN-NNN",
+          "priority": "must"
+        },
+        {
+          "id": "N11",
+          "text": "FR-003 appears in at least one test's covers[] in TEST-STRATEGY__backend-api.yaml OR is deferred via a WRN-NNN",
+          "priority": "must"
+        },
+        {
+          "id": "N12",
+          "text": "FR-004 appears in at least one test's covers[] in TEST-STRATEGY__backend-api.yaml OR is deferred via a WRN-NNN",
+          "priority": "must"
+        },
+        {
+          "id": "N13",
+          "text": "No test in TEST-STRATEGY__backend-api.yaml has FR-005 in its covers[]",
+          "priority": "must"
+        },
+        {
+          "id": "N14",
+          "text": "tasks-controller appears in at least one test's component_ref in TEST-STRATEGY__backend-api.yaml OR is deferred via a WRN-NNN",
+          "priority": "must"
+        },
+        {
+          "id": "N15",
+          "text": "digest-settings-controller appears in at least one test's component_ref in TEST-STRATEGY__backend-api.yaml OR is deferred via a WRN-NNN",
+          "priority": "must"
+        },
+        {
+          "id": "N16",
+          "text": "Every unit-tier test in TEST-STRATEGY__backend-api.yaml has a component_ref matching a component_id in ARCH__backend-api.yaml",
+          "priority": "must"
+        },
+        {
+          "id": "N17",
+          "text": "postgres-unavailable appears as targets_failure_mode in at least one test in TEST-STRATEGY__backend-api.yaml OR is deferred via a WRN-NNN",
+          "priority": "must"
+        },
+        {
+          "id": "N18",
+          "text": "jwt-forgery appears as targets_security_concern in at least one test in TEST-STRATEGY__backend-api.yaml OR is deferred via a WRN-NNN",
+          "priority": "must"
+        },
+        {
+          "id": "N19",
+          "text": "pii-in-logs appears as targets_security_concern in at least one test in TEST-STRATEGY__backend-api.yaml OR is deferred via a WRN-NNN",
+          "priority": "must"
+        },
+        {
+          "id": "N20",
+          "text": "Every tst_id in TEST-STRATEGY__backend-api.yaml matches TST-\\d{3,} and is unique within that file",
+          "priority": "must"
+        },
+        {
+          "id": "N21",
+          "text": "The tst_ids in TEST-STRATEGY__backend-api.yaml do not collide with the pre-existing TST-001..TST-005 in TEST-STRATEGY.yaml (container test ids are in a distinct namespace or are all higher than TST-005)",
+          "priority": "must"
+        },
+        {
+          "id": "N22",
+          "text": "digest-settings-controller is targeted by at least 2 tests via component_ref in TEST-STRATEGY__backend-api.yaml (its two acceptance criteria tested separately)",
+          "priority": "must"
+        },
+        {
+          "id": "N23",
+          "text": "At least one test in TEST-STRATEGY__backend-api.yaml covers the tasks-controller input-validation gap from arch_warnings WRN-001 (a negative or invalid-input test distinct from happy-path and failure-mode tests)",
+          "priority": "must"
+        },
+        {
+          "id": "N24",
+          "text": "The prd_warnings WRN-001 (digest idempotency / double-send risk) is addressed in TEST-STRATEGY__backend-api.yaml by a test or a WRN-NNN deferral naming the idempotency or double-send risk",
+          "priority": "must"
+        },
+        {
+          "id": "N25",
+          "text": "The PRD edge case EDG-001 (zero open tasks) is addressed in TEST-STRATEGY__backend-api.yaml by a test referencing the zero-task scenario or a WRN-NNN deferral naming EDG-001 or zero-open-tasks",
+          "priority": "must"
+        },
+        {
+          "id": "N26",
+          "text": "TEST-STRATEGY__backend-api.yaml tests[] contains more than 8 items (full cluster authored, not old one-per-FR pattern)",
+          "priority": "should"
+        },
+        {
+          "id": "N27",
+          "text": "tasks-controller is targeted by at least 2 tests via component_ref in TEST-STRATEGY__backend-api.yaml (its two acceptance criteria tested separately)",
+          "priority": "should"
+        }
       ]
     }
   ]

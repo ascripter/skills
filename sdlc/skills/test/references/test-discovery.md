@@ -9,6 +9,47 @@ Phase 3. Tag every candidate `✓ found` (a direct upstream signal) or
 The governing principle: **enumerate what must be verified, then pick the
 cheapest tier that verifies it** (see `tiering-guidance.md`).
 
+**This is the complete enumeration — nothing downstream fans it out.** `task`
+realizes **one task per `TST-NNN`**, and codegen writes **one test per task**.
+So the suite you seed here *is* the suite the project gets, test for test. The
+seeding mindset is therefore "list every test this needs," not "list one test
+per requirement and trust a later stage to expand it." A single FR commonly
+deserves a *cluster* of `TST-NNN` items — the next section is how to size that
+cluster.
+
+---
+
+## How many tests does a feature need?
+
+The most common failure of a seeded suite is **one test per requirement** — a
+single happy-path test that makes the coverage gate green while the feature's
+real behaviour goes unchecked. The coverage gate
+(`coverage-and-defer.md`) asks for *at least one* test per item; that is a
+floor, not a target. For each feature/component/requirement, walk this
+checklist and seed a separate `TST-NNN` for every line that applies:
+
+- **Happy path** — the primary success case. (1 test.)
+- **Each acceptance criterion** — every `acceptance_criteria[]` entry on the
+  ARCH component (and PRD `success_metrics.acceptance_criteria`) is a distinct
+  observable claim. Seed one test per criterion; don't fold three criteria into
+  one test's assertions. (N tests for N criteria.)
+- **Boundaries & edge cases** — empty/zero, max/overflow, first/last,
+  duplicate, the explicitly enumerated PRD `use_cases.edge_cases`. Each named
+  edge case is its own test.
+- **Invalid input / error paths** — malformed payloads, missing fields,
+  type/range violations, conflicts. A feature that only proves the happy path
+  is half-tested; the error handling is usually where the bugs are.
+- **Each failure mode & security concern** — every `failure_modes[].id` and
+  `security_concerns[].id` is its own negative/abuse-case test (see §3 below).
+- **Invariants** — where DATA or the component states an invariant (uniqueness,
+  monotonicity, round-trip identity), a `property` test over the input space.
+
+Don't manufacture filler — a genuinely trivial getter may warrant a single
+test. But the *default expectation* for a real feature is several tests, and
+the per-test interview should propose the cluster, then let the user prune.
+Read each ARCH component's `responsibilities` and `acceptance_criteria` as a
+list of behaviours to cover, not as one feature to touch once.
+
 ---
 
 ## System mode — the cross-container suite + global policy
@@ -118,6 +159,47 @@ invariants, property tests over them.
 Pure functions and parsers/serializers with stated invariants are ideal
 `property` candidates — propose them but mark inferred (the user decides if
 the invariant is worth generative testing).
+
+---
+
+## Upstream warnings & enumerated edge cases (both modes, `⚠ inferred`)
+
+The structured `✓ found` fields above (workflows, edges, components,
+requirements, risks) are the obvious seeds. The sources below are the ones a
+one-test-per-FR pass routinely skips — yet they are exactly where the upstream
+*recorded a concern in writing*. Mine each, then seed a test or make a
+deliberate "no test needed, because…" note (don't silently drop them).
+
+- **Every upstream artifact's `*_warnings` / `WRN-NNN`.** `prd_warnings`,
+  `data_warnings`, `arch_warnings`, `api_warnings`, `ux_warnings` each hold
+  items the upstream skill flagged as a risk, gap, or deferred decision. Read
+  each one and ask *"is there a behaviour here a test should pin?"* A warning
+  like "WRN-009: digest send is not idempotent across retries" is a direct
+  prompt for an idempotency test. A warning that names a deferred validation
+  rule is a prompt for the negative test that guards it. These are *not* the
+  same as this artifact's own `test_strategy_warnings` (which record *your*
+  deferrals) — they are inbound signals from upstream.
+- **PRD `use_cases.edge_cases` (`EDG-NNN`).** These are edge cases the PRD
+  author enumerated by hand — the single highest-signal under-used source. Each
+  one is a test (or a reasoned deferral). A cross-container edge case (e.g.
+  "digest run when a team has zero open tasks") seeds a system `e2e`; a
+  container-local one seeds a unit/integration test in that container.
+- **PRD `success_metrics.acceptance_criteria` (`ACR-NNN`).** Product-level
+  acceptance claims — each is an observable outcome a test or e2e should assert
+  (or defer). Reference them in `covers` by their `ACR-NNN` token.
+- **PRD `risks_assumptions.top_risks` and `open_questions`.** A named risk with
+  a testable manifestation (e.g. "email deliverability") may warrant a test
+  (e.g. a contract test on the email provider boundary) or an explicit
+  deferral to a non-test mitigation.
+- **DATA-MODEL invariants & constraints.** Uniqueness, referential, range, and
+  state-machine constraints declared on entities seed validation and `property`
+  tests (write that violates the constraint is rejected; round-trip preserves
+  it).
+
+Tag everything seeded here `⚠ inferred` and confirm one by one — these are
+heuristic reads of prose, so the user gets the final say on each. Anything you
+decide needs no test gets a one-line reasoned note (and, if it maps to a gated
+upstream id, a `WRN-NNN` deferral per `coverage-and-defer.md`).
 
 ---
 

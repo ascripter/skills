@@ -9,6 +9,37 @@ It implements CLAUDE.md §6 ("Coverage contract: trace every upstream item OR
 defer it"). The validator enforces both halves — a strategy that omits an item
 without deferring it cannot reach `status: complete`.
 
+**Coverage is a floor, not a quota.** The gate is satisfied by *one* test (or a
+deferral) per gated item, but one test per item is the *minimum* that makes the
+validator green — it is rarely the *right* number. A feature with three
+acceptance criteria, two edge cases, and an error path needs roughly six tests,
+not one; the gate would pass with one and leave five behaviours unchecked. And
+because `task` maps **one `TST-NNN` → one task → one authored test** (no
+fan-out), the count you write here is the count the project gets. So a green
+gate is necessary, not sufficient. Run the **per-feature sufficiency check**
+(below) alongside the sweep before you close a suite.
+
+---
+
+## Per-feature sufficiency check (after the gate is green)
+
+The coverage gate proves *every item is touched*. This check proves *every item
+is touched enough*. For each gated feature/requirement/component, ask:
+
+- Is the **happy path** plus **each acceptance criterion** its own test, or are
+  several criteria crammed into one test's assertions?
+- Are the **boundary/edge cases** (incl. every PRD `use_cases.edge_cases`) and
+  the **invalid-input/error paths** covered, or only the success case?
+- Does each **failure mode / security concern** have its own negative test?
+
+Where the honest answer is "one happy-path test and nothing else" for a feature
+that clearly has more surface, propose the missing tests (the sweep below is the
+vehicle). Where one test genuinely suffices (a trivial getter, a pure mapping),
+that's fine — say so. The point is a *deliberate* count per feature, decided by
+reasoning about the behaviour, not the accident of "one test cleared the gate."
+The decomposition checklist is `test-discovery.md` → "How many tests does a
+feature need?".
+
 ---
 
 ## What is gated
@@ -87,10 +118,15 @@ specified in `sdlc/skills/prd/references/importance-flows.md` (§ "The
 `critical` flow → dynamic scope-completeness sweep"). For `test`, reflect on:
 
 - the **draft suite** itself (are whole tiers missing — e.g. zero negative
-  tests for a container that has failure modes?);
+  tests for a container that has failure modes? does any feature have only a
+  happy-path test where its acceptance criteria / edge cases / error paths
+  should each be pinned? — see the per-feature sufficiency check above);
 - **every upstream ID family**, not just the most direct one — PRD FR/NFR/WKF,
-  ARCH `failure_modes`/`security_concerns`/`acceptance_criteria`, API
-  operations (contract tests), UX surfaces (a11y), DATA entities (round-trips);
+  PRD `use_cases.edge_cases` (`EDG-NNN`) and `success_metrics.acceptance_criteria`
+  (`ACR-NNN`), **every upstream artifact's `*_warnings`/`WRN-NNN`** (PRD, DATA,
+  ARCH, API, UX), ARCH `failure_modes`/`security_concerns`/`acceptance_criteria`,
+  API operations (contract tests), UX surfaces (a11y), DATA entities
+  (round-trips) and DATA invariants (property tests);
 - **project-type heuristics** (`tiering-guidance.md` §10) — e.g. an
   event-driven system with no idempotency/replay test, a parser with no
   malformed-input test, an auth boundary with no unauthenticated-request test.

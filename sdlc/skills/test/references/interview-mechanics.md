@@ -39,6 +39,15 @@ Both suites are `critical synthesis: true`. Run each candidate test through:
    (the WKF/FR/NFR/ACR or the failure_mode/security_concern it targets).
    State where the candidate came from ("seeded from WKF-002" / "negative
    case for failure_mode `db-pool-exhausted`").
+   **One upstream item often spawns several tests, not one.** When you reach a
+   feature/requirement, propose the *whole cluster* it warrants — happy path,
+   one test per acceptance criterion, the boundary/edge cases, the
+   invalid-input/error paths — then run each through this state machine. A
+   single "test FR-012" item that clears the coverage gate but leaves the
+   feature's edge and error behaviour unchecked is the failure this flow
+   exists to prevent: nothing downstream fans a `TST-NNN` out, so the cluster
+   must be enumerated here. The decomposition is `test-discovery.md` → "How
+   many tests does a feature need?".
 2. **challenge** — confirm the tier is the *cheapest that proves the
    requirement* (push e2e → integration → unit where possible; see
    `tiering-guidance.md`), and confirm scope (`involves_containers` for

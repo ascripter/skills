@@ -102,10 +102,13 @@ themes:
     title: "System Test Suite (e2e + contract)"
     required: true
     synthesis: true   # scope-defining list synthesized from PRD WKF workflows,
-                      # ARCH cross-container edges, and NFRs. Runs the
-                      # scope-completeness sweep after the per-item loop — see
-                      # references/coverage-and-defer.md.
-    description: "Cross-container end-to-end + contract tests (and system-level load/security/a11y)."
+                      # ARCH cross-container edges, NFRs, every upstream
+                      # *_warnings/WRN-NNN, and PRD use_cases.edge_cases. Runs
+                      # the scope-completeness sweep after the per-item loop —
+                      # see references/coverage-and-defer.md. This is the
+                      # COMPLETE system suite: task realizes one task per
+                      # TST-NNN (no fan-out), so enumerate every test here.
+    description: "Cross-container end-to-end + contract tests (and system-level load/security/a11y). Enumerate the full set — one TST-NNN per intended test; nothing downstream multiplies them."
 
   # -------- container mode --------
   - id: coverage_target
@@ -126,10 +129,14 @@ themes:
     required: true
     synthesis: true   # scope-defining list synthesized from the container's
                       # components, internal edges, implements_requirements,
-                      # acceptance_criteria, failure_modes, and
-                      # security_concerns. Runs the scope-completeness sweep
+                      # acceptance_criteria, failure_modes, security_concerns,
+                      # DATA invariants, and the relevant upstream
+                      # *_warnings/WRN-NNN. Runs the scope-completeness sweep
                       # after the per-item loop — see references/coverage-and-defer.md.
-    description: "Unit + integration (+ property/negative) tests scoped to this container."
+                      # COMPLETE container suite: task realizes one task per
+                      # TST-NNN (no fan-out), so enumerate every test here —
+                      # the full per-feature cluster, not one test per FR.
+    description: "Unit + integration (+ property/negative) tests scoped to this container. Enumerate the full per-feature cluster (happy path, each acceptance criterion, edge/error cases, each failure mode & security concern) — one test per requirement is a floor, not the goal."
 
 questions:
 
@@ -385,15 +392,18 @@ questions:
   # SYSTEM MODE — system_suite (critical per item, synthesis)
   # =========================================================================
   #
-  # The agent runs this theme as a per-test state machine:
+  # The agent runs this theme as a per-test state machine. One upstream item
+  # (a workflow, an NFR, an edge case, an upstream WRN) often warrants SEVERAL
+  # tests — propose the whole cluster, then run each candidate through the loop:
   #
   #   for each candidate system test (from Phase 3 + user-added):
-  #     1. propose:   show tier, draft name, what it covers (WKF/FR/NFR)
+  #     1. propose:   show tier, draft name, what it covers (WKF/FR/NFR/ACR)
   #     2. challenge: confirm scope (involves_containers) + tier choice
   #     3. detail:    fill directives, setup, acceptance, priority
   #     4. approve:   confirm the test; set status: confirmed
   #     5. next
-  #   then: run the scope-completeness sweep (references/coverage-and-defer.md)
+  #   then: run the scope-completeness sweep + per-feature sufficiency check
+  #         (references/coverage-and-defer.md)
   #
   # The questions below describe the FIELDS each per-test drill-down produces.
 
@@ -638,10 +648,13 @@ questions:
   # =========================================================================
   #
   # Per-test state machine, same shape as system_suite. The questions below
-  # describe each per-test drill-down's FIELDS. After the per-item loop, run
-  # the scope-completeness sweep AND verify the coverage gate (every
-  # requirement / acceptance criterion / failure mode / security concern is
-  # covered or deferred) — see references/coverage-and-defer.md.
+  # describe each per-test drill-down's FIELDS. Propose the full per-feature
+  # cluster (happy path, each acceptance criterion, edge/error cases, each
+  # failure mode & security concern), not one test per component. After the
+  # per-item loop, run the scope-completeness sweep AND the per-feature
+  # sufficiency check AND verify the coverage gate (every requirement /
+  # acceptance criterion / failure mode / security concern is covered or
+  # deferred) — see references/coverage-and-defer.md.
 
   - theme: container_suite
     id: tier

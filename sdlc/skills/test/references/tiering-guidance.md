@@ -28,6 +28,16 @@ only by catching a class of regression you actually fear. So the strategy is
 not "write many tests" — it's "cover every requirement and named risk with the
 least, fastest, most stable set of tests that proves them."
 
+"Least" is not "one." Most real features have several distinct things that can
+break — the happy path, each acceptance criterion, the boundaries, the error
+paths, each named failure mode — and each is its own test. Sizing that cluster
+per feature (rather than defaulting to one test per requirement) is in
+`test-discovery.md` → "How many tests does a feature need?". This skill is the
+*complete* enumeration: `task` realizes one task per `TST-NNN` and codegen
+writes one test per task, so no later stage adds the tests you leave out. Pair
+breadth (enough tests per feature) with the push-down discipline below (each
+test at the cheapest tier that proves it).
+
 ## 2. The pyramid (and when to bend it)
 
 The classic **test pyramid**: many fast `unit` tests at the base, fewer
