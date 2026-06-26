@@ -16,12 +16,13 @@
 #   * FR-005 is NOT owned by backend-api (it's digest-worker's) — a test here
 #     whose `covers` names FR-005 must be rejected by the validator.
 metadata:
-  arch_container_version: "1.0"
-  last_updated: "2026-05-26T00:00:00Z"
+  arch_container_version: "1.2"
+  last_updated: "2026-06-26T00:00:00Z"
   generated_by: sdlc-arch
   session_id: "archcm01-arcm-arcm-arcm-archcontainr02"
   status: complete
   changelog:
+    - "1.2 (2026-06-26): Add component operations (OPN family) for atomic task slicing."
     - "1.0 (2026-05-26): Initial container deep-dive (test-eval input fixture)."
 
 container_id: backend-api
@@ -78,6 +79,11 @@ components:
     responsibilities:
       - "Verify JWT signature against the OIDC provider JWKS."
       - "Reject unauthenticated requests with 401."
+    operations:
+      - op_id: OPN-001
+        name: verify-token
+        summary: "Verify the bearer JWT against the OIDC JWKS; reject unauthenticated requests with 401."
+        status: confirmed
     status: confirmed
 
   - component_id: tasks-controller
@@ -92,6 +98,30 @@ components:
     acceptance_criteria:
       - "Creating a task returns 201 with a persisted task id."
       - "Marking a task done flips its status and is reflected on next read."
+    operations:
+      - op_id: OPN-002
+        name: list-tasks
+        summary: "Return the caller's tasks (paginated)."
+        traces_api_operation: list-tasks
+        status: confirmed
+      - op_id: OPN-003
+        name: create-task
+        summary: "Validate the payload, persist a new task, return 201."
+        traces_api_operation: create-task
+        implements_requirements: [FR-001]
+        touches_entities: [Task]
+        satisfies_acceptance:
+          - "Creating a task returns 201 with a persisted task id."
+        status: confirmed
+      - op_id: OPN-004
+        name: update-task
+        summary: "Update a task (e.g. mark done) and persist the new status."
+        traces_api_operation: update-task
+        implements_requirements: [FR-003]
+        touches_entities: [Task]
+        satisfies_acceptance:
+          - "Marking a task done flips its status and is reflected on next read."
+        status: confirmed
     status: confirmed
 
   - component_id: comments-controller
@@ -103,6 +133,19 @@ components:
     traces_data_entities: [Comment]
     implements_requirements: [FR-002]
     traces_prd_workflows: [WKF-002]
+    operations:
+      - op_id: OPN-005
+        name: list-comments
+        summary: "Return the comments on a task."
+        traces_api_operation: list-comments
+        status: confirmed
+      - op_id: OPN-006
+        name: create-comment
+        summary: "Add a comment to a task and persist it."
+        traces_api_operation: create-comment
+        implements_requirements: [FR-002]
+        touches_entities: [Comment]
+        status: confirmed
     status: confirmed
 
   - component_id: digest-settings-controller
@@ -117,6 +160,23 @@ components:
     acceptance_criteria:
       - "Enabling the digest and setting a send time persists and reads back."
       - "Recent digest runs are listed newest-first."
+    operations:
+      - op_id: OPN-007
+        name: get-digest-settings
+        summary: "Return the current digest schedule and recent runs (newest-first)."
+        traces_api_operation: get-digest-settings
+        touches_entities: [DigestRun]
+        satisfies_acceptance:
+          - "Recent digest runs are listed newest-first."
+        status: confirmed
+      - op_id: OPN-008
+        name: update-digest-settings
+        summary: "Enable/disable the digest and set the send time; persist the schedule."
+        traces_api_operation: update-digest-settings
+        implements_requirements: [FR-004]
+        satisfies_acceptance:
+          - "Enabling the digest and setting a send time persists and reads back."
+        status: confirmed
     status: confirmed
 
   - component_id: persistence-repository
@@ -125,6 +185,17 @@ components:
     responsibilities:
       - "Read and write Task, Comment and DigestRun rows."
     traces_data_entities: [Task, Comment, DigestRun]
+    operations:
+      - op_id: OPN-009
+        name: write-row
+        summary: "Insert or update a Task, Comment or DigestRun row."
+        touches_entities: [Task, Comment, DigestRun]
+        status: confirmed
+      - op_id: OPN-010
+        name: read-row
+        summary: "Read a Task, Comment or DigestRun row (or list)."
+        touches_entities: [Task, Comment, DigestRun]
+        status: confirmed
     status: confirmed
 
 internal_edges:

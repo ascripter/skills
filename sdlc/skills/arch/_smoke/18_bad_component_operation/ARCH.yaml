@@ -1,0 +1,44 @@
+# 18 — component operations cross-check (#21) failures.
+# The `app` container's ARCH__app.yaml has a component whose operations[] carry
+#   (a) a malformed op_id (OPN-1, not OPN-NNN), and
+#   (b) an implements_requirements (FR-002) not owned by the component (FR-001).
+# No PRD.yaml on purpose, so feature-coverage / PRD-trace resolution soften and
+# the ONLY errors are the operation ones.
+# Expectation: validator exits 1 ([FAIL]) — status 'complete' with op errors.
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-06-26T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "18181818-aaaa-1818-1818-181818181818"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Single deployable; smoke fixture for operation checks."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "Serves task CRUD."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "FR-001"
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: "docs/ARCH__app.yaml"
+
+edges: []
+
+non_container_features: []
+
+arch_warnings: []

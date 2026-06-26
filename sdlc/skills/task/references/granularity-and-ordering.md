@@ -7,26 +7,50 @@ straight from the demo PRD's FR-013.
 
 ---
 
-## Granularity (coarse vs fine)
+## Granularity (atomic vs component) — DEFAULT atomic
 
-FR-013's only required structural decision (`requires_user_decision`).
+The one required structural decision. **Default to `atomic`** — the whole point
+of this skill is to feed the codegen factory *method-level* work units, because
+it fans one sub-agent out per task: atomic tasks mean tight per-task context,
+cheaper + higher-quality generation, and a clean 1:1 between a task and the test
+that verifies it.
 
-- **coarse** — one `implementation` task per component. Fewer, larger tasks. Each
-  codegen sub-agent gets a whole component's worth of context. Right for
-  small/medium apps and components with a single cohesive responsibility.
-- **fine** — split a component's implementation across its `responsibilities` /
-  owned endpoints / public methods. More, smaller tasks. Right for large
-  components, endpoint-heavy services, or when you want tighter per-task context
-  to raise codegen quality and cut cost (FR-014's "primary cost/quality lever").
+- **atomic** — slice to the finest unit the *architecture declares*:
+  - **one `implementation` task per component operation** — each `OPN-NNN` in the
+    component's `operations[]` (ARCH__<container>.yaml) becomes its own task,
+    scoped `component_ref` + `implements_operations: [OPN-NNN]`. The op's traces
+    ride up onto the task (`touches_operations` ← the op's `traces_api_operation`,
+    `implements` ← its `implements_requirements`, `touches_entities` ← its
+    `touches_entities`).
+  - **one `test` task per `TST-NNN`** — never grouped (see below).
+  - **one `migration` task per entity**.
+  - A component that declares **no** `operations[]` falls back to **one task for
+    the whole component** (graceful degradation — the validator warns, and ARCH
+    should be enriched with operations to fix it at the source, not papered over
+    here). The atomicity gate only bites for components that *do* declare ops.
+- **component** — the old coarse mode: one `implementation` task per component,
+  regardless of how many operations it has. Reserve for tiny apps / components
+  where per-method tasks would be noise.
 
-The trade-off is real and worth stating to the user: the codegen agent emits
-files per task, so finer slicing means more, cheaper-per-unit tasks but more
-edges to order and more total orchestration. Pre-fill `coarse` for ≤3-component
-containers, suggest `fine` when a component owns many endpoints. Container
-interviews inherit the system-mode default unless overridden.
+The trade-off, worth stating to the user: atomic = more, cheaper-context tasks
+but more `depends_on` edges to order and more total orchestration; `component` =
+fewer, larger tasks each carrying a whole component's context. Container
+interviews inherit the system-mode default unless overridden. Legacy files
+written `coarse`/`fine` are read as `component`/`atomic`.
 
-Whatever the choice, **a test task is always its own task** regardless of
-granularity — granularity only slices implementation work.
+**The operation-coverage gate is what makes atomic stick.** Under `atomic`, the
+validator *blocks* `complete` until every `OPN-NNN` across the container's
+components is realized by a task naming it in `implements_operations` OR deferred
+with a `WRN-NNN`. A bare `component_ref` does **not** transitively cover the
+component's operations under atomic — that is the point. (Under `component` the
+same check is advisory and transitive.) See `coverage-and-defer.md`.
+
+Whatever the choice, **a test task is always its own task — one per `TST-NNN`,
+never grouped.** Granularity only slices implementation work; a `TST-NNN` is
+already an atomic behaviour, so bundling two into one `test` task hides a test
+from the coverage gate and the codegen heal-loop. One `test` task realizes
+exactly one `TST-NNN` (occasionally a tight cluster only when they share a single
+fixture and assertion target — prefer one-per-TST).
 
 ---
 

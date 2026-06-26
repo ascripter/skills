@@ -19,8 +19,9 @@ or `⚠ inferred` (derived).
 
 | Upstream signal | Seeds | kind | Scope / ref field |
 |---|---|---|---|
-| `ARCH__<cid>.components[]` (each component) | one impl task (coarse) or one per responsibility/endpoint (fine) | `implementation` | `component_ref` = component_id |
-| `TEST-STRATEGY__<cid>.tests[]` (each `TST-NNN`) | one first-class test task | `test` | `implements_tests` = [TST-NNN] |
+| `ARCH__<cid>.components[].operations[]` (each `OPN-NNN`) | **one impl task per operation** (atomic — the default) | `implementation` | `component_ref` = component_id + `implements_operations` = [OPN-NNN] |
+| `ARCH__<cid>.components[]` with **no** operations (or granularity:component) | one impl task for the whole component | `implementation` | `component_ref` = component_id |
+| `TEST-STRATEGY__<cid>.tests[]` (each `TST-NNN`) | **one first-class test task per `TST-NNN`** (never grouped) | `test` | `implements_tests` = [TST-NNN] |
 | `ARCH__<cid>.internal_edges` (`calls`/`reads`/`writes`) | a wiring task (or fold into the consumer's impl task) | `integration` | `depends_on` the two components' tasks |
 | container package skeleton | one skeleton task | `scaffold` | — (usually the root dep) |
 | DATA entities the container persists (a `repository` component's `traces_data_entities`) | the schema/DDL + migration task — the **entity realization** unit, distinct from the repository code that queries it | `migration` | `touches_entities` = [EntityName] |
@@ -30,9 +31,21 @@ or `⚠ inferred` (derived).
 | `DESIGN__assets.yaml` (asset_pipeline) — frontend containers | asset-folder scaffold + one generation-brief sidecar per asset | `design` | `touches_assets` = [AST-NNN] |
 | `config_loader` component / env settings the container needs | a config-wiring task (secrets backends are owned by `/sdlc:deploy`) | `config` | — |
 
-Each component is the unit of implementation work. At **coarse** granularity,
-one `implementation` task per component; at **fine**, split by the component's
-`responsibilities` / owned endpoints / methods (see `granularity-and-ordering.md`).
+At **atomic** granularity (the default) the **operation** is the unit of
+implementation work: one `implementation` task per `OPN-NNN`, scoped
+`component_ref` + `implements_operations: [OPN-NNN]`, with the op's own traces
+(`traces_api_operation` → `touches_operations`, `implements_requirements` →
+`implements`, `touches_entities`) copied onto the task. A component that declares
+no operations falls back to one task for the whole component. At **component**
+granularity it is always one task per component. The operation-coverage gate
+holds you to realizing every `OPN-NNN` (or deferring it) under atomic — see
+`coverage-and-defer.md`. See `granularity-and-ordering.md` for the full model.
+
+When ARCH declares no operations on a non-trivial component, that is an
+upstream gap: the right fix is `/sdlc:arch <container>` to add `operations[]`,
+not to invent a method breakdown here (inventing structure at the task stage is
+the hallucination the provenance guard exists to prevent). Note it in a
+`WRN-NNN` and slice that component coarsely.
 
 `implements` (FR/NFR) on an impl task = the subset of that component's
 `implements_requirements` the task realizes. Keep it a subset — the validator
@@ -63,13 +76,14 @@ repo-relative directory(ies) its source lives in (the component → code-module
 seam). **Seed each component-scoped task's `target_files` from it** rather than
 inventing paths:
 
-- A coarse `implementation` task for component `C` → `target_files` are the
-  file(s) under `C.code_location` it writes (e.g. `code_location: ["src/auth/"]`
-  → `target_files: ["src/auth/service.py", "src/auth/tokens.py"]`).
+- A component-level (`granularity: component`) `implementation` task for component
+  `C` → `target_files` are the file(s) under `C.code_location` it writes (e.g.
+  `code_location: ["src/auth/"]` → `target_files: ["src/auth/service.py",
+  "src/auth/tokens.py"]`).
 - A `test` task → the test file(s), typically mirroring the component's location
   under the project's test root (`tests/auth/test_service.py`).
-- At **fine** granularity, each split task takes the subset of `code_location`
-  files for its slice.
+- At **atomic** granularity, each per-operation task takes the subset of
+  `code_location` files for its operation (e.g. the file holding that method).
 
 The validator emits an advisory WARNING when a component-scoped task's
 `target_files` fall outside the owning component's `code_location` (directory-

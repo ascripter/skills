@@ -53,9 +53,11 @@ metadata:                                  # REQUIRED
 overview: <two or three sentences>          # REQUIRED — what bootstrapping + wiring this system entails
 
 # ---------------------------------------------------------------------------
-# granularity — global default the per-container interviews inherit (coarse/fine).
+# granularity — global default the per-container interviews inherit. DEFAULT:
+# atomic (one task per component operation / per TST-NNN). `component` = coarse
+# (one task per component). Legacy aliases on read: fine→atomic, coarse→component.
 # ---------------------------------------------------------------------------
-granularity: coarse | fine                  # REQUIRED
+granularity: atomic | component             # REQUIRED (default: atomic)
 
 # ---------------------------------------------------------------------------
 # build_order — the container sequence the codegen orchestrator builds in.

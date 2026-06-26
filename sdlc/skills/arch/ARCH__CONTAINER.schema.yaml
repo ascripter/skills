@@ -19,7 +19,7 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  arch_container_version: "1.1"            # REQUIRED
+  arch_container_version: "1.2"            # REQUIRED
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-arch                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -271,6 +271,48 @@ components:                                # REQUIRED — non-empty
                                            #            for this component (e.g. "all
                                            #            owned endpoints return 2xx for
                                            #            happy-path fixtures").
+    operations:                            # OPTIONAL but strongly encouraged for non-
+                                           #   plumbing components — the method/function
+                                           #   units of work this component performs. This
+                                           #   is the component → CODE seam: the downstream
+                                           #   `task` skill slices ONE atomic task per
+                                           #   operation, so a component with no operations
+                                           #   can only be sliced coarsely (one task for the
+                                           #   whole component). Draft one op per owned API
+                                           #   operation (controllers), per entity CRUD verb
+                                           #   (repositories), or per behaviour the
+                                           #   responsibilities / acceptance_criteria imply
+                                           #   (services/use_cases). The validator emits a
+                                           #   non-blocking WARNING for a non-trivial
+                                           #   component that declares none (cross-check 21).
+      - op_id: OPN-001                     # REQUIRED — stable id, unique within THIS file.
+                                           #   Family OPN-NNN (writer-managed counter in arch
+                                           #   state.last_ids.OPN). Renaming `name` never
+                                           #   changes op_id.
+        name: create-task                  # REQUIRED — method/function name (verb-first;
+                                           #   mirrors the API operation_id for a controller).
+        summary: <one line>                # REQUIRED — what this operation does.
+        # --- traces: the contract this operation realizes (ALL OPTIONAL) ---
+        traces_api_operation: create-task  # OPTIONAL — an operation_id from API__*.yaml
+                                           #   (controllers / api_clients). Validated ⊆ the
+                                           #   API operation set; lets `task`/`test` slice
+                                           #   endpoint-level work. The component-level
+                                           #   `traces_api_operations` stays the union.
+        implements_requirements:           # OPTIONAL — FR-NNN/NFR-NNN this op realizes. MUST
+          - FR-001                         #   be ⊆ the OWNING component's
+                                           #   implements_requirements (validated).
+        touches_entities:                  # OPTIONAL — DATA-MODEL entity name(s) this op
+          - Task                           #   reads/writes. Validated ⊆ the entities the
+                                           #   owning component traces.
+        satisfies_acceptance:              # OPTIONAL — the component acceptance_criterion
+          - "Creating a task returns 201 with a persisted id."  # string(s) this op fulfils.
+        # --- optional signature (codegen-grade; opt-in, omit for lightweight) ---
+        inputs:                            # OPTIONAL — params/args.
+          - "payload: TaskCreate"
+        outputs: Task                      # OPTIONAL — return shape.
+        errors:                            # OPTIONAL — error cases.
+          - "ValidationError -> 400"
+        status: draft | confirmed          # REQUIRED — interview progress.
     status: defined | draft | confirmed    # REQUIRED — interview progress
 
 # ---------------------------------------------------------------------------
@@ -350,7 +392,10 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     Cross-check failures force `metadata.status: draft`.
 # 15. Edge via_* resolution — for every edge with a via_* field set:
 #       * via_resource_id  → must resolve to a resource_id in API__*.yaml
-#       * via_operation_id → must resolve to an operation_id in API__*.yaml
+#       * via_operation_id → must resolve to an API operation_id in API__*.yaml
+#                            OR a component operation (operations[].name / op_id)
+#                            of a component in this container — so an INTERNAL
+#                            (non-API) call can name the callee's method.
 #       * via_channel_id   → must resolve to API.events.channels[].channel_id
 #       * via_entity       → must resolve to a DATA-MODEL entity name
 # 16. Deployment shape compatibility — `deployment.shape` must be
@@ -373,4 +418,18 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     infer its file placement. Does NOT block status: complete (placement can
 #     legitimately be deferred), but filling it is what makes "mostly
 #     autonomous" downstream codegen actually hold.
+# 21. Component operations — for every operations[] entry on every component:
+#       * op_id matches OPN-NNN (zero-padded ≥3 digits) and is UNIQUE across all
+#         components in this file (it is the stable handle `task` references).
+#       * name + summary are non-empty (required per op).
+#       * traces_api_operation       → resolves to an operation_id in API__*.yaml.
+#       * implements_requirements     → FR-NNN/NFR-NNN format + exists in PRD.yaml
+#         AND ⊆ the OWNING component's implements_requirements.
+#       * touches_entities            → ⊆ the owning component's traces_data_entities
+#         (and a DATA-MODEL entity name).
+#     Cross-check failures force `metadata.status: draft`. The operations LIST
+#     itself is optional (does NOT block complete), but a non-trivial component
+#     (same set as #20) that declares no operations emits a non-blocking WARNING:
+#     downstream `task` can only slice it coarsely (one task for the whole
+#     component) rather than one atomic task per operation.
 # =============================================================================

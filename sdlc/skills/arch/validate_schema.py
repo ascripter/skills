@@ -448,6 +448,29 @@ class SecurityConcern(_Base):
 ContainerSecurityConcern = Union[SecurityConcern, str]
 
 
+class Operation(_Base):
+    """A component's method/function-level unit of work (cross-check #21).
+
+    op_id (OPN-NNN) is the stable handle the downstream `task` skill references
+    to slice ONE atomic task per operation. name + summary are required; every
+    trace + signature field is optional (lightweight by default, signature
+    opt-in for codegen-grade components). `outputs` is left untyped (str or
+    list) since it is a free-form signature hint.
+    """
+
+    op_id: Optional[str] = None
+    name: Optional[str] = None
+    summary: Optional[str] = None
+    traces_api_operation: Optional[str] = None          # operation_id in API__*.yaml
+    implements_requirements: Optional[List[str]] = None  # FR-NNN/NFR-NNN ⊆ component
+    touches_entities: Optional[List[str]] = None         # ⊆ component traces_data_entities
+    satisfies_acceptance: Optional[List[str]] = None
+    inputs: Optional[List[str]] = None
+    outputs: Optional[Any] = None
+    errors: Optional[List[str]] = None
+    status: Optional[ContainerStatus] = None
+
+
 class Component(_Base):
     component_id: str
     archetype: Optional[ComponentArchetype] = None
@@ -465,6 +488,7 @@ class Component(_Base):
     traces_prd_workflows: Optional[List[str]] = None      # WKF-NNN
     failure_modes: Optional[List[ComponentFailureMode]] = None
     acceptance_criteria: Optional[List[str]] = None
+    operations: Optional[List[Operation]] = None          # OPN-NNN method units
     status: Optional[ContainerStatus] = None
 
 
@@ -640,6 +664,7 @@ _WKF_PREFIX_RE = re.compile(r"^WKF-\d{3,}$", re.IGNORECASE)
 # (every must-have FR) is unaffected: it only counts FR-NNN entries.
 _FR_OR_NFR_PREFIX_RE = re.compile(r"^(?:FR|NFR)-\d{3,}$", re.IGNORECASE)
 _NFR_ID_RE = re.compile(r"^NFR-\d+", re.IGNORECASE)
+_OPN_PREFIX_RE = re.compile(r"^OPN-\d{3,}$", re.IGNORECASE)
 
 
 def check_warning_ids(warnings: List[str], label: str) -> List[str]:
@@ -1354,6 +1379,107 @@ def check_component_code_location(
     return warnings
 
 
+def check_component_operations(
+    container: ArchContainer,
+    file_label: str,
+    api_operation_ids: Set[str],
+    data_entity_names: Set[str],
+) -> Tuple[List[str], List[str]]:
+    """Cross-check #21 — validate each component's operations[] (the method/
+    function units the downstream `task` skill slices one atomic task per).
+
+    Returns (errs, warns). Errs force draft / block complete; warns are advisory.
+
+      errs:
+        * op_id matches OPN-NNN and is unique across the whole file.
+        * name + summary are non-empty.
+        * traces_api_operation resolves to an API operation_id (when API present).
+        * implements_requirements are FR/NFR format AND ⊆ the OWNING component's
+          implements_requirements.
+        * touches_entities ⊆ the owning component's traces_data_entities (and a
+          DATA-MODEL entity when present).
+      warns:
+        * a non-trivial component (same set as code_location #20) that carries a
+          trace but declares no operations — `task` can only slice it coarsely.
+
+    op_id uniqueness is checked here (not as a raising model_validator) so a draft
+    with duplicate ids stays loadable and reports a fixable error.
+    """
+    errs: List[str] = []
+    warns: List[str] = []
+    seen_op_ids: Dict[str, str] = {}        # OP_ID(upper) -> component_id
+    for i, comp in enumerate(container.components or []):
+        cid = comp.component_id
+        archetype = comp.archetype.value if comp.archetype else None
+        comp_reqs = {str(r).strip().upper() for r in (comp.implements_requirements or [])}
+        comp_ents = {str(e).strip() for e in (comp.traces_data_entities or [])}
+        ops = comp.operations or []
+        if not ops and archetype not in _PLUMBING_COMPONENT_ARCHETYPES:
+            has_trace = any([
+                comp.traces_api_resources, comp.traces_api_operations,
+                comp.traces_ux_surfaces, comp.traces_data_entities,
+                comp.implements_requirements,
+            ])
+            if has_trace:
+                warns.append(
+                    f"{file_label}: components[{i}]='{cid}' declares no operations "
+                    f"— downstream `task` can only slice it coarsely (one task for "
+                    f"the whole component, not one per method/operation)"
+                )
+        for j, op in enumerate(ops):
+            where = f"{file_label}: components[{i}]='{cid}'.operations[{j}]"
+            op_id = (op.op_id or "").strip()
+            if not op_id:
+                errs.append(f"{where}: missing op_id")
+            elif not _OPN_PREFIX_RE.match(op_id):
+                errs.append(f"{where}.op_id='{op.op_id}' must match OPN-NNN")
+            else:
+                key = op_id.upper()
+                if key in seen_op_ids:
+                    errs.append(
+                        f"{where}.op_id='{op_id}' is duplicated "
+                        f"(already used by component '{seen_op_ids[key]}')"
+                    )
+                else:
+                    seen_op_ids[key] = cid
+            if not (op.name or "").strip():
+                errs.append(f"{where}: missing name")
+            if not (op.summary or "").strip():
+                errs.append(f"{where}: missing summary")
+            if op.traces_api_operation:
+                t = str(op.traces_api_operation).strip()
+                if api_operation_ids and t not in api_operation_ids:
+                    errs.append(
+                        f"{where}.traces_api_operation='{t}' is not an operation_id "
+                        f"in any API__*.yaml"
+                    )
+            for r in op.implements_requirements or []:
+                ru = str(r).strip().upper()
+                if not _FR_OR_NFR_PREFIX_RE.match(ru):
+                    errs.append(
+                        f"{where}.implements_requirements '{r}' is not an "
+                        f"FR-NNN/NFR-NNN id"
+                    )
+                elif comp_reqs and ru not in comp_reqs:
+                    errs.append(
+                        f"{where}.implements_requirements '{r}' is not in the owning "
+                        f"component '{cid}' implements_requirements"
+                    )
+            for e in op.touches_entities or []:
+                es = str(e).strip()
+                if data_entity_names and es not in data_entity_names:
+                    errs.append(
+                        f"{where}.touches_entities '{e}' is not an entity in "
+                        f"DATA-MODEL.yaml"
+                    )
+                elif comp_ents and es not in comp_ents:
+                    errs.append(
+                        f"{where}.touches_entities '{e}' is not in the owning "
+                        f"component '{cid}' traces_data_entities"
+                    )
+    return errs, warns
+
+
 def check_edge_via_fields_arch(
     arch: Arch,
     api_resource_ids: Set[str],
@@ -1391,8 +1517,22 @@ def check_edge_via_fields_container(
 ) -> List[str]:
     """Cross-check #15 (container scope) — every InternalEdge/ExternalEdge
     via_* (when set) resolves to upstream artifact.
+
+    `via_operation_id` resolves against the API operation set OR a component
+    operation (operations[].name / op_id) of a component in this container, so an
+    INTERNAL (non-API) call edge can name the callee's method.
     """
     errs: List[str] = []
+
+    # Component-operation tokens (names + OPN-NNN ids) declared in this container.
+    comp_op_tokens: Set[str] = set()
+    for comp in container.components or []:
+        for op in (comp.operations or []):
+            if op.op_id:
+                comp_op_tokens.add(str(op.op_id).strip())
+            if op.name:
+                comp_op_tokens.add(str(op.name).strip())
+    known_ops = api_operation_ids | comp_op_tokens
 
     def _check(label: str, e: Any) -> None:
         rid = getattr(e, "via_resource_id", None)
@@ -1404,10 +1544,11 @@ def check_edge_via_fields_container(
                 f"{file_label}: {label}.via_resource_id='{rid}' "
                 f"is not a resource_id in any API__*.yaml"
             )
-        if oid and api_operation_ids and oid not in api_operation_ids:
+        if oid and known_ops and oid not in known_ops:
             errs.append(
                 f"{file_label}: {label}.via_operation_id='{oid}' "
-                f"is not an operation_id in any API__*.yaml"
+                f"is not an API operation_id (API__*.yaml) or a component "
+                f"operation (operations[].name/op_id) in this container"
             )
         if cid and api_channel_ids and cid not in api_channel_ids:
             errs.append(
@@ -1650,6 +1791,8 @@ def validate_all(arch_path: Path) -> int:
     container_via_errs: List[str] = []
     deployment_compat_errs: List[str] = []
     code_location_warnings: List[str] = []
+    component_op_errs: List[str] = []
+    component_op_warnings: List[str] = []
     warning_id_errs: List[str] = check_warning_ids(arch.arch_warnings, "arch_warnings")
     id_format_errs: List[str] = check_arch_id_formats(arch)
     for name, c in containers.items():
@@ -1657,6 +1800,11 @@ def validate_all(arch_path: Path) -> int:
         edge_errs_containers.extend(check_container_edges(c, name, arch))
         consistency_errs.extend(check_container_self_consistency(c, arch, name))
         code_location_warnings.extend(check_component_code_location(c, name))
+        op_errs, op_warns = check_component_operations(
+            c, name, api_operation_ids, data_entity_names
+        )
+        component_op_errs.extend(op_errs)
+        component_op_warnings.extend(op_warns)
         component_trace_errs.extend(
             check_component_traces(
                 c, arch, name,
@@ -1703,6 +1851,7 @@ def validate_all(arch_path: Path) -> int:
         ("PRD trace ID-format error(s) (expected FR-NNN / WKF-NNN)", id_format_errs),
         ("PRD must-have FR-NNN feature(s) implemented by no container", uncovered_features),
         ("implements_requirements / traces_prd_workflows resolution error(s)", prd_trace_errs),
+        ("component operation integrity error(s) (cross-check 21)", component_op_errs),
     ]
 
     # 6) Reporting — hard problems force draft / block complete.
@@ -1744,7 +1893,7 @@ def validate_all(arch_path: Path) -> int:
             store_ids,
         )
         _print_extra_problems(extra_problems)
-        _print_warnings(external_warnings, upstream_warnings, code_location_warnings)
+        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings)
         return 1
 
     if status == "complete":
@@ -1763,7 +1912,7 @@ def validate_all(arch_path: Path) -> int:
             f"{len(ux_ids)} data-bearing UX surface(s) all owned; "
             f"{store_note}; {feat_note}; edges resolve."
         )
-        _print_warnings(external_warnings, upstream_warnings, code_location_warnings)
+        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings)
         return 0
 
     # status == "draft"
@@ -1801,7 +1950,7 @@ def validate_all(arch_path: Path) -> int:
             "\nAll required fields filled, coverage complete, edges resolve. "
             "Set metadata.status: complete when done."
         )
-    _print_warnings(external_warnings, upstream_warnings, code_location_warnings)
+    _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings)
     return 0
 
 
@@ -1901,6 +2050,7 @@ def _print_warnings(
     external_warnings: List[str],
     upstream_warnings: List[str],
     code_location_warnings: Optional[List[str]] = None,
+    operation_warnings: Optional[List[str]] = None,
 ) -> None:
     if external_warnings:
         print()
@@ -1916,6 +2066,11 @@ def _print_warnings(
         print()
         print(f"WARNINGS ({len(code_location_warnings)} component(s) without code_location):")
         for w in code_location_warnings:
+            print(f"  - {w}")
+    if operation_warnings:
+        print()
+        print(f"WARNINGS ({len(operation_warnings)} component(s) without operations):")
+        for w in operation_warnings:
             print(f"  - {w}")
 
 

@@ -81,11 +81,15 @@ silently guess.
 - **Write-permission error on `docs/`.** Report the path and the OS error; do not
   lose interview state — it is already persisted in the state file. Suggest the
   user fix permissions and re-run (resume will pick up).
-- **Very large system (many containers / fine granularity → hundreds of tasks).**
-  Keep per-container files small and let the system file hold only the stitch +
-  cross-container work. The union-graph check scales linearly; the interview is
-  the bottleneck — lean hard on the Phase 3 draft so the user edits rather than
-  dictates.
+- **Very large system (many containers / atomic granularity → hundreds of tasks).**
+  Atomic slicing multiplies task count (one per operation), so this is the common
+  case, not the exception. Keep per-container files small and let the system file
+  hold only the stitch + cross-container work. The union-graph check scales
+  linearly; the interview is the bottleneck — lean hard on the Phase 3 draft (it
+  is seeded one task per ARCH operation) so the user edits rather than dictates,
+  and use `priority` (must/should/could) so the codegen orchestrator can stage the
+  long tail. If atomic is genuinely too fine for a throwaway prototype, the user
+  can choose `granularity: component`.
 - **Invalid JSON on disk (hand-edit gone wrong).** The validator returns exit 2
   ("cannot read/parse"). Show the user the parse error location; offer to
   reconstruct from the state file's `partial_answers`.

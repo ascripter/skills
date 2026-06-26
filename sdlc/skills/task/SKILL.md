@@ -87,8 +87,9 @@ many containers they touch:
   handoff, plus the **stitch**: `build_order` (providers before consumers) and
   the `container_task_graphs` registry.
 - **Container** (`TASKS__<container>.json`): work scoped to one container — its
-  `scaffold` task, one `implementation` task per component (or N at fine
-  granularity), one `test` task per `TST-NNN` in its test strategy, and
+  `scaffold` task, one `implementation` task **per component operation** (`OPN-NNN`)
+  at atomic granularity (the default) or one per component at `component`
+  granularity, one `test` task per `TST-NNN` in its test strategy, and
   `integration` tasks for its internal edges.
 
 ## Files in this skill
@@ -103,7 +104,7 @@ many containers they touch:
 | `set_claude_md_pointer.py` | Deterministic CLAUDE.md pointer injector, called in Phase 8. |
 | `references/interview-mechanics.md` | AskUserQuestion batch format, EXIT semantics, importance-tier flows. Read on entering Phase 6. |
 | `references/task-discovery.md` | How to seed the task graph from ARCH components + TEST tests + API + DATA (system and container). Read in Phase 3. |
-| `references/granularity-and-ordering.md` | Coarse/fine granularity, dependency ordering, the topological build_order, and the deterministic cross-file stitch. Read in Phases 3–6. |
+| `references/granularity-and-ordering.md` | Atomic vs component granularity (per-operation slicing), dependency ordering, the topological build_order, and the deterministic cross-file stitch. Read in Phases 3–6. |
 | `references/coverage-and-defer.md` | The trace-or-defer coverage contract (component + test coverage) and the WRN-NNN deferral mechanism. Read in Phase 6 and Phase 7. |
 | `references/merge-validate.md` | Merge logic, the cross-check suite, the JSON rationale, CLAUDE.md pointer rules, the downstream-rejection rule. Read on entering Phase 7. |
 | `references/edge-cases.md` | Unusual situations and their handling. |
@@ -337,11 +338,16 @@ than inventing from a blank page. Load `references/task-discovery.md` and
 
 **Container mode — implementation + test work:**
 
-1. **`ARCH__<container>.components[]`** — each component seeds one
-   `implementation` task at coarse granularity (or one per responsibility/
-   endpoint at fine). `component_ref` = the component. Tag `✓ found`.
-2. **`TEST-STRATEGY__<container>.tests[]`** — each `TST-NNN` seeds one
-   first-class `test` task (`implements_tests`). Tag `✓ found`.
+1. **`ARCH__<container>.components[].operations[]`** — at atomic granularity (the
+   default) each component **operation** (`OPN-NNN`) seeds one `implementation`
+   task scoped `component_ref` + `implements_operations: [OPN-NNN]`, with the op's
+   traces copied up (`touches_operations` ← `traces_api_operation`, `implements` ←
+   `implements_requirements`, `touches_entities`). A component with no operations
+   (or `granularity: component`) seeds one task for the whole component
+   (`component_ref` only). Tag `✓ found`.
+2. **`TEST-STRATEGY__<container>.tests[]`** — each `TST-NNN` seeds its own
+   first-class `test` task (`implements_tests`) — **one per `TST-NNN`, never
+   grouped**. Tag `✓ found`.
 3. **`ARCH__<container>.internal_edges`** — `calls` edges between components seed
    `integration` tasks. Tag `✓ found`.
 4. **Container `scaffold`** — one task for the package skeleton/manifest. Tag
@@ -374,9 +380,11 @@ theme batch:
 
 **Both modes:**
 
-1. `granularity` — `coarse` (one implementation task per component) vs `fine`
-   (split per responsibility/endpoint/method). FR-013's only required structural
-   decision. Container mode pre-fills from the system value when present.
+1. `granularity` — `atomic` (one implementation task per component operation
+   `OPN-NNN` + one test task per `TST-NNN`) vs `component` (one task per
+   component). **Default `atomic`** — the method-level breakdown the codegen
+   factory wants. The only required structural decision. Container mode pre-fills
+   from the system value when present.
 
 **System mode also:**
 
@@ -416,19 +424,22 @@ Walk the themes in `task-questions.yaml` order. Themes are tagged
 2. `container_tasks` — `critical` per item, `synthesis: true`. For each task:
    `tsk_id`, `title`, `kind` (∈ scaffold / implementation / test / integration /
    migration / config / design / chore), `description`, `component_ref`,
-   `implements` (FR/NFR), `implements_tests` (TST), `implements_surfaces` (SCR),
-   `implements_workflows` (WKF), `touches_entities`, `touches_operations`,
-   `touches_assets` (AST), `depends_on`, `inputs`, `target_files`, `outputs`,
-   `acceptance`, `priority`.
+   `implements_operations` (OPN — the atomic scope; under atomic an impl task
+   names the one operation it builds), `implements` (FR/NFR), `implements_tests`
+   (TST), `implements_surfaces` (SCR), `implements_workflows` (WKF),
+   `touches_entities`, `touches_operations`, `touches_assets` (AST), `depends_on`,
+   `inputs`, `target_files`, `outputs`, `acceptance`, `priority`.
    `target_files` (the codegen write targets) is drafted from the owning
    component's `code_location` in `ARCH__<container>.yaml` — a component-scoped
    task's files must sit within it (validator warns otherwise), which is what
    stops codegen inventing paths; `outputs` stays the contract-level result.
    Run the scope-completeness sweep after the per-item loop. The coverage gates
-   (Phase 7) require every component, container `TST-NNN`, owned `SCR` surface,
-   owned-resource operation, traced entity, and `implements_requirements` FR/NFR
-   to be realized by a task (directly or transitively via a realized component)
-   or deferred — plus a `design` task for a token_based_ui frontend.
+   (Phase 7) require every component, **every component operation `OPN-NNN`
+   (under atomic — named in `implements_operations`, no transitive credit)**,
+   container `TST-NNN`, owned `SCR` surface, owned-resource operation, traced
+   entity, and `implements_requirements` FR/NFR to be realized by a task
+   (directly or — except OPN under atomic — transitively via a realized
+   component) or deferred — plus a `design` task for a token_based_ui frontend.
 
 #### Tier mechanics
 
@@ -480,8 +491,14 @@ An item is covered if a task names it OR a task realizes a component that traces
   by some system `test` task OR deferred.
 - **Container component coverage** — every `components[].component_id` in
   `ARCH__<cid>.yaml` is realized by ≥1 task (`component_ref`) OR deferred.
+- **Container operation coverage** (the atomicity gate, granularity-conditional)
+  — every `OPN-NNN` in any component's `operations[]` is realized by a task
+  naming it in `implements_operations` OR deferred. **Blocking under
+  `granularity: atomic`** (no transitive credit from a bare `component_ref` — that
+  is the point); advisory + transitive under `component`. No-op when ARCH
+  declares no operations.
 - **Container test coverage** — every `TST-NNN` in `TEST-STRATEGY__<cid>.yaml` is
-  realized by some task (`implements_tests`) OR deferred.
+  realized by some task (`implements_tests`) OR deferred — one task per `TST-NNN`.
 - **Surface coverage** — every `SCR` in the container's `owns_ux_surfaces`
   (ARCH.yaml, slug→SCR via `UX.yaml`) realized (`implements_surfaces` / a realized
   component's `traces_ux_surfaces`) OR deferred. Advisory when `UX.yaml` absent.

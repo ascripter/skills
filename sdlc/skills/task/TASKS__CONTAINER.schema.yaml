@@ -27,6 +27,8 @@
 #   * WRN-NNN — one per `task_warnings` entry.
 # Upstream ids it REFERENCES:
 #   * component_id            — ARCH__<container>.yaml components[].component_id
+#   * OPN-NNN                 — ARCH__<container>.yaml components[].operations[].op_id
+#                                (the method/operation a task atomically realizes)
 #   * TST-NNN                 — TEST-STRATEGY__<container>.yaml tests[].tst_id
 #   * FR-NNN / NFR-NNN        — PRD requirements (functional + non-functional)
 #   * entity names            — DATA-MODEL.yaml entities (PascalCase)
@@ -52,7 +54,7 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  tasks_container_version: "1.0"           # REQUIRED
+  tasks_container_version: "1.1"           # REQUIRED
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-task                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -73,22 +75,31 @@ overview: <two or three sentences>          # REQUIRED — what building this co
 inherits_from: docs/TASKS.json              # OPTIONAL — pointer to the system task graph
 
 # ---------------------------------------------------------------------------
-# granularity — the one structural choice (FR-013's only requires_user_decision).
-#   coarse — one implementation task per component (fewer, larger tasks).
-#   fine   — implementation split per responsibility / endpoint / method.
-# Drives how finely the per-component work is sliced into TSK-NNN units. The
-# codegen agent emits files per TSK, so granularity trades context-size per task
-# against task count. Pre-filled from the inherited system value when present.
+# granularity — the one structural choice. DEFAULT: atomic.
+#   atomic    — slice to the finest unit the architecture DECLARES: one
+#               implementation task per component operation (ARCH OPN-NNN), one
+#               test task per TST-NNN (never grouped), one migration per entity. A
+#               component that declares no operations falls back to one task for
+#               the whole component (graceful — the validator warns). This is the
+#               method/function-level breakdown the codegen factory wants: tight
+#               per-task context, cheap+high-quality generation, 1:1 with tests.
+#   component — coarse: one implementation task per component, regardless of how
+#               many operations it has. Fewer, larger tasks.
+# Legacy aliases accepted on read: `fine`→`atomic`, `coarse`→`component`.
+# The codegen agent emits files per TSK, so atomic = more, cheaper-context tasks
+# (and more edges to order) vs component = fewer, larger. Container interviews
+# inherit the system value unless overridden.
 # ---------------------------------------------------------------------------
-granularity: coarse | fine                  # REQUIRED
+granularity: atomic | component             # REQUIRED (default: atomic)
 
 # ---------------------------------------------------------------------------
 # tasks — the container's dependency-ordered work units. Each is a TSK-NNN item.
 # `critical` per item in the interview: the agent derives candidates from the
-# container's components (one impl task each, or N at fine granularity), its
-# TEST-STRATEGY tests (one test task each — test tasks are first-class), its
-# internal_edges (integration/wiring tasks), and a scaffold task, then confirms
-# each. The list is later TOPOLOGICALLY ORDERED by depends_on.
+# container's components (one impl task PER OPERATION at atomic granularity — the
+# default — or one per component at `component` granularity), its TEST-STRATEGY
+# tests (one test task PER TST-NNN — test tasks are first-class, never grouped),
+# its internal_edges (integration/wiring tasks), and a scaffold task, then
+# confirms each. The list is later TOPOLOGICALLY ORDERED by depends_on.
 # ---------------------------------------------------------------------------
 tasks:                                      # REQUIRED — list[Task], non-empty
   - tsk_id: TSK-001                         # REQUIRED — unique within THIS file
@@ -114,6 +125,17 @@ tasks:                                      # REQUIRED — list[Task], non-empty
                                              #   matching ARCH__<container>.yaml.
                                              #   An implementation/test task is
                                              #   "scoped to one CMP" via this.
+    implements_operations:                  # OPTIONAL (the ATOMIC scope) — OPN-NNN
+      - OPN-001                             #   op id(s) from the component_ref's
+                                             #   operations[] in ARCH__<container>.yaml
+                                             #   that THIS task realizes. Under
+                                             #   granularity:atomic an implementation
+                                             #   task names exactly the operation(s) it
+                                             #   builds (usually one), and EVERY
+                                             #   component operation must be realized by
+                                             #   some task OR deferred (the
+                                             #   operation-coverage gate). VALIDATED ⊆
+                                             #   the component_ref's operations[].op_id.
     implements:                             # OPTIONAL — FR/NFR ids this task realizes.
       - FR-008                              #   Subset of the targeted component's /
       - NFR-011                             #   container's implements_requirements.
@@ -218,7 +240,10 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 # 4.  Scope integrity — every implementation task is scoped to one component or
 #     one contract: kind:implementation MUST set component_ref OR touches_operations.
 #     Every component_ref resolves to a components[].component_id in
-#     ARCH__<container_id>.yaml. Blocks complete.
+#     ARCH__<container_id>.yaml. Every implements_operations entry is OPN-NNN and
+#     resolves to an operations[].op_id of the task's component_ref in
+#     ARCH__<container_id>.yaml (a bare op with no component_ref is rejected).
+#     Blocks complete.
 # 5.  implements integrity — every `implements` entry is FR/NFR format, resolves
 #     to a PRD id, AND ⊆ the union of implements_requirements across the
 #     container + the targeted component. Blocks complete.
@@ -268,6 +293,19 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     implements_requirements is realized by a task (`implements`) or transitively
 #     (a realized component declaring it) OR deferred. (Promoted from advisory to
 #     blocking: the user contract is "faithfully convert all FRs/NFRs".)
+# 14a. Operation coverage (granularity-conditional — the atomicity gate) — every
+#     operations[].op_id declared across the container's components in
+#     ARCH__<cid>.yaml must be realized OR deferred. This is what makes atomic
+#     slicing STICK. Behaviour depends on `granularity`:
+#       * granularity: atomic    → BLOCKING trace-or-defer. An OPN-NNN is realized
+#         only when a task NAMES it in implements_operations; otherwise defer it
+#         with a WRN-NNN. (A bare component_ref does NOT transitively cover its
+#         operations under atomic — that is the whole point.) Only bites for
+#         components that declare operations; a no-operations component falls back
+#         to component-level coverage (#9).
+#       * granularity: component → ADVISORY/transitive: a component_ref task covers
+#         its component's operations; unrealized ops warn but do not block.
+#     Softens to a no-op when no component declares operations (older ARCH files).
 # 15. Design coverage — a token_based_ui frontend that owns surfaces must have a
 #     kind:design (or equivalent) task wiring the design tokens/theme OR defer.
 #     Per-asset (AST-NNN) realization is advisory. Skipped when DESIGN is absent

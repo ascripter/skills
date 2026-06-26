@@ -1020,6 +1020,34 @@ questions:
     confidence_field: false
     importance: med
 
+  - theme: per_component_deepdive
+    id: operations
+    schema_path: component.operations
+    question: >
+      What are this component's operations — the method/function-level units of
+      work it performs? (Approve the drafted list, or edit it.)
+    hint: >
+      THE component→code seam. The downstream `task` skill slices ONE atomic task
+      per operation, so this is what makes method-level task breakdown possible;
+      a component with no operations can only be sliced coarsely (one task for the
+      whole component). DRAFT the list, don't ask cold — derive one operation per
+      owned API operation (controllers/api_clients, set traces_api_operation), per
+      entity CRUD verb (repositories, set touches_entities), or per behaviour the
+      responsibilities + acceptance_criteria + implements_requirements imply
+      (services/use_cases). Each op carries op_id (OPN-NNN, writer-managed in
+      state.last_ids.OPN, unique per file), name (verb-first), summary (one line),
+      and optional traces (traces_api_operation, implements_requirements ⊆ the
+      component's, touches_entities) + an optional signature (inputs/outputs/
+      errors) for codegen-grade components. Before closing, cross-check the
+      drafted ops against the component's API operations / acceptance_criteria /
+      traced entities — every one should map to an operation. Skip for trivial
+      plumbing (config_loader, serializer, observability_bootstrap, error_handler).
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
   # =========================================================================
   # CONTAINER MODE — internal_and_external_edges (critical synthesis)
   # =========================================================================

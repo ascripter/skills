@@ -87,16 +87,20 @@ questions:
     id: granularity
     schema_path: granularity
     question: >
-      How finely should work be sliced into tasks — coarse (one implementation
-      task per component) or fine (split per responsibility / endpoint / method)?
+      How finely should work be sliced into tasks — atomic (one task per
+      component operation / per test) or component (one task per component)?
     hint: >
-      FR-013's one required structural decision. The codegen agent emits files
-      per task, so granularity trades context-size per task against task count.
-      Coarse suits small/medium apps; fine suits large components or
-      endpoint-heavy services. Container interviews inherit this default.
+      The one required structural decision; DEFAULT atomic. atomic = one
+      implementation task per ARCH component operation (OPN-NNN) + one test task
+      per TST-NNN — method-level units the codegen factory builds one sub-agent
+      per, giving tight per-task context, cheaper+higher-quality generation, and
+      a 1:1 task↔test mapping. component = the old coarse mode (one task per
+      component), for tiny apps where per-method tasks would be noise. Atomic
+      needs ARCH components to declare operations[]; a component with none falls
+      back to one task. Container interviews inherit this default.
     suggested_answers:
-      - "coarse — one implementation task per component"
-      - "fine — split per responsibility / endpoint / method"
+      - "atomic — one task per operation / per test (recommended)"
+      - "component — one task per component (coarse)"
     free_text_allowed: false
     required: true
     capture_rationale: true
@@ -290,12 +294,12 @@ questions:
   - theme: build_plan_container
     id: granularity
     schema_path: granularity
-    question: "Granularity for this container — coarse (one task per component) or fine (per responsibility/endpoint)?"
-    hint: "Inherits the system default unless this container warrants a different slice (e.g. a large component → fine)."
+    question: "Granularity for this container — atomic (one task per operation / per test) or component (one task per component)?"
+    hint: "Inherits the system default (atomic) unless this container warrants a coarser slice (e.g. a tiny container where per-method tasks would be noise → component)."
     suggested_answers:
       - "inherit the system default"
-      - "coarse — one implementation task per component"
-      - "fine — split per responsibility / endpoint / method"
+      - "atomic — one task per operation / per test (recommended)"
+      - "component — one task per component (coarse)"
     free_text_allowed: false
     required: true
     capture_rationale: true
@@ -351,6 +355,26 @@ questions:
     suggested_answers: []
     free_text_allowed: true
     required_if: "task.kind == 'implementation'"
+    required: false
+    confidence_field: false
+    importance: critical
+
+  - theme: container_tasks
+    id: implements_operations
+    schema_path: task.implements_operations
+    question: "Which component operation(s) does this atomic task realize (OPN-NNN)?"
+    hint: >
+      The ATOMIC scope. Under granularity:atomic, each implementation task names
+      exactly the operation(s) it builds (usually ONE) from the component_ref's
+      operations[] in ARCH__<container>.yaml — and EVERY component operation must
+      be realized by some task OR deferred (the operation-coverage gate). The op's
+      own traces ride up onto the task: set touches_operations from the op's
+      traces_api_operation, implements from the op's implements_requirements,
+      touches_entities from the op's touches_entities. Validated ⊆ the
+      component_ref's operations[].op_id. Omit under granularity:component.
+    suggested_answers: []
+    free_text_allowed: true
+    required_if: "granularity == 'atomic' and task.kind == 'implementation'"
     required: false
     confidence_field: false
     importance: critical
