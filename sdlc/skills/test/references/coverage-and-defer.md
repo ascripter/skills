@@ -63,6 +63,12 @@ Drawn from `ARCH.yaml.containers[<id>]` and `docs/ARCH__<id>.yaml`:
 - **Risks.** Every `failure_modes[].id` and `security_concerns[].id`
   (container- and component-level, structured entries only) must be exercised
   by a test (`targets_failure_mode` / `targets_security_concern`) OR deferred.
+- **Operations (advisory, never blocks).** Every component `operations[].op_id`
+  (`OPN-NNN`) SHOULD be exercised by a test (`targets_operation`). A gap emits a
+  WARNING, not a block — a test strategy is risk-driven, so a trivial operation
+  (a plain getter) may legitimately go untested. Seed one unit test per operation
+  so the suite is atomic by default, and defer the genuinely-trivial ones with a
+  `WRN-NNN` to silence the warning intentionally.
 
 (Container-level `acceptance_criteria` in `ARCH.yaml` and bare-string
 failure-modes/concerns without a stable id are surfaced as seeds but are

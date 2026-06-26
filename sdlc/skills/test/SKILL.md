@@ -458,12 +458,17 @@ Walk the themes in `test-questions.yaml` order. Themes are tagged
    `tst_id`, `name`, `tier` (∈ unit / integration / property / contract /
    load / security / accessibility), `description`, `component_ref` (a
    `components[].component_id` from `ARCH__<container>.yaml`, when the test
-   targets one), `directives`, `covers` (FR/NFR/ACR), `targets_failure_mode`
-   / `targets_security_concern` (the ARCH risk id this negative case exercises),
-   `priority`, `setup`, `fixtures`, `mocks`, `acceptance`. Run the
-   scope-completeness sweep after the per-item loop. The coverage gate
-   (Phase 7) requires every container/component requirement, acceptance
-   criterion, failure mode, and security concern to be covered or deferred.
+   targets one), `targets_operation` (the component `operations[].op_id` /
+   `OPN-NNN` this test exercises — the atomic test grain; seed one unit test per
+   operation, mirroring `task`'s per-operation slicing), `directives`, `covers`
+   (FR/NFR/ACR), `targets_failure_mode` / `targets_security_concern` (the ARCH
+   risk id this negative case exercises), `priority`, `setup`, `fixtures`,
+   `mocks`, `acceptance`. Run the scope-completeness sweep after the per-item
+   loop. The coverage gate (Phase 7) requires every container/component
+   requirement, acceptance criterion, failure mode, and security concern to be
+   covered or deferred; component operations are an **advisory** coverage layer
+   (seed one test per operation; a gap warns but never blocks — a trivial getter
+   may go untested or be deferred with a `WRN-NNN`).
 
 #### Tier mechanics
 

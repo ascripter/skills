@@ -115,8 +115,16 @@ factory for tests — mine every structured field.
 
 For each `components[]`:
 
-- Seed `unit` tests for each `responsibilities[]` entry and each
-  `acceptance_criteria[]` entry. `component_ref: <component_id>`.
+- **Seed one `unit` test per component `operations[]` entry** (`OPN-NNN`) — the
+  atomic test grain, mirroring how the `task` skill slices one task per
+  operation. Set `component_ref: <component_id>` AND
+  `targets_operation: <OPN-NNN>`, and pull the op's `traces` into the test:
+  `covers` ← the op's `implements_requirements`, plus a happy-path assertion from
+  its `summary` / `satisfies_acceptance`. Every component operation SHOULD get a
+  test (the advisory operation-coverage warning flags any that don't); defer a
+  genuinely trivial op (a plain getter) with a `WRN-NNN`.
+- For a component that declares **no** `operations[]`, fall back to seeding from
+  each `responsibilities[]` and `acceptance_criteria[]` entry (the older grain).
 - Map the component's `implements_requirements` (FR/NFR) into the tests'
   `covers` so the **requirement-coverage gate** is satisfied.
 - `validator` / `serializer` / `repository` archetypes warrant explicit

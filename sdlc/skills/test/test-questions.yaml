@@ -717,6 +717,23 @@ questions:
     importance: critical
 
   - theme: container_suite
+    id: targets_operation
+    schema_path: test.targets_operation
+    question: "Which component operation does this test exercise (OPN-NNN)?"
+    hint: >
+      The ATOMIC test grain. A unit test targets one operation (operations[].op_id
+      / OPN-NNN) of its component_ref in ARCH__<container>.yaml — mirroring how the
+      `task` skill slices one task per operation. Seed ONE unit test per component
+      operation so the suite is method-granular. Every component operation SHOULD
+      be exercised by a test (advisory operation-coverage warning otherwise) or
+      deferred via a WRN-NNN. Validated ⊆ the component_ref's operations[].op_id.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: container_suite
     id: covers
     schema_path: test.covers
     question: "Which requirements does this test verify (FR / NFR / ACR)?"
