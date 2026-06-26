@@ -1,0 +1,132 @@
+# Container deep-dive for `web-frontend`, the FRONTEND task-eval input fixture.
+# Its components each trace a UX surface (slug) — so the task validator's
+# surface-coverage gate (slug→SCR via UX.yaml) and the token_based_ui design
+# gate both have something to bite on. owns_api_resources is empty (a frontend
+# CONSUMES the API), so the operation-coverage gate is a no-op here.
+metadata:
+  arch_container_version: "1.1"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "archcm02-arcm-arcm-arcm-archcontainr03"
+  status: complete
+  changelog:
+    - "1.0 (2026-05-26): Initial web-frontend container deep-dive (task-eval input)."
+
+container_id: web-frontend
+archetype: web-frontend
+overview: >
+  Next.js single-page app rendering the task list, task detail, comments panel
+  and digest-settings screens. Calls the backend API; holds no persistence.
+
+tech_stack:
+  language: TypeScript
+  language_confidence: confirmed
+  framework: Next.js
+  runtime_version: "node 20"
+  package_manager: pnpm
+
+api_consumers:
+  - resource_id: tasks
+  - resource_id: comments
+  - resource_id: digest-settings
+
+ux_surface:
+  - surface_id: task-list
+  - surface_id: task-detail
+  - surface_id: comments-panel
+  - surface_id: digest-settings
+
+deployment:
+  shape: static_asset
+  shape_confidence: confirmed
+  hosting: "Vercel"
+
+observability:
+  logs: "browser console + error beacon"
+
+failure_modes:
+  - id: api-unreachable
+    description: "Backend API is unreachable or returns 5xx."
+    likelihood: medium
+    impact: medium
+    mitigation: "Retry with backoff; show an inline error state."
+
+components:
+  - component_id: task-list-view
+    archetype: view
+    purpose: "Renders the paginated task list and triage actions."
+    responsibilities:
+      - "Render tasks and let the user create/triage them."
+    code_location: ["src/app/tasks/"]
+    traces_ux_surfaces: [task-list]
+    implements_requirements: [FR-001]
+    traces_prd_workflows: [WKF-001]
+    acceptance_criteria:
+      - "The list renders tasks newest-first and a create action is reachable."
+    status: confirmed
+
+  - component_id: task-detail-view
+    archetype: view
+    purpose: "Renders one task with its status controls."
+    responsibilities:
+      - "Show a task and let the user mark it done."
+    code_location: ["src/app/tasks/"]
+    traces_ux_surfaces: [task-detail]
+    implements_requirements: [FR-001, FR-003]
+    traces_prd_workflows: [WKF-001]
+    acceptance_criteria:
+      - "Marking a task done updates the view without a full reload."
+    status: confirmed
+
+  - component_id: comments-panel-view
+    archetype: view
+    purpose: "Renders the comments panel on a task."
+    responsibilities:
+      - "List and add comments on the open task."
+    code_location: ["src/app/comments/"]
+    traces_ux_surfaces: [comments-panel]
+    implements_requirements: [FR-002]
+    traces_prd_workflows: [WKF-002]
+    status: confirmed
+
+  - component_id: digest-settings-view
+    archetype: view
+    purpose: "Renders the weekly digest settings form and recent runs."
+    responsibilities:
+      - "Edit the digest schedule and list recent runs."
+    code_location: ["src/app/digest/"]
+    traces_ux_surfaces: [digest-settings]
+    implements_requirements: [FR-004]
+    traces_prd_workflows: [WKF-003]
+    status: confirmed
+
+  - component_id: api-client
+    archetype: api_client
+    purpose: "Typed client over the backend REST API."
+    responsibilities:
+      - "Call the tasks/comments/digest-settings endpoints with auth."
+    code_location: ["src/lib/api/"]
+    traces_api_resources: [tasks, comments, digest-settings]
+    status: confirmed
+
+internal_edges:
+  - from: task-list-view
+    to: api-client
+    type: calls
+  - from: task-detail-view
+    to: api-client
+    type: calls
+  - from: comments-panel-view
+    to: api-client
+    type: calls
+  - from: digest-settings-view
+    to: api-client
+    type: calls
+
+external_edges:
+  - from: api-client
+    to: backend-api
+    type: calls
+    note: "Consumes the backend REST resources."
+
+arch_warnings: []

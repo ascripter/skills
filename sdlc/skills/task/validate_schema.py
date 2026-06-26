@@ -34,14 +34,26 @@ Validates:
          container's + targeted component's implements_requirements).
        - implements_tests entries are TST-NNN and resolve to the matching
          TEST-STRATEGY(.__container).yaml; kind:test must set one.
+       - touches_operations ⊆ API__*.yaml operation_ids (a bare resource_id is
+         rejected); touches_entities ⊆ DATA-MODEL.yaml entities;
+         implements_surfaces ⊆ UX.yaml SCR ids; implements_workflows ⊆ PRD WKF
+         ids; touches_assets ⊆ DESIGN__assets.yaml AST ids.
        - involves_containers / build_order / container_task_graphs resolve to
          ARCH.yaml.
        - depends_on entries resolve across the union of all task files, and the
          union graph is acyclic.
-    6. Coverage cross-checks (trace-or-defer; block status: complete):
-       - Container: every component_id and every container TST-NNN is realized
-         by some task OR deferred via a WRN-NNN.
-       - System: every system TST-NNN is realized by some task OR deferred.
+    6. Coverage cross-checks (trace-or-defer; block status: complete). An item is
+       covered if a task names it OR a task realizes a component that traces it
+       (transitive credit); otherwise it must be deferred via a WRN-NNN:
+       - Container: every component_id; every container TST-NNN; every SCR in the
+         container's owns_ux_surfaces (needs UX.yaml to map slug→SCR); every
+         operation_id of an owned API resource; every entity its components
+         trace; every FR/NFR in its implements_requirements; and (token_based_ui
+         frontends) a design task wiring the tokens.
+       - System: every system TST-NNN.
+       - Union: every PRD must-have FR is realized somewhere or deferred (hard
+         only once the whole graph is stitched; advisory before).
+       Surface/operation gates soften to advisory when UX/API are absent.
 
 Exit codes:
     0 — schema valid; status='complete' (all checks passing) or status='draft'.
@@ -107,10 +119,12 @@ class Granularity(str, Enum):
 # strict pydantic enum) so a draft with an off-vocabulary kind stays loadable
 # and reports a fixable error instead of crashing the parse.
 CONTAINER_KINDS = {
-    "scaffold", "implementation", "test", "integration", "migration", "config", "chore",
+    "scaffold", "implementation", "test", "integration", "migration", "config",
+    "design", "chore",
 }
 SYSTEM_KINDS = {
-    "scaffold", "integration", "test", "config", "migration", "deploy-prep", "docs", "chore",
+    "scaffold", "integration", "test", "config", "migration", "design",
+    "deploy-prep", "docs", "chore",
 }
 
 
@@ -149,8 +163,11 @@ class ContainerTask(BaseModel):
     component_ref: Optional[str] = None
     implements: Optional[List[str]] = None
     implements_tests: Optional[List[str]] = None
+    implements_surfaces: Optional[List[str]] = None
+    implements_workflows: Optional[List[str]] = None
     touches_entities: Optional[List[str]] = None
     touches_operations: Optional[List[str]] = None
+    touches_assets: Optional[List[str]] = None
     depends_on: Optional[List[str]] = None
     inputs: Optional[List[str]] = None
     target_files: Optional[List[str]] = None  # codegen write targets; grounded
@@ -214,6 +231,10 @@ _WRN_RE = re.compile(r"^WRN-\d{3,}:\s+.+")
 _TST_RE = re.compile(r"^TST-\d{3,}$", re.IGNORECASE)
 _FR_RE = re.compile(r"^FR-\d+$", re.IGNORECASE)
 _NFR_RE = re.compile(r"^NFR-\d+$", re.IGNORECASE)
+_SCR_RE = re.compile(r"^SCR-\d{3,}$", re.IGNORECASE)
+_WKF_RE = re.compile(r"^WKF-\d{3,}$", re.IGNORECASE)
+_AST_RE = re.compile(r"^AST-\d{3,}$", re.IGNORECASE)
+_OPR_RE = re.compile(r"^OPR-\d{3,}$", re.IGNORECASE)
 # A cross-file dep ref: "<container-or-TASKS>/TSK-NNN".
 _XREF_RE = re.compile(r"^(?P<scope>[A-Za-z0-9_-]+)/(?P<tsk>TSK-\d{3,})$")
 
@@ -303,8 +324,13 @@ def _path_within_any(path: str, bases: List[str]) -> bool:
 
 
 def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
-    """Return {'FR','NFR'} id sets declared in PRD.yaml (monorepo-aware)."""
-    fams: Dict[str, Set[str]] = {"FR": set(), "NFR": set()}
+    """Return id sets declared in PRD.yaml (monorepo-aware):
+      FR       — every functional requirement (must + nice).
+      FR_MUST  — must_have_features only (the global-coverage target).
+      NFR      — non-functional requirements.
+      WKF      — use_cases.core_workflows ids.
+    """
+    fams: Dict[str, Set[str]] = {"FR": set(), "FR_MUST": set(), "NFR": set(), "WKF": set()}
     raw = _safe_yaml(prd_path)
     if raw is None:
         return fams
@@ -317,7 +343,10 @@ def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
                 for item in freqs.get(key) or []:
                     mm = re.match(r"^FR-\d+", str(item).strip(), re.IGNORECASE)
                     if mm:
-                        fams["FR"].add(mm.group(0).upper())
+                        fid = mm.group(0).upper()
+                        fams["FR"].add(fid)
+                        if key == "must_have_features":
+                            fams["FR_MUST"].add(fid)
         nfreqs = node.get("non_functional_requirements") or {}
         if isinstance(nfreqs, dict):
             for key in ("performance_targets", "other"):
@@ -325,6 +354,12 @@ def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
                     mm = re.match(r"^NFR-\d+", str(item).strip(), re.IGNORECASE)
                     if mm:
                         fams["NFR"].add(mm.group(0).upper())
+        ucs = node.get("use_cases") or {}
+        if isinstance(ucs, dict):
+            for item in ucs.get("core_workflows") or []:
+                mm = re.match(r"^WKF-\d+", str(item).strip(), re.IGNORECASE)
+                if mm:
+                    fams["WKF"].add(mm.group(0).upper())
 
     if monorepo:
         for prod in (raw.get("products") or {}).values():
@@ -342,6 +377,11 @@ class ArchInfo:
         self.container_ids: Set[str] = set()
         self.testable: Set[str] = set()
         self.implements: Dict[str, Set[str]] = {}       # cid -> {FR/NFR}
+        self.owns_ux: Dict[str, Set[str]] = {}          # cid -> {surface slugs}
+        self.owns_api: Dict[str, Set[str]] = {}         # cid -> {resource_ids}
+        self.persistence: Dict[str, Set[str]] = {}      # cid -> {store_ids}
+        self.archetype: Dict[str, str] = {}             # cid -> archetype
+        self.non_container_features: Set[str] = set()   # {FR} delivered off-container
         # cross-container calls/depends_on edges as (from_cid, to_cid) pairs:
         self.cross_edges: List[Tuple[str, str]] = []
         self.present: bool = False
@@ -361,10 +401,18 @@ def load_arch(arch_path: Path) -> ArchInfo:
             continue
         info.container_ids.add(cid)
         archetype = (c.get("archetype") or "").strip()
+        info.archetype[cid] = archetype
         external = bool(c.get("external"))
         if (not external) and archetype not in INFRA_ARCHETYPES and archetype != "external-service":
             info.testable.add(cid)
         info.implements[cid] = _req_tokens_in(c.get("implements_requirements") or [])
+        info.owns_ux[cid] = {str(s).strip() for s in (c.get("owns_ux_surfaces") or [])}
+        info.owns_api[cid] = {str(s).strip() for s in (c.get("owns_api_resources") or [])}
+        info.persistence[cid] = {str(s).strip() for s in (c.get("persistence") or [])}
+    for fr in raw.get("non_container_features") or []:
+        mm = re.match(r"^FR-\d+", str(fr).strip(), re.IGNORECASE)
+        if mm:
+            info.non_container_features.add(mm.group(0).upper())
     for e in raw.get("edges") or []:
         if not isinstance(e, dict):
             continue
@@ -382,6 +430,21 @@ class ArchContainerInfo:
         self.implements: Set[str] = set()    # union of all implements_requirements
         # component_id -> its code_location list (repo-relative dirs/files).
         self.component_code_location: Dict[str, List[str]] = {}
+        # component_id -> per-component upstream traces (for transitive coverage
+        # credit: a REALIZED component covers everything it traces).
+        self.comp_archetype: Dict[str, str] = {}
+        self.comp_ux: Dict[str, Set[str]] = {}        # surface slugs
+        self.comp_api_res: Dict[str, Set[str]] = {}   # resource_ids
+        self.comp_api_op: Dict[str, Set[str]] = {}    # operation_ids / OPR-NNN
+        self.comp_entities: Dict[str, Set[str]] = {}  # entity names
+        self.comp_reqs: Dict[str, Set[str]] = {}      # FR/NFR
+        # union of every component's traces_data_entities (the container's
+        # architecture-declared entity footprint = the entity-coverage expected set)
+        self.all_entities: Set[str] = set()
+
+
+def _strset(node: dict, key: str) -> Set[str]:
+    return {str(x).strip() for x in (node.get(key) or []) if str(x).strip()}
 
 
 def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
@@ -395,12 +458,20 @@ def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
         if not isinstance(comp, dict):
             continue
         coid = comp.get("component_id")
-        if coid:
-            info.component_ids.add(coid)
-            cl = comp.get("code_location")
-            if isinstance(cl, list):
-                info.component_code_location[coid] = [str(x) for x in cl]
-        info.implements |= _req_tokens_in(comp.get("implements_requirements") or [])
+        if not coid:
+            continue
+        info.component_ids.add(coid)
+        cl = comp.get("code_location")
+        if isinstance(cl, list):
+            info.component_code_location[coid] = [str(x) for x in cl]
+        info.comp_archetype[coid] = (comp.get("archetype") or "").strip()
+        info.comp_ux[coid] = _strset(comp, "traces_ux_surfaces")
+        info.comp_api_res[coid] = _strset(comp, "traces_api_resources")
+        info.comp_api_op[coid] = _strset(comp, "traces_api_operations")
+        info.comp_entities[coid] = _strset(comp, "traces_data_entities")
+        info.comp_reqs[coid] = _req_tokens_in(comp.get("implements_requirements") or [])
+        info.implements |= info.comp_reqs[coid]
+        info.all_entities |= info.comp_entities[coid]
     return info
 
 
@@ -414,6 +485,122 @@ def load_test_tst_ids(path: Path) -> Set[str]:
         if isinstance(t, dict) and t.get("tst_id"):
             out.add(str(t["tst_id"]).upper())
     return out
+
+
+class UxInfo:
+    """slug↔SCR maps from UX.yaml (monorepo-aware)."""
+
+    def __init__(self) -> None:
+        self.present: bool = False
+        self.scr_ids: Set[str] = set()          # all SCR-NNN
+        self.slug_to_scr: Dict[str, str] = {}   # surface_id slug -> SCR-NNN
+        self.scr_to_slug: Dict[str, str] = {}   # SCR-NNN -> slug
+
+    def to_scr(self, token: str) -> Optional[str]:
+        """Normalize a surface token (SCR-NNN or slug) to its SCR-NNN."""
+        t = str(token).strip()
+        if _SCR_RE.match(t):
+            return t.upper()
+        return self.slug_to_scr.get(t)
+
+
+def load_ux(ux_path: Path) -> UxInfo:
+    info = UxInfo()
+    raw = _safe_yaml(ux_path)
+    if raw is None:
+        return info
+    info.present = True
+    monorepo = bool((raw.get("metadata") or {}).get("monorepo"))
+
+    def _pull(node: dict) -> None:
+        for s in node.get("surface_inventory") or []:
+            if not isinstance(s, dict):
+                continue
+            scr = s.get("id")
+            slug = s.get("surface_id")
+            if scr and _SCR_RE.match(str(scr)):
+                scr = str(scr).upper()
+                info.scr_ids.add(scr)
+                if slug:
+                    info.slug_to_scr[str(slug).strip()] = scr
+                    info.scr_to_slug[scr] = str(slug).strip()
+
+    if monorepo:
+        for prod in (raw.get("products") or {}).values():
+            if isinstance(prod, dict):
+                _pull(prod)
+    else:
+        _pull(raw)
+    return info
+
+
+class ApiInfo:
+    """resource→operation map across API__*.yaml (operation_id + OPR-NNN)."""
+
+    def __init__(self) -> None:
+        self.present: bool = False
+        self.all_ops: Set[str] = set()            # operation_ids (+ OPR-NNN)
+        self.resources: Set[str] = set()          # resource_ids
+        self.resource_to_ops: Dict[str, Set[str]] = {}
+
+
+def load_api(docs_dir: Path) -> ApiInfo:
+    info = ApiInfo()
+    for p in sorted(docs_dir.glob("API__*.yaml")):
+        raw = _safe_yaml(p)
+        if raw is None:
+            continue
+        info.present = True
+        rid = raw.get("resource_id") or p.stem[len("API__"):]
+        rid = str(rid).strip()
+        info.resources.add(rid)
+        ops: Set[str] = info.resource_to_ops.setdefault(rid, set())
+        for ep in raw.get("endpoints") or []:
+            if not isinstance(ep, dict):
+                continue
+            for key in ("operation_id", "id"):
+                v = ep.get(key)
+                if v:
+                    ops.add(str(v).strip())
+                    info.all_ops.add(str(v).strip())
+    return info
+
+
+def load_data_entities(data_path: Path) -> Tuple[Set[str], bool, bool]:
+    """Return (entity names, present, polyglot). Single-store DATA models let the
+    advisory entity check flag store-resident-but-untraced entities."""
+    raw = _safe_yaml(data_path)
+    if raw is None:
+        return set(), False, False
+    ents = raw.get("entities")
+    names = set(ents.keys()) if isinstance(ents, dict) else set()
+    polyglot = bool((raw.get("persistence") or {}).get("polyglot"))
+    return {str(n) for n in names}, True, polyglot
+
+
+class DesignInfo:
+    def __init__(self) -> None:
+        self.present: bool = False
+        self.functional_structure: Set[str] = set()   # token_based_ui|asset_pipeline|headless
+        self.ast_ids: Set[str] = set()                # AST-NNN from DESIGN__assets.yaml
+
+
+def load_design(docs_dir: Path) -> DesignInfo:
+    info = DesignInfo()
+    raw = _safe_yaml(docs_dir / "DESIGN.yaml")
+    if raw is not None:
+        info.present = True
+        fs = raw.get("functional_structure")
+        if isinstance(fs, list):
+            info.functional_structure = {str(x).strip() for x in fs}
+        elif isinstance(fs, str):
+            info.functional_structure = {fs.strip()}
+    assets = _safe_yaml(docs_dir / "DESIGN__assets.yaml")
+    if assets is not None:
+        for a in assets.get("assets") or []:
+            if isinstance(a, dict) and a.get("id") and _AST_RE.match(str(a["id"])):
+                info.ast_ids.add(str(a["id"]).upper())
+    return info
 
 
 # =============================================================================
@@ -678,6 +865,11 @@ def check_container(
     fams: Dict[str, Set[str]],
     arch: ArchInfo,
     docs_dir: Path,
+    ux: UxInfo,
+    api: ApiInfo,
+    data_ents: Set[str],
+    data_present: bool,
+    design: DesignInfo,
 ) -> Tuple[List[str], List[str]]:
     errs: List[str] = []
     warns: List[str] = []
@@ -703,8 +895,15 @@ def check_container(
     covered_components: Set[str] = set()
     covered_tst: Set[str] = set()
     named_reqs: Set[str] = set()
+    explicit_surfaces: Set[str] = set()   # SCR-NNN, normalized
+    explicit_ops: Set[str] = set()
+    explicit_entities: Set[str] = set()
+    realized_ast: Set[str] = set()
+    has_design_task = False
 
     for i, t in enumerate(m.tasks or []):
+        if t.kind == "design":
+            has_design_task = True
         if t.component_ref:
             covered_components.add(t.component_ref)
             if ac.present and t.component_ref not in ac.component_ids:
@@ -745,6 +944,63 @@ def check_container(
         if t.kind == "test" and not t.implements_tests:
             errs.append(f"{label} tasks[{i}] is kind:test but has no implements_tests")
 
+        # --- new typed ref-field validation ---
+        for ref in t.touches_operations or []:
+            r = str(ref).strip()
+            if not api.present:
+                explicit_ops.add(r)               # cannot validate; accept
+            elif r in api.all_ops:
+                explicit_ops.add(r)
+            elif r in api.resources:
+                errs.append(f"{label} tasks[{i}].touches_operations '{r}' is a resource_id, not an operation — list its endpoints[].operation_id (or an OPR-NNN)")
+            else:
+                errs.append(f"{label} tasks[{i}].touches_operations '{r}' is not an operation_id/OPR-NNN in any API__*.yaml")
+        for ref in t.touches_entities or []:
+            e = str(ref).strip()
+            if data_present and e not in data_ents:
+                errs.append(f"{label} tasks[{i}].touches_entities '{e}' is not a DATA-MODEL entity")
+            else:
+                explicit_entities.add(e)
+        for ref in t.implements_surfaces or []:
+            s = str(ref).strip()
+            if not _SCR_RE.match(s):
+                errs.append(f"{label} tasks[{i}].implements_surfaces '{ref}' is not an SCR-NNN id")
+            elif ux.present and s.upper() not in ux.scr_ids:
+                errs.append(f"{label} tasks[{i}].implements_surfaces '{ref}' is not a surface in UX.yaml")
+            else:
+                explicit_surfaces.add(s.upper())
+        for ref in t.implements_workflows or []:
+            w = str(ref).strip().upper()
+            if not _WKF_RE.match(w):
+                errs.append(f"{label} tasks[{i}].implements_workflows '{ref}' is not a WKF-NNN id")
+            elif fams["WKF"] and w not in fams["WKF"]:
+                errs.append(f"{label} tasks[{i}].implements_workflows '{ref}' does not resolve to a PRD workflow")
+        for ref in t.touches_assets or []:
+            a = str(ref).strip().upper()
+            if not _AST_RE.match(a):
+                errs.append(f"{label} tasks[{i}].touches_assets '{ref}' is not an AST-NNN id")
+            elif design.present and design.ast_ids and a not in design.ast_ids:
+                errs.append(f"{label} tasks[{i}].touches_assets '{ref}' is not an asset in DESIGN__assets.yaml")
+            else:
+                realized_ast.add(a)
+
+    # --- transitive coverage credit: a REALIZED component covers everything it
+    #     traces (the codegen sub-agent building it reads its ARCH trace). ---
+    trans_surfaces: Set[str] = set()
+    trans_ops: Set[str] = set()
+    trans_entities: Set[str] = set()
+    trans_reqs: Set[str] = set()
+    for comp in covered_components:
+        for slug in ac.comp_ux.get(comp, set()):
+            scr = ux.to_scr(slug)
+            if scr:
+                trans_surfaces.add(scr)
+        trans_ops |= ac.comp_api_op.get(comp, set())
+        for res in ac.comp_api_res.get(comp, set()):
+            trans_ops |= api.resource_to_ops.get(res, set())
+        trans_entities |= ac.comp_entities.get(comp, set())
+        trans_reqs |= ac.comp_reqs.get(comp, set())
+
     warnings = m.task_warnings or []
     deferred_components = _deferred_literals(warnings, ac.component_ids)
     deferred_tst = {x.upper() for x in _deferred_literals(warnings, cont_tst)}
@@ -757,11 +1013,133 @@ def check_container(
     for tid in sorted(cont_tst):
         if tid not in covered_tst and tid not in deferred_tst:
             errs.append(f"{label} test coverage: {tid} (TEST-STRATEGY__{cid}) is realized by no task and no WRN-NNN defers it")
-    # Requirement coverage (advisory).
+
+    # Surface coverage (trace-or-defer; soften when UX.yaml is absent).
+    owned_slugs = arch.owns_ux.get(cid, set()) if cid else set()
+    if owned_slugs:
+        if ux.present:
+            realized_scr = explicit_surfaces | trans_surfaces
+            for slug in sorted(owned_slugs):
+                scr = ux.to_scr(slug)
+                if scr is None:
+                    warns.append(f"{label} owns_ux_surface '{slug}' has no SCR id in UX.yaml")
+                    continue
+                defer_keys = {scr, slug}
+                if scr not in realized_scr and not _deferred_literals(warnings, defer_keys):
+                    errs.append(f"{label} surface coverage: {scr} ({slug}) (owns_ux_surfaces) is realized by no task and no WRN-NNN defers it")
+        else:
+            warns.append(f"{label} surface coverage not checked — UX.yaml absent (cannot resolve {len(owned_slugs)} owned surface slug(s) to SCR ids)")
+
+    # Operation coverage (trace-or-defer; soften when no API__*.yaml is present).
+    owned_res = arch.owns_api.get(cid, set()) if cid else set()
+    if owned_res:
+        if api.present:
+            expected_ops: Set[str] = set()
+            for res in owned_res:
+                expected_ops |= api.resource_to_ops.get(res, set())
+            realized_ops = explicit_ops | trans_ops
+            # An operation set carries both operation_id and OPR-NNN for the same
+            # endpoint; realizing either covers it. Compare the human operation_id
+            # names (skip the bare OPR-NNN duplicates the resource map also holds).
+            for op in sorted(expected_ops):
+                if _OPR_RE.match(op):
+                    continue
+                if op not in realized_ops and not _deferred_literals(warnings, {op}):
+                    errs.append(f"{label} operation coverage: operation '{op}' (owned API resource) is realized by no task and no WRN-NNN defers it")
+        else:
+            warns.append(f"{label} operation coverage not checked — no API__*.yaml present")
+
+    # Entity coverage (trace-or-defer over the container's component-declared
+    # entity footprint; transitive credit via a realized repository component).
+    expected_ents = set(ac.all_entities)
+    if expected_ents:
+        realized_ents = explicit_entities | trans_entities
+        for e in sorted(expected_ents):
+            if e not in realized_ents and not _deferred_literals(warnings, {e}):
+                errs.append(f"{label} entity coverage: entity '{e}' (traced by a component) is realized by no task and no WRN-NNN defers it")
+
+    # Requirement coverage (trace-or-defer; promoted from advisory to blocking).
+    realized_reqs = named_reqs | trans_reqs
+    deferred_reqs = {x.upper() for x in _deferred_literals(warnings, allowed_reqs)}
     for r in sorted(allowed_reqs):
-        if r not in named_reqs:
-            warns.append(f"{label} requirement coverage: {r} is implemented by this container but named by no task's `implements` (transitively covered if its component is realized)")
+        if r not in realized_reqs and r not in deferred_reqs:
+            errs.append(f"{label} requirement coverage: {r} is in implements_requirements but realized by no task and no WRN-NNN defers it")
+
+    # Design coverage — a token_based_ui frontend that owns surfaces needs a
+    # design task wiring the tokens/theme (or a defer); assets stay advisory.
+    if owned_slugs and design.present and "token_based_ui" in design.functional_structure:
+        if not has_design_task and not any(
+            kw in w.lower() for w in warnings for kw in ("design", "token", "theme")
+        ):
+            errs.append(f"{label} design coverage: container owns surfaces and DESIGN uses token_based_ui, but no kind:design task wires the tokens/theme (defer via a WRN-NNN if intentional)")
+    if owned_slugs and design.present and "asset_pipeline" in design.functional_structure:
+        for ast in sorted(design.ast_ids):
+            if ast not in realized_ast and not _deferred_literals(warnings, {ast}):
+                warns.append(f"{label} asset {ast} (DESIGN__assets) has no scaffolding/brief task")
     return errs, warns
+
+
+# =============================================================================
+# Global (union) coverage — the "convert all FRs" guarantee + entity advisory
+# =============================================================================
+
+
+def global_coverage(
+    sysm: Optional[TasksSystem],
+    containers: List[Tuple[str, TasksContainer]],
+    fams: Dict[str, Set[str]],
+    arch: ArchInfo,
+    docs_dir: Path,
+    data_ents: Set[str],
+    data_present: bool,
+) -> Tuple[List[str], List[str], bool]:
+    """Returns (fr_gaps, entity_warnings, fully_stitched).
+
+    fr_gaps        — PRD must_have FRs realized by no task across the union and
+                     not deferred / non-container. Blocking only when the graph
+                     is fully stitched (caller decides).
+    entity_warnings— DATA entities traced by no component in any present
+                     container file (likely an ARCH gap) — always advisory.
+    fully_stitched — system file complete AND every buildable ARCH container has
+                     a TASKS__*.json present (so an all-FR gate is fair).
+    """
+    must = set(fams["FR_MUST"])
+    realized: Set[str] = set()
+    deferred: Set[str] = set(arch.non_container_features)
+    traced_entities: Set[str] = set()
+
+    if sysm is not None:
+        for t in sysm.tasks or []:
+            realized |= {r.upper() for r in (t.implements or []) if _FR_RE.match(str(r).upper())}
+        deferred |= _deferred_literals(sysm.task_warnings or [], must)
+
+    present_cids: Set[str] = set()
+    for cid, cm in containers:
+        present_cids.add(cid)
+        ac = load_arch_container(docs_dir, cid)
+        traced_entities |= ac.all_entities
+        covered_comps = {t.component_ref for t in (cm.tasks or []) if t.component_ref}
+        for t in cm.tasks or []:
+            realized |= {r.upper() for r in (t.implements or []) if _FR_RE.match(str(r).upper())}
+        for comp in covered_comps:
+            realized |= {r for r in ac.comp_reqs.get(comp, set()) if _FR_RE.match(r)}
+        deferred |= _deferred_literals(cm.task_warnings or [], must)
+
+    fr_gaps = [
+        f"global requirement coverage: must-have {r} (PRD) is realized by no task in any file and is not deferred/non-container"
+        for r in sorted(must - realized - deferred)
+    ]
+
+    ent_warns: List[str] = []
+    if data_present and data_ents:
+        for e in sorted(data_ents - traced_entities):
+            ent_warns.append(
+                f"DATA entity '{e}' is traced by no component in any built container — likely an ARCH gap; it will get no migration/repository task"
+            )
+
+    sys_complete = sysm is not None and sysm.metadata.status == Status.complete
+    fully_stitched = bool(sys_complete and arch.testable and arch.testable <= present_cids)
+    return fr_gaps, ent_warns, fully_stitched
 
 
 # =============================================================================
@@ -798,6 +1176,10 @@ def validate_all(path: Path) -> int:
 
     fams = load_prd_id_families(docs_dir / "PRD.yaml")
     arch = load_arch(docs_dir / "ARCH.yaml")
+    ux = load_ux(docs_dir / "UX.yaml")
+    api = load_api(docs_dir)
+    data_ents, data_present, _polyglot = load_data_entities(docs_dir / "DATA-MODEL.yaml")
+    design = load_design(docs_dir)
 
     parse_failed = False
     blocking: List[str] = []
@@ -852,7 +1234,9 @@ def validate_all(path: Path) -> int:
         blocking += [f"{cp.name}: {e}" for e in check_tsk_ids(cm.tasks or [], cp.stem)]
         blocking += [f"{cp.name}: {e}" for e in check_kinds(cm.tasks or [], CONTAINER_KINDS, cp.stem)]
         blocking += [f"{cp.name}: {e}" for e in check_warning_ids(cm.task_warnings, cp.stem)]
-        c_errs, c_warns = check_container(cm, fams, arch, docs_dir)
+        c_errs, c_warns = check_container(
+            cm, fams, arch, docs_dir, ux, api, data_ents, data_present, design
+        )
         blocking += [f"{cp.name}: {e}" for e in c_errs]
         warnings += [f"{cp.name}: {w}" for w in c_warns]
 
@@ -861,6 +1245,22 @@ def validate_all(path: Path) -> int:
 
     # Union-graph dependency resolution + acyclicity (the stitch).
     blocking += [f"graph: {e}" for e in check_dependencies_and_cycles(sysm, containers)]
+
+    # Global (union) requirement coverage + orphaned-entity advisory.
+    fr_gaps, ent_warns, fully_stitched = global_coverage(
+        sysm, containers, fams, arch, docs_dir, data_ents, data_present
+    )
+    # The all-FR gate is only fair once the whole graph is stitched (system file
+    # complete AND every buildable container present). Before that it is advisory
+    # — an FR owned by a not-yet-built container must not fail the early files.
+    if fully_stitched:
+        blocking += [f"union: {e}" for e in fr_gaps]
+        # "traced by no component anywhere" is only a definitive ARCH gap once
+        # every container is built; before that the picture is partial, so the
+        # entity advisory would be noisy (a frontend-only run traces no entities).
+        warnings += [f"union: {w}" for w in ent_warns]
+    else:
+        warnings += [f"union: {e} (advisory until the graph is fully stitched)" for e in fr_gaps]
 
     # Upstream-status awareness (non-blocking).
     for up in ("PRD.yaml", "DATA-MODEL.yaml", "ARCH.yaml", "TEST-STRATEGY.yaml"):

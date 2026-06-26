@@ -75,7 +75,7 @@ themes:
                       # components, its TEST-STRATEGY tests, and its internal
                       # edges. Runs the scope-completeness sweep after the
                       # per-item loop — see references/coverage-and-defer.md.
-    description: "Scaffold, per-component implementation tasks, first-class test tasks, and within-container wiring for this container."
+    description: "Scaffold, per-component implementation tasks, migration (entity) tasks, design (token/asset) tasks for frontends, first-class test tasks, and within-container wiring for this container."
 
 questions:
 
@@ -138,13 +138,14 @@ questions:
     id: kind
     schema_path: task.kind
     question: "What kind of system task is this?"
-    hint: "System file holds cross-container/repo-level kinds. See references/task-discovery.md."
+    hint: "System file holds cross-container/repo-level kinds (`design` = a shared design-token package for ≥2 frontends). See references/task-discovery.md."
     suggested_answers:
       - scaffold
       - integration
       - test
       - config
       - migration
+      - design
       - deploy-prep
       - docs
       - chore
@@ -313,7 +314,7 @@ questions:
     id: kind
     schema_path: task.kind
     question: "What kind of task is this?"
-    hint: "Container kinds: scaffold/implementation/test/integration/migration/config/chore. See references/task-discovery.md."
+    hint: "Container kinds: scaffold/implementation/test/integration/migration/config/design/chore. `migration` realizes DATA entities; `design` wires DESIGN tokens/assets for a frontend. See references/task-discovery.md."
     suggested_answers:
       - implementation
       - test
@@ -321,6 +322,7 @@ questions:
       - scaffold
       - migration
       - config
+      - design
       - chore
     free_text_allowed: false
     required: true
@@ -386,7 +388,10 @@ questions:
     id: touches_entities
     schema_path: task.touches_entities
     question: "Which data entities does this task read/write (DATA-MODEL names)?"
-    hint: "Optional. For migration/repository tasks. Validated against DATA-MODEL.yaml entities when present."
+    hint: >
+      For migration/repository tasks. Validated ⊆ DATA-MODEL.yaml entity names
+      when present. Every entity the container's components trace must be realized
+      by some task (here, or a realized repository component) OR deferred.
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -398,8 +403,52 @@ questions:
     schema_path: task.touches_operations
     question: "Which API operations does this task implement (operation_ids)?"
     hint: >
-      Optional. The 'contract' scope — the alternative to component_ref for an
-      implementation task. Validated against API__*.yaml endpoints when present.
+      The 'contract' scope — alternative to component_ref. Give endpoint
+      operation_ids (or OPR-NNN), NOT the resource_id — the validator rejects a
+      bare resource. Every operation of an owned resource must be realized (here,
+      or transitively via a component tracing the resource) OR deferred.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: container_tasks
+    id: implements_surfaces
+    schema_path: task.implements_surfaces
+    question: "Which UX surfaces does this task render (SCR-NNN)?"
+    hint: >
+      Frontend tasks only. SCR-NNN ids from UX.yaml. Validated for SCR format +
+      existence. Every SCR in the container's owns_ux_surfaces (ARCH.yaml) must be
+      realized (here, or via a realized component's traces_ux_surfaces) OR
+      deferred — the surface-coverage gate.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: container_tasks
+    id: implements_workflows
+    schema_path: task.implements_workflows
+    question: "Which user workflows does this task participate in (WKF-NNN)?"
+    hint: >
+      Optional explicit link to PRD core_workflows. End-to-end coverage rides on
+      the system e2e test tasks; this just makes the journey→task trace visible.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: container_tasks
+    id: touches_assets
+    schema_path: task.touches_assets
+    question: "Which DESIGN assets does this design task scaffold (AST-NNN)?"
+    hint: >
+      For kind:design asset tasks. AST-NNN ids from DESIGN__assets.yaml. Each
+      seeds a generation-brief sidecar. Asset realization is advisory (AICF
+      specifies assets; it does not generate the binaries).
     suggested_answers: []
     free_text_allowed: true
     required: false

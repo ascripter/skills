@@ -1,0 +1,26 @@
+# Input fixture for the FRONTEND container task eval. A token_based_ui design
+# system — so the task validator's design gate requires the web-frontend
+# container to carry a kind:design task wiring the tokens/theme (or defer it).
+metadata:
+  design_version: "1.0"
+  last_updated: "2026-05-26T00:00:00Z"
+  generated_by: sdlc-design
+  session_id: "dsgn0001-ds01-ds01-ds01-designfront001"
+  monorepo: false
+  status: "complete"
+
+design_warnings: []
+
+functional_structure: ["token_based_ui"]
+functional_structure_confidence: confirmed
+
+aesthetic_direction:
+  style_family: minimal_flat
+  mood_keywords: ["calm", "focused"]
+  requires_custom_assets: false
+
+traces_ux_surfaces: ["SCR-001", "SCR-002", "SCR-003", "SCR-004"]
+implements_requirements: []
+
+sub_artifacts:
+  - docs/DESIGN__tokens.yaml

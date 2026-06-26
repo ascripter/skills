@@ -61,7 +61,11 @@
         {"id": "A9", "text": "Every kind:test task has implements_tests; subgraph acyclic", "priority": "must"},
         {"id": "A10", "text": "Every tsk_id matches TSK-NNN, unique; kinds in container vocabulary; outputs+acceptance non-empty", "priority": "must"},
         {"id": "A11", "text": "validate_schema.py exits 0 with [OK]", "priority": "must"},
-        {"id": "A12", "text": "metadata.changelog has >=1 entry; >=1 kind:scaffold task", "priority": "should"}
+        {"id": "A12", "text": "metadata.changelog has >=1 entry; >=1 kind:scaffold task", "priority": "should"},
+        {"id": "A13", "text": "OPERATION-ID GATE: no task has a bare resource_id (tasks, comments, digest-settings) in touches_operations; every entry is a real operation_id (e.g. list-tasks, create-task, list-comments, get-digest-settings)", "priority": "must"},
+        {"id": "A14", "text": "ENTITY COVERAGE: Task, Comment and DigestRun are each realized by a task's touches_entities (e.g. a kind:migration task) OR by a realized repository component (component_ref to the persistence repository), OR deferred via a WRN-NNN", "priority": "must"},
+        {"id": "A15", "text": "OPERATION COVERAGE: for each owned resource (tasks, comments, digest-settings), every operation is realized by a task's touches_operations OR transitively by a realized controller component tracing that resource, OR deferred via a WRN-NNN", "priority": "must"},
+        {"id": "A16", "text": "NO CROSS-CONTAINER LEAKAGE: no task implements FR-005 (digest-worker's), and no component_ref/implements_surfaces names a web-frontend or other container's id", "priority": "must"}
       ]
     },
     {
@@ -125,6 +129,43 @@
         {"id": "A10", "text": "Every tsk_id in docs/TASKS.json matches TSK-NNN and is unique; every kind is in the system-kind vocabulary", "priority": "must"},
         {"id": "A11", "text": "Every task in docs/TASKS.json has non-empty outputs and acceptance", "priority": "must"},
         {"id": "A12", "text": "metadata.changelog in docs/TASKS.json has at least one entry", "priority": "should"}
+      ]
+    },
+    {
+      "id": 5,
+      "name": "frontend-surface-and-design-coverage",
+      "prompt": "Run sdlc-task in CONTAINER mode for the web-frontend container (equivalent to `/sdlc:task web-frontend`). The project has a complete upstream chain staged at the paths in `files`. No docs/TASKS.json exists yet — scope this container's tasks to same-file dependencies (internally acyclic, resolvable on their own). For every multiple-choice question pick the recommended (position-1) option; for free-text give a one-line plausible answer; accept all inferred pre-fills; skip optional themes at the gate. The product is tinytrack; web-frontend is a Next.js SPA with a token_based_ui design system (DESIGN.yaml). ARCH__web-frontend.yaml declares five components (task-list-view, task-detail-view, comments-panel-view, digest-settings-view, api-client) and owns four UX surfaces (task-list, task-detail, comments-panel, digest-settings) mapping to SCR-001..SCR-004 in UX.yaml; TEST-STRATEGY__web-frontend.yaml carries TST-001..TST-005. KEY CANARIES (HARD-fail trace-or-defer gates): (1) SURFACE GATE — every owned surface SCR-001..SCR-004 is realized by a task's implements_surfaces, or transitively via a realized component's traces_ux_surfaces, or deferred via a WRN-NNN. (2) DESIGN GATE — DESIGN.yaml functional_structure includes token_based_ui, so at least one kind:design task wires the theme/tokens, or design is deferred. (3) COMPONENT GATE — every component_id realized via component_ref or deferred. (4) TEST GATE — every TST-001..TST-005 named in some task's implements_tests or deferred. (5) FIELD VALIDATION — implements_surfaces values are SCR-NNN that exist in UX.yaml; touches_operations are operation_ids (e.g. list-tasks), never bare resource_ids (e.g. tasks). (6) STRUCTURAL — every tsk_id is TSK-NNN unique; every kind is in the container vocabulary (scaffold/implementation/test/integration/migration/config/design/chore); every task has non-empty outputs+acceptance; the subgraph is acyclic with all depends_on resolving same-file. Then write docs/TASKS__web-frontend.json and run validate_schema.py until it exits 0.",
+      "expected_output": "docs/TASKS__web-frontend.json with container_id:web-frontend and metadata.status:complete (>=1 changelog entry). Every component covered via component_ref or deferred; every surface SCR-001..SCR-004 realized via implements_surfaces or a realized component's traces_ux_surfaces or deferred; >=1 kind:design task wiring the token_based_ui theme (or deferred); every TST-001..TST-005 covered by implements_tests or deferred; no bare resource_id in touches_operations; every tsk_id TSK-NNN unique; every kind in the extended container vocabulary; non-empty outputs+acceptance; acyclic same-file subgraph. validate_schema.py exits 0 with [OK] complete.",
+      "files": [
+        "evals/fixtures/web-app/docs/PRD.yaml",
+        "evals/fixtures/web-app/docs/DATA-MODEL.yaml",
+        "evals/fixtures/web-app/docs/TEST-STRATEGY.yaml",
+        "evals/fixtures/web-app/docs/API.yaml",
+        "evals/fixtures/web-app/docs/API__tasks.yaml",
+        "evals/fixtures/web-app/docs/API__comments.yaml",
+        "evals/fixtures/web-app/docs/API__digest-settings.yaml",
+        "evals/fixtures/web-app-container/docs/ARCH.yaml",
+        "evals/fixtures/web-frontend/docs/UX.yaml",
+        "evals/fixtures/web-frontend/docs/DESIGN.yaml",
+        "evals/fixtures/web-frontend/docs/ARCH__web-frontend.yaml",
+        "evals/fixtures/web-frontend/docs/TEST-STRATEGY__web-frontend.yaml"
+      ],
+      "assertions": [
+        {"id": "A1", "text": "docs/TASKS__web-frontend.json exists and is valid JSON", "priority": "must"},
+        {"id": "A2", "text": "container_id == web-frontend", "priority": "must"},
+        {"id": "A3", "text": "metadata.status == complete", "priority": "must"},
+        {"id": "A4", "text": "COMPONENT GATE: every component (task-list-view, task-detail-view, comments-panel-view, digest-settings-view, api-client) is realized via component_ref or deferred via WRN-NNN", "priority": "must"},
+        {"id": "A5", "text": "SURFACE GATE: each of SCR-001..SCR-004 is in some task's implements_surfaces, or transitively covered via a realized component's traces_ux_surfaces, or deferred via WRN-NNN — none silently absent", "priority": "must"},
+        {"id": "A6", "text": "DESIGN GATE: at least one task has kind==design wiring the design tokens/theme (non-empty outputs+acceptance), OR design is deferred via WRN-NNN", "priority": "must"},
+        {"id": "A7", "text": "TEST GATE: each of TST-001..TST-005 is in some task's implements_tests or deferred via WRN-NNN", "priority": "must"},
+        {"id": "A8", "text": "implements_surfaces values are real SCR-NNN ids from UX.yaml (no invented ids)", "priority": "must"},
+        {"id": "A9", "text": "no task has a bare resource_id in touches_operations; every entry is an operation_id (e.g. list-tasks)", "priority": "must"},
+        {"id": "A10", "text": "every kind is one of scaffold/implementation/test/integration/migration/config/design/chore", "priority": "must"},
+        {"id": "A11", "text": "every tsk_id matches TSK-NNN and is unique", "priority": "must"},
+        {"id": "A12", "text": "every task has non-empty outputs and acceptance", "priority": "must"},
+        {"id": "A13", "text": "the subgraph is acyclic and every depends_on resolves to a same-file TSK-NNN", "priority": "must"},
+        {"id": "A14", "text": "validate_schema.py exits 0 with [OK] complete", "priority": "must"},
+        {"id": "A15", "text": "metadata.changelog has at least one entry", "priority": "should"}
       ]
     }
   ]

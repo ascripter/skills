@@ -1,0 +1,75 @@
+# Container test strategy for `web-frontend`, the FRONTEND task-eval input.
+# Each TST-NNN becomes a first-class test task in the gold TASKS__web-frontend.
+metadata:
+  test_strategy_container_version: "1.0"
+  last_updated: "2026-05-28T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: "testfe01-tfe1-tfe1-tfe1-testfrontend01"
+  status: complete
+  changelog:
+    - "1.0 (2026-05-28): Initial web-frontend container test strategy."
+
+container_id: web-frontend
+overview: "Component-level rendering tests plus an API-failure integration case."
+inherits_from: docs/TEST-STRATEGY.yaml
+coverage_target:
+  line_pct: 80.0
+
+tests:
+  - tst_id: TST-001
+    name: "task-list renders newest-first"
+    tier: unit
+    description: "The task list view renders tasks and exposes a create action."
+    component_ref: task-list-view
+    directives:
+      - "Render with a fixture of tasks; assert order + create affordance."
+    covers: [FR-001]
+    priority: must
+    acceptance: "The list renders tasks newest-first and a create action is reachable."
+    status: confirmed
+  - tst_id: TST-002
+    name: "task-detail marks a task done"
+    tier: unit
+    description: "The detail view flips status without a reload."
+    component_ref: task-detail-view
+    directives:
+      - "Render a task; act: mark done; assert optimistic update."
+    covers: [FR-003]
+    priority: must
+    acceptance: "Marking a task done updates the view without a full reload."
+    status: confirmed
+  - tst_id: TST-003
+    name: "comments-panel adds a comment"
+    tier: unit
+    description: "The comments panel posts and lists a comment."
+    component_ref: comments-panel-view
+    directives:
+      - "Render the panel; act: submit a comment; assert it appears."
+    covers: [FR-002]
+    priority: must
+    acceptance: "A new comment appears in the panel after submit."
+    status: confirmed
+  - tst_id: TST-004
+    name: "digest-settings saves the schedule"
+    tier: unit
+    description: "The settings form persists and reads back the schedule."
+    component_ref: digest-settings-view
+    directives:
+      - "Render the form; act: save; assert read-back."
+    covers: [FR-004]
+    priority: must
+    acceptance: "Saving the digest schedule reads back the same values."
+    status: confirmed
+  - tst_id: TST-005
+    name: "api-client surfaces an unreachable backend"
+    tier: integration
+    description: "Negative case for the api-unreachable failure mode."
+    component_ref: api-client
+    directives:
+      - "Stub a 503; assert retry then an inline error state (no crash)."
+    targets_failure_mode: api-unreachable
+    priority: must
+    acceptance: "An unreachable backend surfaces as an inline error, not a crash."
+    status: confirmed
+
+test_strategy_warnings: []

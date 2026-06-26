@@ -79,13 +79,16 @@ tasks:                                      # REQUIRED — list[SystemTask], non
   - tsk_id: TSK-001                         # REQUIRED — unique within THIS file
     title: <short imperative phrase>        # REQUIRED — e.g. "Scaffold the monorepo workspace"
     kind:                                   # REQUIRED — one of:
-      # scaffold | integration | test | config | migration | deploy-prep | docs | chore
+      # scaffold | integration | test | config | migration | design | deploy-prep | docs | chore
       #   scaffold     — repo/monorepo skeleton, workspace config, root tooling
       #   integration  — wire a cross-container call/dependency (ARCH.yaml edge)
       #   test         — author a system-level test realizing one or more TST-NNN
       #                  (e2e / contract) from TEST-STRATEGY.yaml
-      #   config       — root config / shared CFG-SCT wiring
+      #   config       — root config / shared env wiring
       #   migration    — shared schema / data bootstrap spanning containers
+      #   design       — build a SHARED design-token / theme package consumed by
+      #                  ≥2 frontend containers (a monorepo's design system); the
+      #                  per-container theme wiring stays a container design task
       #   deploy-prep  — handoff scaffolding for /sdlc:deploy (CI skeleton, etc.)
       #   docs         — repo-level docs/readme scaffolding
       #   chore        — shared lint/format/tooling, misc
@@ -173,5 +176,13 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     deferral emits a WARNING.
 # 10. container_task_graphs integrity (advisory) — each container_id resolves to
 #     ARCH.yaml; each file_path exists on disk. Mismatch ⇒ WARNING.
-# 11. Coverage / integrity failures force metadata.status: draft.
+# 11. Global requirement coverage (the union "convert all FRs" guarantee) — every
+#     PRD must_have_features FR-NNN is realized by some task across the union of
+#     docs/TASKS.json + every docs/TASKS__*.json (named in a task's `implements`,
+#     or transitively via a realized component declaring it), OR deferred via a
+#     WRN-NNN in any file, OR listed in ARCH.yaml non_container_features. This is
+#     BLOCKING only when the SYSTEM file claims status:complete (the whole graph
+#     is stitched); while containers are still being built it is advisory, so an
+#     FR owned by a not-yet-built container does not wrongly fail the early files.
+# 12. Coverage / integrity failures force metadata.status: draft.
 # =============================================================================

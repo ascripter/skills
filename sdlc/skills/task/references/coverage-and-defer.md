@@ -11,43 +11,83 @@ without deferring it cannot reach `status: complete`.
 
 ---
 
-## What is gated
+## Transitive credit (the rule that keeps the gates humane)
+
+An upstream item counts as **realized** if *either*:
+
+1. a task **names it directly** (`component_ref`, `implements_tests`,
+   `touches_operations`, `touches_entities`, `implements_surfaces`,
+   `implements`), OR
+2. a task **realizes a component that traces it** — the codegen sub-agent
+   building that component reads its `ARCH__<cid>` trace, so the operation /
+   surface / entity / requirement is reachable for it.
+
+So you do **not** have to re-list every operation on every coarse controller, nor
+every entity on the repository task. Realize the component and the things it
+traces ride along. The gate only forces an explicit choice for items that *no*
+realized component traces — the genuinely orphaned ones, which are exactly the
+silent-drop risks. Everything not realized must be **deferred** (named in a
+`WRN-NNN`).
+
+## What is gated (all block `complete` — trace-or-defer)
 
 ### Container file (`TASKS__<container>.json`)
 
-Drawn from `docs/ARCH__<cid>.yaml` and `docs/TEST-STRATEGY__<cid>.yaml`:
-
-- **Components.** Every `components[].component_id` in `ARCH__<cid>.yaml` must be
-  realized by ≥1 task (a task whose `component_ref` is that component) OR
-  deferred. A component nobody builds is the classic synthesis gap.
-- **Tests.** Every `tests[].tst_id` in `TEST-STRATEGY__<cid>.yaml` must be
-  realized by some task (`implements_tests` contains it) OR deferred. Test tasks
-  are first-class — the gate is what keeps them from being dropped.
+- **Components** — every `components[].component_id` in `ARCH__<cid>.yaml`.
+- **Tests** — every `tests[].tst_id` in `TEST-STRATEGY__<cid>.yaml` (first-class).
+- **Surfaces** — every `SCR` in the container's `owns_ux_surfaces` (ARCH.yaml,
+  resolved slug→SCR via `UX.yaml`). Backend containers own none ⇒ trivially met.
+  Softens to advisory when `UX.yaml` is absent (slug↔SCR can't be resolved).
+- **Operations** — every `operation_id` of a resource the container
+  `owns_api_resources` (from `API__*.yaml`). Softens to advisory when no
+  `API__*.yaml` is present. A bare resource_id in `touches_operations` is a
+  hard error (list the operations).
+- **Entities** — every entity the container's components trace
+  (`traces_data_entities`). Realize via a `migration`/repository task
+  (`touches_entities`) or a realized repository component.
+- **Requirements** — every `FR`/`NFR` in the container's + components'
+  `implements_requirements` (promoted from advisory: the contract is "convert all
+  FRs/NFRs"). Usually satisfied transitively by realized components; only
+  genuinely orphaned reqs force an explicit defer.
+- **Design** (token_based_ui frontends that own surfaces) — a `design` task wiring
+  the tokens/theme, or a defer. Per-asset (`AST-NNN`) tasks are advisory.
 
 ### System file (`TASKS.json`)
 
-- **System tests.** Every `tests[].tst_id` in `TEST-STRATEGY.yaml` (the e2e /
-  contract suite) must be realized by some system `test` task OR deferred.
+- **System tests** — every `tests[].tst_id` in `TEST-STRATEGY.yaml` (e2e/contract).
+
+### Union (across all task files)
+
+- **Global FR coverage** — every PRD `must_have_features` `FR-NNN` is realized by
+  some task somewhere (directly or transitively) OR deferred OR an
+  `ARCH.non_container_features`. Hard **only once the whole graph is stitched**
+  (system file `complete` AND every buildable container has a `TASKS__*.json`);
+  advisory before then, so an FR owned by a not-yet-built container does not
+  wrongly fail an early file.
 
 ### Advisory (warns, never blocks)
 
-- **Requirements.** An `FR-NNN`/`NFR-NNN` in a container's/component's
-  `implements_requirements` that no task names in `implements` emits a warning —
-  it is usually covered *transitively* through a realized component, so it does
-  not block `complete`. (Component coverage is the hard gate; requirement
-  coverage rides on it.)
-- **Cross-container edges.** An `ARCH.yaml` `calls`/`depends_on` edge with no
-  integration task spanning both endpoints emits a warning.
+- **Cross-container edges** — an `ARCH.yaml` `calls`/`depends_on` edge with no
+  integration task spanning both endpoints.
+- **Orphaned entities** — a DATA entity traced by no component in any built
+  container (a likely ARCH gap — it would get no migration task).
+- **Workflows (WKF)** — end-to-end coverage rides on the system e2e test tasks;
+  `implements_workflows` on a task is an optional explicit link, not a gate.
 
 ---
 
 ## How to TRACE (the normal path)
 
-Realize the item from a task:
+Realize the item from a task (or rely on a realized component that traces it):
 
 - a component → a task with `component_ref: <that component>` (kind:implementation).
 - a test → a task with `implements_tests: [<TST-NNN>]` (kind:test).
+- a surface → a frontend task with `implements_surfaces: [<SCR-NNN>]`.
+- an operation → a task with `touches_operations: [<operation_id>]` (or a realized
+  component tracing the operation's resource).
+- an entity → a `migration`/repository task with `touches_entities: [<EntityName>]`.
 - a requirement → name it in some task's `implements` (or rely on the component).
+- design tokens → a `design` task (token_based_ui frontends).
 
 The validator counts the item as covered.
 
@@ -91,13 +131,16 @@ flow → dynamic scope-completeness sweep"). For `task`, reflect on:
 
 - the **draft list** itself (is a whole kind missing — e.g. zero `migration`
   tasks for a container that has repository components and DATA entities? no
-  `scaffold` task at all?);
+  `scaffold` task at all? a token_based_ui frontend with no `design` task?);
 - **every upstream ID family**, not just the most direct one — ARCH components
-  AND internal edges, TEST `TST-NNN`, PRD FR/NFR, DATA entities (migrations),
-  API operations (endpoint tasks), CFG/SCT (config tasks);
+  AND internal edges, TEST `TST-NNN`, PRD FR/NFR, PRD `WKF`, DATA entities
+  (migrations), API operations (endpoint tasks), UX `SCR` surfaces (frontend impl
+  tasks), DESIGN tokens/`AST` assets (design tasks), `config_loader` components
+  (config tasks);
 - **project-type heuristics** — a CLI needs an entrypoint/arg-parsing task; a
-  web service needs a server-bootstrap task; a monorepo needs a workspace
-  scaffold; anything with persistence needs a migration/bootstrap task.
+  web service needs a server-bootstrap task; a frontend needs a routing/theme
+  task; a monorepo needs a workspace scaffold; anything with persistence needs a
+  migration/bootstrap task.
 
 Surface concrete candidate tasks (not category labels) via one multi-select
 `AskUserQuestion`. Caps: at most 2 sweep passes per list; honour the anti-padding

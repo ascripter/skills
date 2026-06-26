@@ -9,9 +9,9 @@
   "plugins": [
     {
       "name": "sdlc",
-      "description": "SDLC pipeline: setup → prd → ux → design → data → api → arch --next → test --next → task -- next → deploy",
+      "description": "SDLC pipeline: setup → prd → ux → design → data → api → arch --next → test --next → task -- next → code → deploy",
       "source": "./sdlc",
-      "version": "0.2.3"
+      "version": "0.2.4"
     }
   ]
 }

@@ -16,7 +16,9 @@ description: >
   docs/TEST-STRATEGY.yaml (system), and per container docs/ARCH__<container>.yaml
   + docs/TEST-STRATEGY__<container>.yaml as required preconditions and refuses to
   run if any is missing or its metadata.status != complete. docs/DATA-MODEL.yaml,
-  docs/API.yaml (+ API__*), and docs/PRD.yaml are read for id resolution.
+  docs/API.yaml (+ API__*), docs/UX.yaml, docs/DESIGN.yaml (+ DESIGN__*), and
+  docs/PRD.yaml are read for id resolution and the surface/operation/entity/
+  design coverage gates.
 user-invocable: true
 disable-model-invocation: true
 model: opus
@@ -212,15 +214,23 @@ system file). System mode will not touch any `docs/TASKS__*.json`.
 Do filesystem lookups before the resume check (Phase 1):
 
 ```bash
-ls docs/API.yaml 2>/dev/null
-ls docs/DATA-MODEL.yaml 2>/dev/null
+ls docs/API.yaml docs/DATA-MODEL.yaml docs/UX.yaml docs/DESIGN.yaml 2>/dev/null
 ```
 
-`docs/API.yaml` (+ `API__*`) and `docs/DATA-MODEL.yaml` sharpen task seeding
-(operation-level implementation tasks; entity-level migration/repository tasks).
-Record `api_present` / `data_present` in the active sub-session state. Their
-absence is not an error — note it in `task_warnings` (WRN-NNN) only if it leaves
-a gap you would otherwise have filled.
+These optional enrichers sharpen task seeding and feed the coverage gates:
+- `docs/API.yaml` (+ `API__*`) → operation-level work + the **operation-coverage**
+  gate (every owned resource's `operation_id` realized or deferred).
+- `docs/DATA-MODEL.yaml` → entity-level `migration` tasks + the **entity-coverage**
+  gate.
+- `docs/UX.yaml` → the slug↔`SCR` map the **surface-coverage** gate needs (every
+  frontend container's `owns_ux_surfaces` realized or deferred).
+- `docs/DESIGN.yaml` (+ `DESIGN__tokens`/`DESIGN__assets`) → `design` tasks
+  (theme/token wiring, asset-brief sidecars) for frontend containers.
+
+Record `api_present` / `data_present` / `ux_present` / `design_present` in the
+active sub-session state. Absence is not an error — the dependent gate softens to
+advisory — but note it in `task_warnings` (WRN-NNN) when it leaves a gap you would
+otherwise have filled (e.g. UX absent ⇒ surfaces can't be coverage-checked).
 
 Required preconditions are checked in Phase 2.
 
@@ -278,9 +288,13 @@ If any required validator exits non-zero, or any required artifact has
 `metadata.status != complete`, **stop**. Print a clear message naming the
 offending file and the upstream skill to run.
 
-Optional enrichers (read only if present): `docs/DATA-MODEL.yaml` (entities →
-migration/repository tasks; `touches_entities`), `docs/API.yaml` + `API__*`
-(operation_ids → contract/endpoint tasks; `touches_operations`).
+Optional enrichers (read only if present, slice large ones via `INDEX.yaml`):
+`docs/DATA-MODEL.yaml` (entities → `migration`/repository tasks;
+`touches_entities`), `docs/API.yaml` + `API__*` (operation_ids →
+contract/endpoint tasks; `touches_operations`), `docs/UX.yaml` (surfaces →
+frontend impl tasks; `implements_surfaces`; also the slug↔SCR map the
+surface-coverage gate needs), and `docs/DESIGN.yaml` + `DESIGN__tokens`/`__assets`
+(theme/token + asset realization → `design` tasks; `touches_assets`).
 
 **Read `PRD.conventions` (if present).** Honour the binding `conventions` block
 before writing anything — `conventions.artifact_ids` (consult before emitting
@@ -332,10 +346,20 @@ than inventing from a blank page. Load `references/task-discovery.md` and
    `integration` tasks. Tag `✓ found`.
 4. **Container `scaffold`** — one task for the package skeleton/manifest. Tag
    `⚠ inferred`.
-5. **DATA entities / API operations the components trace** — repository
-   components seed `migration`/repository tasks; controllers seed
-   operation-level tasks (`touches_entities` / `touches_operations`). Tag
-   `⚠ inferred`.
+5. **DATA entities the components persist** — a `repository` component's
+   `traces_data_entities` seeds a `migration` task (schema/DDL — the entity
+   realization unit) with `touches_entities`. Tag `⚠ inferred`.
+6. **API operations of owned resources** — controllers seed operation-level work
+   with `touches_operations` (operation_ids, not the resource_id). Tag `⚠ inferred`.
+7. **UX surfaces (frontend containers)** — each `SCR` in `owns_ux_surfaces` (via a
+   component's `traces_ux_surfaces`) seeds an `implementation` task with
+   `implements_surfaces`. Tag `✓ found`.
+8. **DESIGN (frontend containers)** — `token_based_ui` seeds a `design` task for
+   the theme/token files; `asset_pipeline` seeds a `design` asset-scaffold task +
+   one brief sidecar per `AST-NNN` (`touches_assets`). Tag `⚠ inferred`.
+
+Seed each component-scoped task's `acceptance` from its component's
+`acceptance_criteria` (don't re-invent the ARCH-declared done-conditions).
 
 Present the draft. Each `⚠ inferred` candidate gets its own AskUserQuestion call.
 Persist confirmations to `state.sessions[<key>].defined_tasks`. The task list is
@@ -391,16 +415,20 @@ Walk the themes in `task-questions.yaml` order. Themes are tagged
    default unless overridden).
 2. `container_tasks` — `critical` per item, `synthesis: true`. For each task:
    `tsk_id`, `title`, `kind` (∈ scaffold / implementation / test / integration /
-   migration / config / chore), `description`, `component_ref`, `implements`
-   (FR/NFR), `implements_tests` (TST), `touches_entities`, `touches_operations`,
-   `depends_on`, `inputs`, `target_files`, `outputs`, `acceptance`, `priority`.
+   migration / config / design / chore), `description`, `component_ref`,
+   `implements` (FR/NFR), `implements_tests` (TST), `implements_surfaces` (SCR),
+   `implements_workflows` (WKF), `touches_entities`, `touches_operations`,
+   `touches_assets` (AST), `depends_on`, `inputs`, `target_files`, `outputs`,
+   `acceptance`, `priority`.
    `target_files` (the codegen write targets) is drafted from the owning
    component's `code_location` in `ARCH__<container>.yaml` — a component-scoped
    task's files must sit within it (validator warns otherwise), which is what
    stops codegen inventing paths; `outputs` stays the contract-level result.
-   Run the scope-completeness sweep after the per-item loop. The coverage gate
-   (Phase 7) requires every component and every container `TST-NNN` to be
-   realized by a task or deferred.
+   Run the scope-completeness sweep after the per-item loop. The coverage gates
+   (Phase 7) require every component, container `TST-NNN`, owned `SCR` surface,
+   owned-resource operation, traced entity, and `implements_requirements` FR/NFR
+   to be realized by a task (directly or transitively via a realized component)
+   or deferred — plus a `design` task for a token_based_ui frontend.
 
 #### Tier mechanics
 
@@ -444,14 +472,31 @@ failures force `metadata.status: draft`; upstream-status issues emit warnings
 only. The full check list (and the merge logic + recovery flow on `[FAIL]`) lives
 in `references/merge-validate.md`; in summary:
 
-**Coverage** (block complete — trace-or-defer, see `references/coverage-and-defer.md`):
+**Coverage** (block complete — trace-or-defer, see `references/coverage-and-defer.md`).
+An item is covered if a task names it OR a task realizes a component that traces it
+(transitive credit); otherwise defer it with a `WRN-NNN`:
 
 - **System test coverage** — every `TST-NNN` in `TEST-STRATEGY.yaml` is realized
-  by some system `test` task OR deferred via a `task_warnings` WRN-NNN.
+  by some system `test` task OR deferred.
 - **Container component coverage** — every `components[].component_id` in
   `ARCH__<cid>.yaml` is realized by ≥1 task (`component_ref`) OR deferred.
 - **Container test coverage** — every `TST-NNN` in `TEST-STRATEGY__<cid>.yaml` is
   realized by some task (`implements_tests`) OR deferred.
+- **Surface coverage** — every `SCR` in the container's `owns_ux_surfaces`
+  (ARCH.yaml, slug→SCR via `UX.yaml`) realized (`implements_surfaces` / a realized
+  component's `traces_ux_surfaces`) OR deferred. Advisory when `UX.yaml` absent.
+- **Operation coverage** — every `operation_id` of an owned API resource realized
+  (`touches_operations` / a realized component) OR deferred. Advisory when no
+  `API__*.yaml`.
+- **Entity coverage** — every entity the components trace realized (a `migration`/
+  repository task's `touches_entities` / a realized repository component) OR deferred.
+- **Requirement coverage** — every `FR`/`NFR` in the container's + components'
+  `implements_requirements` realized (`implements` / a realized component) OR deferred.
+- **Design coverage** — a token_based_ui frontend that owns surfaces has a `design`
+  task wiring the tokens OR a defer (per-asset AST tasks advisory).
+- **Union FR coverage** — every PRD must-have `FR-NNN` realized somewhere or
+  deferred; hard only once the whole graph is stitched (system complete + every
+  container present), advisory before.
 
 **The stitch** (block complete):
 
@@ -464,6 +509,10 @@ in `references/merge-validate.md`; in summary:
 - `TSK-NNN` on every `tsk_id` (unique per file); `WRN-NNN` on every warning.
 - `implements` resolves to PRD FR/NFR (⊆ the container's/component's
   `implements_requirements`); `implements_tests` resolves to a `TST-NNN`.
+- `touches_operations` ⊆ API `operation_id`s (a bare resource_id is rejected);
+  `touches_entities` ⊆ DATA entity names; `implements_surfaces` ⊆ UX `SCR` ids;
+  `implements_workflows` ⊆ PRD `WKF` ids; `touches_assets` ⊆ DESIGN `AST` ids.
+  Each softens to format-only when its upstream is absent.
 - Every `implementation` task is scoped to a component (`component_ref`) or a
   contract (`touches_operations`); every `component_ref` resolves.
 
@@ -508,14 +557,15 @@ The `kind` is the most consequential field on a task: it tells the codegen agent
 | `implementation`| Implement one component's behaviour (the bulk). Scoped via `component_ref`.|
 | `test`          | Author the test(s) realizing one or more `TST-NNN`. First-class.         |
 | `integration`   | Wire two components / a within-container call.                           |
-| `migration`     | Schema / persistence / data-migration setup.                            |
-| `config`        | CFG / SCT / env wiring for this container.                               |
+| `migration`     | Schema / DDL / persistence setup — the DATA **entity realization** unit.  |
+| `config`        | Env / settings wiring (`config_loader`); deploy owns secrets backends.   |
+| `design`        | Realize DESIGN for this frontend: theme/token files (token_based_ui) or asset-folder scaffold + per-`AST` brief sidecars (asset_pipeline). |
 | `chore`         | Tooling, lint config, local CI, misc plumbing.                          |
 
 **System kinds:** `scaffold` (repo/monorepo skeleton) · `integration`
 (cross-container wiring) · `test` (system e2e/contract) · `config` · `migration`
-(shared/bootstrap) · `deploy-prep` (handoff to `/sdlc:deploy`) · `docs`
-(repo-level) · `chore`.
+(shared/bootstrap) · `design` (shared design-token package for ≥2 frontends) ·
+`deploy-prep` (handoff to `/sdlc:deploy`) · `docs` (repo-level) · `chore`.
 
 `references/task-discovery.md` maps each upstream signal to the kind it seeds.
 
@@ -612,7 +662,7 @@ The task interview can be long. Keep it humane:
   subgraph — 1 scaffold, 6 implementation, 9 test, 2 integration. Component
   coverage: green. Test coverage: green. Next: `web-frontend`.").
 - Always call out that candidate tasks were synthesized from ARCH + TEST +
-  DATA + API — don't pretend they came from nowhere.
+  DATA + API + UX + DESIGN — don't pretend they came from nowhere.
 - For each test task, name the `TST-NNN` it realizes so the user sees the
   test→task link; for each integration task, name the edge it wires.
 - After all themes, congratulate briefly and move to write & validate.

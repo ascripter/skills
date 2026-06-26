@@ -31,9 +31,24 @@
 #   * FR-NNN / NFR-NNN        — PRD requirements (functional + non-functional)
 #   * entity names            — DATA-MODEL.yaml entities (PascalCase)
 #   * operation_id            — API__<resource>.yaml endpoints[].operation_id
+#   * SCR-NNN                 — UX.yaml surface_inventory[].id (the visual/CLI
+#                                surfaces this container renders; from the
+#                                container's owns_ux_surfaces in ARCH.yaml)
+#   * WKF-NNN                 — PRD use_cases.core_workflows (the user journeys a
+#                                task participates in)
+#   * AST-NNN                 — DESIGN__assets.yaml assets[].id (a bespoke asset
+#                                this task scaffolds a brief / pipeline slot for)
 #   * cross-file TSK refs      — "<other-container>/TSK-NNN" or "TASKS/TSK-NNN"
 #                                (a task in another container file or the system
 #                                 file) used in depends_on for the global stitch.
+#
+# WHY these refs exist: the Stage-14 code agent consumes "TaskGraph + all
+# upstream" and sees ONLY a task's TSK + the contracts it touches (demo FR-014).
+# So a task must NAME every contract it realizes — operation, entity, surface,
+# requirement — or that contract is unreachable for the sub-agent building it.
+# These typed per-family fields are the sdlc equivalent of the demo Task's flat
+# `implements_refs` (which lists OPR/ENT/SCR/SIG/CFG/SCT ids); we keep them typed
+# per CLAUDE.md §4 so the validator can enforce a family prefix on each.
 # =============================================================================
 
 metadata:                                  # REQUIRED
@@ -79,13 +94,19 @@ tasks:                                      # REQUIRED — list[Task], non-empty
   - tsk_id: TSK-001                         # REQUIRED — unique within THIS file
     title: <short imperative phrase>        # REQUIRED — e.g. "Implement the auth service"
     kind:                                   # REQUIRED — one of:
-      # scaffold | implementation | test | integration | migration | config | chore
+      # scaffold | implementation | test | integration | migration | config | design | chore
       #   scaffold       — container skeleton: package layout, manifest, entrypoint
       #   implementation — implement a component's behaviour (the bulk of the work)
       #   test           — author the test(s) realizing one or more TST-NNN
       #   integration    — wire two components together / a within-container call
-      #   migration      — schema / persistence / data-migration setup
-      #   config         — CFG / SCT / env wiring for this container
+      #   migration      — schema / persistence / data-migration setup (DDL,
+      #                    repository wiring) — the home for entity realization
+      #   config         — env / settings wiring for this container (config_loader
+      #                    component; deploy owns secrets backends)
+      #   design         — realize the DESIGN system for this container's surfaces:
+      #                    theme/token files (token_based_ui) or asset-folder
+      #                    scaffold + per-AST generation-brief sidecars
+      #                    (asset_pipeline). Frontend containers only.
       #   chore          — tooling, lint config, local CI, misc plumbing
     description: <string>                    # REQUIRED — what to build + why
     component_ref: <component_id>            # OPTIONAL (see cross-check 4) — a
@@ -103,9 +124,39 @@ tasks:                                      # REQUIRED — list[Task], non-empty
                                             #   realized by some task OR deferred.
     touches_entities:                       # OPTIONAL — DATA-MODEL entity names
       - User                                #   (PascalCase) this task reads/writes.
-    touches_operations:                     # OPTIONAL — API operation_ids this task
-      - create-user                         #   implements (a "contract" scope, the
-                                            #   alternative to component_ref).
+                                            #   VALIDATED ⊆ DATA-MODEL.yaml entities
+                                            #   when present. Every entity the
+                                            #   container's components trace must be
+                                            #   realized by a task (touches_entities
+                                            #   or a realized repository component)
+                                            #   OR deferred (entity-coverage gate).
+    touches_operations:                     # OPTIONAL — API operation_ids (the
+      - create-user                         #   endpoints[].operation_id strings) OR
+                                            #   OPR-NNN ids this task implements (a
+                                            #   "contract" scope, the alternative to
+                                            #   component_ref). VALIDATED ⊆ the
+                                            #   API__*.yaml operation set when present
+                                            #   — a bare resource_id is rejected.
+                                            #   Every operation of a resource the
+                                            #   container owns must be realized (here
+                                            #   or transitively via a realized
+                                            #   component tracing the resource) OR
+                                            #   deferred (operation-coverage gate).
+    implements_surfaces:                    # OPTIONAL (frontend) — SCR-NNN ids from
+      - SCR-004                             #   UX.yaml this task renders. VALIDATED
+                                            #   for SCR-NNN format + existence in UX.
+                                            #   Every SCR in the container's
+                                            #   owns_ux_surfaces (ARCH.yaml) must be
+                                            #   realized (here or via a realized
+                                            #   component's traces_ux_surfaces) OR
+                                            #   deferred (surface-coverage gate).
+    implements_workflows:                   # OPTIONAL — WKF-NNN user journeys this
+      - WKF-002                             #   task participates in (advisory link;
+                                            #   end-to-end coverage rides on the
+                                            #   system e2e test tasks).
+    touches_assets:                         # OPTIONAL — AST-NNN ids from
+      - AST-002                             #   DESIGN__assets.yaml this design task
+                                            #   scaffolds a brief / pipeline slot for.
     depends_on:                             # OPTIONAL — TSK ids that must complete
       - TSK-000                             #   first. Same-file ("TSK-000"), or
       - shared-lib/TSK-004                  #   cross-file ("<container>/TSK-NNN" or
@@ -174,29 +225,57 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 # 6.  implements_tests integrity — every entry is TST-NNN, resolves to a
 #     tests[].tst_id in TEST-STRATEGY__<container_id>.yaml. kind:test MUST set a
 #     non-empty implements_tests. Blocks complete.
-# 7.  Dependency integrity — every depends_on entry resolves to a TSK id (this
+# 7.  Field-ref integrity (block complete; softens to format-only when the
+#     upstream is absent):
+#       * touches_operations  → each entry is an operation_id (or OPR-NNN) in some
+#         API__*.yaml; a bare resource_id is rejected with a helpful message.
+#       * touches_entities    → each entry is a DATA-MODEL.yaml entity name.
+#       * implements_surfaces → SCR-NNN format + exists in UX.yaml.
+#       * implements_workflows→ WKF-NNN format + exists in PRD.yaml.
+#       * touches_assets      → AST-NNN format (+ exists in DESIGN__assets.yaml).
+# 8.  Dependency integrity — every depends_on entry resolves to a TSK id (this
 #     file, a cross-file "<cid>/TSK-NNN" against an on-disk TASKS__<cid>.json, or
 #     "TASKS/TSK-NNN" against docs/TASKS.json). The UNION task graph across the
 #     system file + all container files MUST be acyclic (topological sort exists).
 #     Blocks complete. (The acyclicity check is what validates FR-013's
 #     "deterministic stitch into one global dependency-ordered TaskGraph".)
-# 8.  Component coverage (trace-or-defer) — every components[].component_id in
-#     ARCH__<container_id>.yaml is realized by ≥1 task (a task whose component_ref
-#     is that component) OR deferred via a WRN-NNN naming the component_id.
-#     Blocks complete.
-# 9.  Test coverage (trace-or-defer) — every tests[].tst_id in
-#     TEST-STRATEGY__<container_id>.yaml is realized by ≥1 task (implements_tests
-#     contains it) OR deferred via a WRN-NNN naming the TST-NNN. Blocks complete.
-# 10. Requirement coverage (advisory, non-blocking) — every FR/NFR in the
-#     container's + components' implements_requirements that is NOT named by any
-#     task's `implements` emits a WARNING (it is usually covered transitively via
-#     a covered component, so this does not block complete).
-# 11. target_files grounding (advisory, non-blocking) — for a component-scoped
-#     task (component_ref set), every target_files path SHOULD sit within one of
-#     the owning component's `code_location` directories in ARCH__<cid>.yaml. A
-#     path outside emits a WARNING (placement drift — the codegen agent would
-#     write outside the component's declared home). Directory-level containment;
-#     skipped when the component declares no code_location.
-# 12. Coverage / integrity failures force metadata.status: draft (they do not
+#
+# Coverage gates — all trace-or-defer, all block complete (see
+# references/coverage-and-defer.md). "Realized transitively" = the item is traced
+# by a component that some task realizes (component_ref) — the codegen sub-agent
+# building that component reads its ARCH trace, so the item is reachable. "Defer"
+# = the id is named in a task_warnings WRN-NNN.
+# 9.  Component coverage — every components[].component_id in ARCH__<cid>.yaml is
+#     realized by ≥1 task (component_ref) OR deferred.
+# 10. Test coverage — every tests[].tst_id in TEST-STRATEGY__<cid>.yaml is
+#     realized by some task (implements_tests) OR deferred.
+# 11. Surface coverage — every SCR in the container's owns_ux_surfaces (ARCH.yaml,
+#     mapped slug→SCR via UX.yaml) is realized by a task (implements_surfaces) or
+#     transitively (a realized component's traces_ux_surfaces) OR deferred.
+#     Backend containers own no surfaces ⇒ trivially satisfied. Softens to
+#     advisory when UX.yaml is absent (slug↔SCR cannot be resolved).
+# 12. Operation coverage — every operation_id of a resource the container owns
+#     (ARCH.yaml owns_api_resources → API__*.yaml endpoints) is realized by a task
+#     (touches_operations) or transitively (a realized component tracing that
+#     operation or its resource) OR deferred. Softens to advisory when no
+#     API__*.yaml is present.
+# 13. Entity coverage — every entity the container's components trace
+#     (∪ components[].traces_data_entities in ARCH__<cid>.yaml) is realized by a
+#     task (touches_entities) or transitively (a realized repository component
+#     tracing it) OR deferred. Advisory sibling: a DATA entity living in a store
+#     the container binds but traced by no component (a likely ARCH gap) warns.
+# 14. Requirement coverage — every FR/NFR in the container's + components'
+#     implements_requirements is realized by a task (`implements`) or transitively
+#     (a realized component declaring it) OR deferred. (Promoted from advisory to
+#     blocking: the user contract is "faithfully convert all FRs/NFRs".)
+# 15. Design coverage — a token_based_ui frontend that owns surfaces must have a
+#     kind:design (or equivalent) task wiring the design tokens/theme OR defer.
+#     Per-asset (AST-NNN) realization is advisory. Skipped when DESIGN is absent
+#     or functional_structure is headless.
+# 16. target_files grounding (advisory, non-blocking) — for a component-scoped
+#     task, every target_files path SHOULD sit within the owning component's
+#     `code_location` directories in ARCH__<cid>.yaml. Outside ⇒ WARNING
+#     (placement drift). Directory-level; skipped when no code_location.
+# 17. Coverage / integrity failures force metadata.status: draft (they do not
 #     crash the validator) so partial task graphs remain saveable as drafts.
 # =============================================================================

@@ -18,7 +18,12 @@ agree:
   * a corrupted stitch gold (a system task's cross-file dep pointed at a
     non-existent backend-api/TSK-999) flips the validator to exit 1 AND flips
     grade_eval_4's union-resolve + validator checks — proving the cross-file
-    checks have teeth.
+    checks have teeth;
+  * the web-frontend gold (TASKS__web-frontend.json) validates [OK] complete —
+    exercising the surface-coverage gate (slug→SCR via UX.yaml) and the
+    token_based_ui design gate that the backend-only golds never touch — and two
+    corruptions flip it red: dropping the kind:design task trips design coverage,
+    and dropping a view task trips surface + component + test coverage.
 
 Usage:
     python sdlc/skills/task/evals/selftest.py
@@ -79,6 +84,21 @@ def _stage() -> tuple[Path, Path, Path]:
         SCRATCH / "container" / "test-project",
         SCRATCH / "stitch" / "test-project",
     )
+
+
+def _stage_fe(tag: str, tasks_obj: dict | None) -> Path:
+    """Stage the web-frontend scenario: web-app upstreams + the container ARCH
+    (which owns the four UX surfaces) + the frontend UX/DESIGN/ARCH__/TEST__
+    fixtures + a TASKS__web-frontend.json (the gold, or a mutated copy)."""
+    docs = SCRATCH / tag / "test-project" / "docs"
+    _copy_tree(FIX / "web-app" / "docs", docs)
+    shutil.copy2(FIX / "web-app-container" / "docs" / "ARCH.yaml", docs / "ARCH.yaml")
+    _copy_tree(FIX / "web-frontend" / "docs", docs)
+    if tasks_obj is None:
+        shutil.copy2(GOLD / "TASKS__web-frontend.json", docs / "TASKS__web-frontend.json")
+    else:
+        (docs / "TASKS__web-frontend.json").write_text(json.dumps(tasks_obj, indent=2), encoding="utf-8")
+    return SCRATCH / tag / "test-project"
 
 
 def _validate(tp: Path) -> tuple[int, str]:
@@ -166,6 +186,34 @@ def main() -> int:
     for r in sx_must_fail:
         print(f"      caught: {r['text']}")
     ok = ok and sx_val_red and sx_grade_red
+
+    print("== frontend gold (surface + design coverage gates) ==")
+    fe_gold = json.loads((GOLD / "TASKS__web-frontend.json").read_text(encoding="utf-8"))
+    rc_f, out_f = _validate(_stage_fe("fe-gold", None))
+    fe_v = rc_f == 0 and "complete" in out_f.lower()
+    print(f"  frontend gold: exit={rc_f}  {'OK' if fe_v else 'UNEXPECTED'}  | {out_f.splitlines()[0] if out_f else ''}")
+    ok = ok and fe_v
+
+    print("== frontend corruption (expect the new gates RED) ==")
+    # drop the kind:design task (and its dangling depends_on) → design-coverage gate.
+    nod = json.loads(json.dumps(fe_gold))
+    nod["tasks"] = [t for t in nod["tasks"] if t["tsk_id"] != "TSK-002"]
+    for t in nod["tasks"]:
+        t["depends_on"] = [d for d in t.get("depends_on", []) if d != "TSK-002"]
+    rc_nd, out_nd = _validate(_stage_fe("fe-nodesign", nod))
+    design_red = rc_nd == 1 and "design coverage" in out_nd
+    print(f"  drop design task: exit={rc_nd}  {'RED (correct)' if design_red else 'UNEXPECTED — design gate silent'}")
+    ok = ok and design_red
+    # drop the task-list view impl + its test → surface + component + test gates.
+    nos = json.loads(json.dumps(fe_gold))
+    nos["tasks"] = [t for t in nos["tasks"] if t["tsk_id"] not in ("TSK-003", "TSK-008")]
+    rc_ns, out_ns = _validate(_stage_fe("fe-nosurface", nos))
+    surface_red = rc_ns == 1 and "surface coverage" in out_ns and "SCR-001" in out_ns
+    print(f"  drop task-list view+test: exit={rc_ns}  {'RED (correct)' if surface_red else 'UNEXPECTED — surface gate silent'}")
+    for line in out_ns.splitlines():
+        if "coverage:" in line:
+            print(f"      caught: {line.strip()}")
+    ok = ok and surface_red
 
     print()
     if ok:

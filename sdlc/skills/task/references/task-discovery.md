@@ -17,15 +17,18 @@ first-class alongside implementation tasks." Seed exactly that.
 Source candidates, in priority order. Tag `✓ found` (direct from an upstream id)
 or `⚠ inferred` (derived).
 
-| Upstream signal | Seeds | kind | Scope field |
+| Upstream signal | Seeds | kind | Scope / ref field |
 |---|---|---|---|
 | `ARCH__<cid>.components[]` (each component) | one impl task (coarse) or one per responsibility/endpoint (fine) | `implementation` | `component_ref` = component_id |
 | `TEST-STRATEGY__<cid>.tests[]` (each `TST-NNN`) | one first-class test task | `test` | `implements_tests` = [TST-NNN] |
 | `ARCH__<cid>.internal_edges` (`calls`/`reads`/`writes`) | a wiring task (or fold into the consumer's impl task) | `integration` | `depends_on` the two components' tasks |
 | container package skeleton | one skeleton task | `scaffold` | — (usually the root dep) |
-| components tracing DATA entities (`traces_data_entities`) | a repository/migration task | `migration` | `touches_entities` |
-| components tracing API operations (`traces_api_operations`) | an endpoint/contract task | `implementation` | `touches_operations` |
-| `CFG-###`/`SCT-###` the container needs | a config-wiring task | `config` | — |
+| DATA entities the container persists (a `repository` component's `traces_data_entities`) | the schema/DDL + migration task — the **entity realization** unit, distinct from the repository code that queries it | `migration` | `touches_entities` = [EntityName] |
+| API operations of an owned resource (`traces_api_operations`, or all ops of a `traces_api_resources`) | the endpoint/contract work (often folded into the controller's impl task) | `implementation` | `touches_operations` = [operation_id] |
+| UX surfaces the container renders (`owns_ux_surfaces` / a component's `traces_ux_surfaces`) — frontend containers | the screen/command impl task | `implementation` | `implements_surfaces` = [SCR-NNN] |
+| `DESIGN__tokens.yaml` (token_based_ui) — frontend containers | the theme/token wiring task | `design` | `target_files` = theme/token files |
+| `DESIGN__assets.yaml` (asset_pipeline) — frontend containers | asset-folder scaffold + one generation-brief sidecar per asset | `design` | `touches_assets` = [AST-NNN] |
+| `config_loader` component / env settings the container needs | a config-wiring task (secrets backends are owned by `/sdlc:deploy`) | `config` | — |
 
 Each component is the unit of implementation work. At **coarse** granularity,
 one `implementation` task per component; at **fine**, split by the component's
@@ -34,6 +37,24 @@ one `implementation` task per component; at **fine**, split by the component's
 `implements` (FR/NFR) on an impl task = the subset of that component's
 `implements_requirements` the task realizes. Keep it a subset — the validator
 rejects an `implements` outside the component/container's declared requirements.
+
+**Name every contract a task realizes.** The Stage-14 code agent sees only a
+task's TSK + the contracts it touches, so put the upstream ids on the task:
+`touches_operations` (operation_ids — NOT the resource_id; the validator rejects
+a bare resource), `touches_entities` (DATA entity names), `implements_surfaces`
+(SCR-NNN), `implements` (FR/NFR), `implements_tests` (TST-NNN). These are the
+sdlc-typed equivalent of the demo `Task.implements_refs` flat list — kept per
+family so each gets a validated prefix (CLAUDE.md §4). A task that realizes a
+component covers everything that component traces **transitively**, so you do not
+have to re-list every operation on every coarse controller — but the coverage
+gate (`coverage-and-defer.md`) will hold you to realizing every owned surface /
+operation / entity / requirement **or deferring it**.
+
+**Seed `acceptance` from the component.** `ARCH__<cid>` components (and the
+container) carry `acceptance_criteria` — the done-conditions ARCH declared for
+the downstream task/test agents. Seed each component-scoped task's `acceptance`
+from its component's `acceptance_criteria` rather than re-inventing them, so the
+ARCH-declared contract isn't silently lost.
 
 ### Ground `target_files` in the component's `code_location`
 
@@ -63,6 +84,31 @@ A component with no `code_location` (ARCH left it blank) means you have nothing
 to ground against — note it (`WRN-NNN`) and either ask the user for the path or
 fall back to the conventional location for the component's archetype, so a
 target path is still chosen deliberately rather than invented at codegen time.
+
+### DESIGN realization (frontend containers)
+
+`DESIGN.yaml` + its sub-files are how the generated app gets its look — the
+Stage-14 code agent consumes DesignSystemSpec for "theme/token/asset
+scaffolding" (demo FR-014). `task` is where that work becomes concrete tasks.
+Read DESIGN only for a container that **owns UX surfaces** (a frontend); skip it
+for headless / backend containers.
+
+- `functional_structure` includes `token_based_ui` → seed one `design` task that
+  writes the theme/token files (e.g. `tailwind.config`, CSS custom-properties,
+  a DTCG token export). This is the **hard** design gate for a token-based
+  frontend: ship the task or defer it with a reasoned `WRN-NNN`.
+- `functional_structure` includes `asset_pipeline` (or `aesthetic_direction.
+  requires_custom_assets`) → seed a `design`/`scaffold` task for the asset folder
+  layout + manifest, and one generation-brief sidecar task per `AST-NNN` in
+  `DESIGN__assets.yaml` (`touches_assets`). AICF does NOT generate the binary
+  assets (post-MVP); the brief sidecar is the actionable deliverable, so asset
+  realization is **advisory** — surface it, don't block on it.
+- `headless` → no-op (mirrors headless UX).
+
+A shared design-token package consumed by **≥2** frontends in a monorepo is
+homeless cross-container work — author it as a system `design` task in
+`docs/TASKS.json`, leaving each frontend's theme *wiring* a container `design`
+task that depends on it.
 
 ## System mode — `docs/TASKS.json`
 
