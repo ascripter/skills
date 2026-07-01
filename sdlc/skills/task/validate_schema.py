@@ -29,7 +29,9 @@ Validates:
     5. Reference integrity (block status: complete):
        - component_ref resolves to the matching ARCH__<container>.yaml; an
          implementation task is scoped to a component (component_ref) or a
-         contract (touches_operations).
+         contract (touches_operations), sets a target_symbol that resolves to one
+         work_units[].name on its component_ref, and carries exactly one
+         target_files entry (the atomic-codegen pin).
        - implements entries are FR/NFR and resolve to PRD ids (⊆ the
          container's + targeted component's implements_requirements).
        - implements_tests entries are TST-NNN and resolve to the matching
@@ -49,9 +51,9 @@ Validates:
          container's owns_ux_surfaces (needs UX.yaml to map slug→SCR); every
          operation_id of an owned API resource; every entity its components
          trace; every FR/NFR in its implements_requirements; (token_based_ui
-         frontends) a design task wiring the tokens; and — under
-         granularity:atomic — every component operation (ARCH OPN-NNN) named by a
-         task's implements_operations (advisory under granularity:component).
+         frontends) a design task wiring the tokens; and — the atomicity gate —
+         every component work_unit (ARCH work_units[].name) named by exactly one
+         task's target_symbol (always blocking; no coarse fallback).
        - System: every system TST-NNN.
        - Union: every PRD must-have FR is realized somewhere or deferred (hard
          only once the whole graph is stitched; advisory before).
@@ -112,18 +114,6 @@ class TaskStatus(str, Enum):
     confirmed = "confirmed"
 
 
-class Granularity(str, Enum):
-    atomic = "atomic"
-    component = "component"
-
-    @classmethod
-    def _missing_(cls, value: object) -> "Optional[Granularity]":
-        # Accept the legacy v1.0 vocabulary on read: fine→atomic, coarse→component.
-        if isinstance(value, str):
-            return {"fine": cls.atomic, "coarse": cls.component}.get(value.strip().lower())
-        return None
-
-
 # `kind` is validated as a plain string against these sets in the checks (not a
 # strict pydantic enum) so a draft with an off-vocabulary kind stays loadable
 # and reports a fixable error instead of crashing the parse.
@@ -170,7 +160,7 @@ class ContainerTask(BaseModel):
     kind: Optional[str] = None
     description: Optional[str] = None
     component_ref: Optional[str] = None
-    implements_operations: Optional[List[str]] = None  # OPN-NNN of component_ref
+    target_symbol: Optional[str] = None  # the SINGLE work_units[].name on component_ref
     implements: Optional[List[str]] = None
     implements_tests: Optional[List[str]] = None
     implements_surfaces: Optional[List[str]] = None
@@ -215,7 +205,6 @@ class ContainerTaskGraphRef(BaseModel):
 class TasksSystem(BaseModel):
     metadata: SystemMetadata
     overview: Optional[str] = None
-    granularity: Optional[Granularity] = None
     build_order: Optional[List[str]] = None
     tasks: Optional[List[SystemTask]] = None
     container_task_graphs: Optional[List[ContainerTaskGraphRef]] = None
@@ -227,7 +216,6 @@ class TasksContainer(BaseModel):
     container_id: Optional[str] = None
     overview: Optional[str] = None
     inherits_from: Optional[str] = None
-    granularity: Optional[Granularity] = None
     tasks: Optional[List[ContainerTask]] = None
     task_warnings: Optional[List[str]] = None
 
@@ -245,7 +233,6 @@ _SCR_RE = re.compile(r"^SCR-\d{3,}$", re.IGNORECASE)
 _WKF_RE = re.compile(r"^WKF-\d{3,}$", re.IGNORECASE)
 _AST_RE = re.compile(r"^AST-\d{3,}$", re.IGNORECASE)
 _OPR_RE = re.compile(r"^OPR-\d{3,}$", re.IGNORECASE)
-_OPN_RE = re.compile(r"^OPN-\d{3,}$", re.IGNORECASE)
 # A cross-file dep ref: "<container-or-TASKS>/TSK-NNN".
 _XREF_RE = re.compile(r"^(?P<scope>[A-Za-z0-9_-]+)/(?P<tsk>TSK-\d{3,})$")
 
@@ -449,13 +436,10 @@ class ArchContainerInfo:
         self.comp_api_op: Dict[str, Set[str]] = {}    # operation_ids / OPR-NNN
         self.comp_entities: Dict[str, Set[str]] = {}  # entity names
         self.comp_reqs: Dict[str, Set[str]] = {}      # FR/NFR
-        self.comp_ops: Dict[str, Set[str]] = {}       # component_id -> {OPN-NNN}
+        self.comp_units: Dict[str, Set[str]] = {}     # component_id -> {work_unit names}
         # union of every component's traces_data_entities (the container's
         # architecture-declared entity footprint = the entity-coverage expected set)
         self.all_entities: Set[str] = set()
-        # union of every component's operations[].op_id (the operation-coverage
-        # expected set, used by the granularity:atomic gate)
-        self.all_ops: Set[str] = set()
 
 
 def _strset(node: dict, key: str) -> Set[str]:
@@ -487,12 +471,11 @@ def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
         info.comp_reqs[coid] = _req_tokens_in(comp.get("implements_requirements") or [])
         info.implements |= info.comp_reqs[coid]
         info.all_entities |= info.comp_entities[coid]
-        ops: Set[str] = set()
-        for op in comp.get("operations") or []:
-            if isinstance(op, dict) and op.get("op_id"):
-                ops.add(str(op["op_id"]).strip())
-        info.comp_ops[coid] = ops
-        info.all_ops |= ops
+        units: Set[str] = set()
+        for wu in comp.get("work_units") or []:
+            if isinstance(wu, dict) and wu.get("name"):
+                units.add(str(wu["name"]).strip())
+        info.comp_units[coid] = units
     return info
 
 
@@ -666,8 +649,6 @@ def check_required_system(m: TasksSystem) -> List[str]:
     missing: List[str] = []
     if m.overview in (None, ""):
         missing.append("overview")
-    if m.granularity is None:
-        missing.append("granularity")
     if not m.build_order:
         missing.append("build_order (non-empty)")
     if not m.tasks:
@@ -688,8 +669,6 @@ def check_required_container(m: TasksContainer) -> List[str]:
     for fld in ("container_id", "overview"):
         if getattr(m, fld) in (None, ""):
             missing.append(fld)
-    if m.granularity is None:
-        missing.append("granularity")
     if not m.tasks:
         missing.append("tasks (non-empty)")
     for i, t in enumerate(m.tasks or []):
@@ -700,6 +679,15 @@ def check_required_container(m: TasksContainer) -> List[str]:
             missing.append(f"tasks[{i}].outputs")
         if not t.acceptance:
             missing.append(f"tasks[{i}].acceptance")
+        # Atomic-codegen pin: an implementation task names exactly one callable
+        # (target_symbol) housed in exactly one file (target_files).
+        if t.kind == "implementation":
+            if not (t.target_symbol or "").strip():
+                missing.append(f"tasks[{i}].target_symbol (required for kind:implementation)")
+            if not t.target_files or len(t.target_files) != 1:
+                missing.append(
+                    f"tasks[{i}].target_files (kind:implementation needs exactly one entry)"
+                )
     return missing
 
 
@@ -920,7 +908,8 @@ def check_container(
     explicit_ops: Set[str] = set()
     explicit_entities: Set[str] = set()
     realized_ast: Set[str] = set()
-    realized_component_ops: Set[str] = set()   # OPN-NNN named in implements_operations
+    realized_units: Set[Tuple[str, str]] = set()   # (component_ref, target_symbol) built
+    symbol_task_count: Dict[Tuple[str, str], int] = {}   # for the uniqueness gate
     has_design_task = False
 
     for i, t in enumerate(m.tasks or []):
@@ -930,26 +919,22 @@ def check_container(
             covered_components.add(t.component_ref)
             if ac.present and t.component_ref not in ac.component_ids:
                 errs.append(f"{label} tasks[{i}].component_ref '{t.component_ref}' is not a component in ARCH__{cid}.yaml")
-        # implements_operations — the atomic scope: OPN-NNN of the task's component.
-        for ref in t.implements_operations or []:
-            o = str(ref).strip()
-            if not _OPN_RE.match(o):
-                errs.append(f"{label} tasks[{i}].implements_operations '{ref}' is not an OPN-NNN id")
-                continue
-            ou = o.upper()
+        # target_symbol — the atomic scope: the ONE work_unit name of the task's
+        # component that this task builds.
+        sym = (t.target_symbol or "").strip()
+        if sym:
             if not t.component_ref:
-                errs.append(f"{label} tasks[{i}].implements_operations names '{o}' but the task has no component_ref to resolve it against")
-            if ac.present and ac.all_ops:
-                if ou not in {x.upper() for x in ac.all_ops}:
-                    errs.append(f"{label} tasks[{i}].implements_operations '{o}' is not an operations[].op_id in ARCH__{cid}.yaml")
+                errs.append(f"{label} tasks[{i}].target_symbol names '{sym}' but the task has no component_ref to resolve it against")
+            elif ac.present and t.component_ref in ac.component_ids:
+                comp_units = ac.comp_units.get(t.component_ref, set())
+                if comp_units and sym not in comp_units:
+                    errs.append(f"{label} tasks[{i}].target_symbol '{sym}' is not a work_units[].name on component '{t.component_ref}' in ARCH__{cid}.yaml")
                 else:
-                    comp_ops = {x.upper() for x in ac.comp_ops.get(t.component_ref or "", set())}
-                    if t.component_ref and comp_ops and ou not in comp_ops:
-                        errs.append(f"{label} tasks[{i}].implements_operations '{o}' is not an operation of component '{t.component_ref}'")
-                    else:
-                        realized_component_ops.add(ou)
-            else:
-                realized_component_ops.add(ou)
+                    realized_units.add((t.component_ref, sym))
+            elif t.component_ref:
+                realized_units.add((t.component_ref, sym))
+            key = (t.component_ref or "", sym)
+            symbol_task_count[key] = symbol_task_count.get(key, 0) + 1
         # target_files grounding (advisory) — a component-scoped task's write
         # targets should sit within the owning component's code_location.
         if t.component_ref and t.target_files:
@@ -1107,28 +1092,30 @@ def check_container(
         if r not in realized_reqs and r not in deferred_reqs:
             errs.append(f"{label} requirement coverage: {r} is in implements_requirements but realized by no task and no WRN-NNN defers it")
 
-    # Operation coverage (the atomicity gate; granularity-conditional). Every
-    # component operation (ARCH OPN-NNN) must be realized OR deferred. Under
-    # `atomic` a task must NAME the op in implements_operations (a bare
-    # component_ref does NOT transitively cover its ops — that is the point);
-    # under `component` a realized component covers its ops (advisory only).
-    # Softens to a no-op when no component declares operations (older ARCH files).
-    expected_ops = {x.upper() for x in ac.all_ops}
-    if expected_ops:
-        deferred_ops = {x.upper() for x in _deferred_literals(warnings, ac.all_ops)}
-        if m.granularity == Granularity.component:
-            trans_op_ids: Set[str] = set()
-            for comp in covered_components:
-                trans_op_ids |= {x.upper() for x in ac.comp_ops.get(comp, set())}
-            realized_ops_all = realized_component_ops | trans_op_ids
-            for op in sorted(expected_ops):
-                if op not in realized_ops_all and op not in deferred_ops:
-                    warns.append(f"{label} operation coverage (advisory under granularity:component): operation '{op}' (ARCH__{cid}) is realized by no task")
-        else:
-            # atomic (the default; also when granularity is unset)
-            for op in sorted(expected_ops):
-                if op not in realized_component_ops and op not in deferred_ops:
-                    errs.append(f"{label} operation coverage: operation '{op}' (ARCH__{cid} component operation) is realized by no task (implements_operations) and no WRN-NNN defers it")
+    # Work-unit coverage (the atomicity gate — always BLOCKING). Every component
+    # work_unit (ARCH work_units[].name) must be realized OR deferred. A work_unit
+    # is realized only when exactly ONE task NAMES it in target_symbol (a bare
+    # component_ref does NOT transitively cover its work_units — that is the point);
+    # otherwise defer it with a WRN-NNN. Softens to a no-op only for a component
+    # that declares no work_units (pure plumbing — there is no coarse fallback).
+    for coid, unit_names in ac.comp_units.items():
+        for name in sorted(unit_names):
+            if (coid, name) in realized_units:
+                continue
+            if _deferred_literals(warnings, {name}):
+                continue
+            errs.append(
+                f"{label} work-unit coverage: work_unit '{name}' of component "
+                f"'{coid}' (ARCH__{cid}) is realized by no task's target_symbol and "
+                f"no WRN-NNN defers it"
+            )
+    # target_symbol uniqueness — each work_unit is built by exactly one task.
+    for (comp_ref, sym), n in sorted(symbol_task_count.items()):
+        if n > 1:
+            errs.append(
+                f"{label} target_symbol '{sym}' (component '{comp_ref}') is named by "
+                f"{n} tasks — each work_unit must be built by exactly one task"
+            )
 
     # Design coverage — a token_based_ui frontend that owns surfaces needs a
     # design task wiring the tokens/theme (or a defer); assets stay advisory.

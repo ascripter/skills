@@ -75,8 +75,8 @@ when the evidence is unambiguous.**
 
 | Edge type        | Required `via_*` pre-fills (when evidence exists)                |
 |------------------|------------------------------------------------------------------|
-| `calls`          | `via_resource_id` (the API resource being called)                |
-|                  | `via_operation_id` (the specific endpoint, container-edge only)  |
+| `calls` (internal) | `via_unit` (the callee `work_units[].name` on the `to` component) + `via_resource_id` when the callee traces a resource |
+| `calls` (external) | `via_resource_id` (the API resource being called) + `via_operation_id` (the specific API endpoint on the called container) |
 | `reads`/`writes` | `via_entity` (the DATA entity primarily accessed)                |
 | `publishes`      | `via_channel_id` (the API.events channel)                        |
 | `subscribes_to`  | `via_channel_id` (the API.events channel)                        |

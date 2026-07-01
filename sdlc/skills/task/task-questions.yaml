@@ -46,9 +46,9 @@ themes:
   # -------- system mode --------
   - id: build_plan
     mode: system
-    title: "Build Plan (granularity + build order)"
+    title: "Build Plan (build order)"
     required: true
-    description: "Task granularity and the topological container build order (providers before consumers)."
+    description: "The topological container build order (providers before consumers). Slicing is always atomic — one implementation task per work_unit — so there is no granularity choice."
 
   - id: system_tasks
     mode: system
@@ -61,12 +61,6 @@ themes:
     description: "Repo/monorepo scaffold, cross-container integration tasks, and the system-level e2e/contract test tasks."
 
   # -------- container mode --------
-  - id: build_plan_container
-    mode: container
-    title: "Build Plan (granularity)"
-    required: true
-    description: "Task granularity for this container; inherits the system default unless overridden."
-
   - id: container_tasks
     mode: container
     title: "Container Task Graph (scaffold + implementation + tests)"
@@ -75,36 +69,13 @@ themes:
                       # components, its TEST-STRATEGY tests, and its internal
                       # edges. Runs the scope-completeness sweep after the
                       # per-item loop — see references/coverage-and-defer.md.
-    description: "Scaffold, per-component implementation tasks, migration (entity) tasks, design (token/asset) tasks for frontends, first-class test tasks, and within-container wiring for this container."
+    description: "Scaffold, one atomic implementation task per component work_unit, migration (entity) tasks, design (token/asset) tasks for frontends, first-class test tasks, and within-container wiring for this container."
 
 questions:
 
   # =========================================================================
   # SYSTEM MODE — build_plan
   # =========================================================================
-
-  - theme: build_plan
-    id: granularity
-    schema_path: granularity
-    question: >
-      How finely should work be sliced into tasks — atomic (one task per
-      component operation / per test) or component (one task per component)?
-    hint: >
-      The one required structural decision; DEFAULT atomic. atomic = one
-      implementation task per ARCH component operation (OPN-NNN) + one test task
-      per TST-NNN — method-level units the codegen factory builds one sub-agent
-      per, giving tight per-task context, cheaper+higher-quality generation, and
-      a 1:1 task↔test mapping. component = the old coarse mode (one task per
-      component), for tiny apps where per-method tasks would be noise. Atomic
-      needs ARCH components to declare operations[]; a component with none falls
-      back to one task. Container interviews inherit this default.
-    suggested_answers:
-      - "atomic — one task per operation / per test (recommended)"
-      - "component — one task per component (coarse)"
-    free_text_allowed: false
-    required: true
-    capture_rationale: true
-    importance: high
 
   - theme: build_plan
     id: build_order
@@ -288,24 +259,6 @@ questions:
     importance: critical
 
   # =========================================================================
-  # CONTAINER MODE — build_plan_container
-  # =========================================================================
-
-  - theme: build_plan_container
-    id: granularity
-    schema_path: granularity
-    question: "Granularity for this container — atomic (one task per operation / per test) or component (one task per component)?"
-    hint: "Inherits the system default (atomic) unless this container warrants a coarser slice (e.g. a tiny container where per-method tasks would be noise → component)."
-    suggested_answers:
-      - "inherit the system default"
-      - "atomic — one task per operation / per test (recommended)"
-      - "component — one task per component (coarse)"
-    free_text_allowed: false
-    required: true
-    capture_rationale: true
-    importance: high
-
-  # =========================================================================
   # CONTAINER MODE — container_tasks (critical per item, synthesis)
   # =========================================================================
   #
@@ -360,21 +313,22 @@ questions:
     importance: critical
 
   - theme: container_tasks
-    id: implements_operations
-    schema_path: task.implements_operations
-    question: "Which component operation(s) does this atomic task realize (OPN-NNN)?"
+    id: target_symbol
+    schema_path: task.target_symbol
+    question: "Which single component work_unit does this atomic task build (its callable name)?"
     hint: >
-      The ATOMIC scope. Under granularity:atomic, each implementation task names
-      exactly the operation(s) it builds (usually ONE) from the component_ref's
-      operations[] in ARCH__<container>.yaml — and EVERY component operation must
-      be realized by some task OR deferred (the operation-coverage gate). The op's
-      own traces ride up onto the task: set touches_operations from the op's
-      traces_api_operation, implements from the op's implements_requirements,
-      touches_entities from the op's touches_entities. Validated ⊆ the
-      component_ref's operations[].op_id. Omit under granularity:component.
+      The ATOMIC scope. Each implementation task builds exactly ONE work_unit — its
+      target_symbol MUST equal one work_units[].name on the component_ref
+      (ARCH__<container>.yaml), e.g. "TasksController.createTask". EVERY component
+      work_unit must be realized by exactly one task's target_symbol OR deferred
+      (the work-unit coverage gate); no two tasks share a target_symbol. The work_unit's
+      own traces ride up onto the task: set touches_operations from its
+      traces_api_operation, implements from its implements_requirements,
+      touches_entities from its touches_entities. Pair it with a single target_files
+      entry (the file housing the callable).
     suggested_answers: []
     free_text_allowed: true
-    required_if: "granularity == 'atomic' and task.kind == 'implementation'"
+    required_if: "task.kind == 'implementation'"
     required: false
     confidence_field: false
     importance: critical
@@ -507,17 +461,20 @@ questions:
   - theme: container_tasks
     id: target_files
     schema_path: task.target_files
-    question: "Which concrete repo files will this task create or modify (the codegen write targets)?"
+    question: "Which concrete repo file will this task create or modify (the codegen write target)?"
     hint: >
-      DRAFT from the owning component's `code_location` in ARCH__<container>.yaml:
-      a component-scoped task's target_files MUST sit within the component's
+      An implementation task carries EXACTLY ONE target_files entry — the file
+      housing its target_symbol — so the task is pinned to one method in one file
+      (the atomic-codegen unit). DRAFT it from the owning component's
+      `code_location` in ARCH__<container>.yaml: it MUST sit within the component's
       code_location dir(s) — that grounding is what stops the codegen agent
       inventing file paths (the validator warns on a path outside it). For
       scaffold/config tasks with no component, list the files directly. Skip only
       when the task produces no files. Distinct from `outputs` (the contract-level
-      result); these are the raw paths written.
+      result); this is the raw path written.
     suggested_answers: []
     free_text_allowed: true
+    required_if: "task.kind == 'implementation'"
     required: false
     confidence_field: false
     importance: high

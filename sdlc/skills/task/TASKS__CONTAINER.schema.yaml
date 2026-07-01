@@ -27,8 +27,10 @@
 #   * WRN-NNN — one per `task_warnings` entry.
 # Upstream ids it REFERENCES:
 #   * component_id            — ARCH__<container>.yaml components[].component_id
-#   * OPN-NNN                 — ARCH__<container>.yaml components[].operations[].op_id
-#                                (the method/operation a task atomically realizes)
+#   * work_unit name          — ARCH__<container>.yaml components[].work_units[].name
+#                                (the callable a task atomically realizes as its
+#                                 target_symbol; addressed as (component, name) —
+#                                 no id family)
 #   * TST-NNN                 — TEST-STRATEGY__<container>.yaml tests[].tst_id
 #   * FR-NNN / NFR-NNN        — PRD requirements (functional + non-functional)
 #   * entity names            — DATA-MODEL.yaml entities (PascalCase)
@@ -75,31 +77,18 @@ overview: <two or three sentences>          # REQUIRED — what building this co
 inherits_from: docs/TASKS.json              # OPTIONAL — pointer to the system task graph
 
 # ---------------------------------------------------------------------------
-# granularity — the one structural choice. DEFAULT: atomic.
-#   atomic    — slice to the finest unit the architecture DECLARES: one
-#               implementation task per component operation (ARCH OPN-NNN), one
-#               test task per TST-NNN (never grouped), one migration per entity. A
-#               component that declares no operations falls back to one task for
-#               the whole component (graceful — the validator warns). This is the
-#               method/function-level breakdown the codegen factory wants: tight
-#               per-task context, cheap+high-quality generation, 1:1 with tests.
-#   component — coarse: one implementation task per component, regardless of how
-#               many operations it has. Fewer, larger tasks.
-# Legacy aliases accepted on read: `fine`→`atomic`, `coarse`→`component`.
-# The codegen agent emits files per TSK, so atomic = more, cheaper-context tasks
-# (and more edges to order) vs component = fewer, larger. Container interviews
-# inherit the system value unless overridden.
-# ---------------------------------------------------------------------------
-granularity: atomic | component             # REQUIRED (default: atomic)
-
-# ---------------------------------------------------------------------------
 # tasks — the container's dependency-ordered work units. Each is a TSK-NNN item.
+# Slicing is ALWAYS atomic (there is no granularity knob): one implementation
+# task per component work_unit (ARCH work_units[].name — the task's
+# target_symbol), one test task per TST-NNN (never grouped), one migration per
+# entity. This is the method/function-level breakdown the codegen factory wants:
+# tight per-task context, cheap+high-quality generation, a 1:1 task↔test mapping,
+# and a task pinned to exactly one callable in exactly one file.
 # `critical` per item in the interview: the agent derives candidates from the
-# container's components (one impl task PER OPERATION at atomic granularity — the
-# default — or one per component at `component` granularity), its TEST-STRATEGY
-# tests (one test task PER TST-NNN — test tasks are first-class, never grouped),
-# its internal_edges (integration/wiring tasks), and a scaffold task, then
-# confirms each. The list is later TOPOLOGICALLY ORDERED by depends_on.
+# container's components (one impl task PER WORK_UNIT), its TEST-STRATEGY tests
+# (one test task PER TST-NNN — test tasks are first-class, never grouped), its
+# internal_edges (integration/wiring tasks), and a scaffold task, then confirms
+# each. The list is later TOPOLOGICALLY ORDERED by depends_on.
 # ---------------------------------------------------------------------------
 tasks:                                      # REQUIRED — list[Task], non-empty
   - tsk_id: TSK-001                         # REQUIRED — unique within THIS file
@@ -125,17 +114,20 @@ tasks:                                      # REQUIRED — list[Task], non-empty
                                              #   matching ARCH__<container>.yaml.
                                              #   An implementation/test task is
                                              #   "scoped to one CMP" via this.
-    implements_operations:                  # OPTIONAL (the ATOMIC scope) — OPN-NNN
-      - OPN-001                             #   op id(s) from the component_ref's
-                                             #   operations[] in ARCH__<container>.yaml
-                                             #   that THIS task realizes. Under
-                                             #   granularity:atomic an implementation
-                                             #   task names exactly the operation(s) it
-                                             #   builds (usually one), and EVERY
-                                             #   component operation must be realized by
-                                             #   some task OR deferred (the
-                                             #   operation-coverage gate). VALIDATED ⊆
-                                             #   the component_ref's operations[].op_id.
+    target_symbol: <work_unit name>         # REQUIRED for kind:implementation — the
+                                             #   SINGLE callable (method / function /
+                                             #   Class.method) this atomic task creates
+                                             #   or edits, e.g. "TasksController.createTask".
+                                             #   MUST equal exactly one work_units[].name
+                                             #   on the component named in component_ref
+                                             #   (ARCH__<container>.yaml). With the single
+                                             #   target_files entry it pins the task to one
+                                             #   method = the atomic codegen unit. EVERY
+                                             #   component work_unit must be realized by
+                                             #   exactly one task's target_symbol OR
+                                             #   deferred (the work-unit coverage gate);
+                                             #   target_symbol is UNIQUE across tasks.
+                                             #   Empty for non-code tasks (docs / analysis).
     implements:                             # OPTIONAL — FR/NFR ids this task realizes.
       - FR-008                              #   Subset of the targeted component's /
       - NFR-011                             #   container's implements_requirements.
@@ -187,18 +179,21 @@ tasks:                                      # REQUIRED — list[Task], non-empty
     inputs:                                 # OPTIONAL but encouraged — the upstream
       - "ARCH__backend-api.yaml#auth-service"  # artifacts / contracts / files this
                                             #   task consumes (FR-013 "explicit inputs").
-    target_files:                           # OPTIONAL but strongly encouraged for
-      - "src/auth/service.py"               #   scaffold/implementation/test tasks — the
-      - "src/auth/tokens.py"                #   concrete repo-relative file paths this task
-                                            #   CREATES or MODIFIES (the codegen agent's
-                                            #   write targets). For a component-scoped task
-                                            #   (component_ref set) these MUST sit within
+    target_files:                           # REQUIRED for kind:implementation, encouraged
+      - "src/auth/service.py"               #   for scaffold/test — the concrete repo-relative
+                                            #   file path(s) this task CREATES or MODIFIES
+                                            #   (the codegen agent's write targets). An
+                                            #   implementation task carries EXACTLY ONE entry
+                                            #   — the file housing its target_symbol — so the
+                                            #   task is pinned to one method in one file (the
+                                            #   atomic codegen unit). For a component-scoped
+                                            #   task (component_ref set) it MUST sit within
                                             #   the owning component's `code_location` in
                                             #   ARCH__<container>.yaml — the placement seam
-                                            #   that stops the codegen agent inventing
-                                            #   paths. The validator emits an advisory
-                                            #   WARNING (non-blocking) for a path outside
-                                            #   the component's code_location. See
+                                            #   that stops the codegen agent inventing paths.
+                                            #   The validator emits an advisory WARNING
+                                            #   (non-blocking) for a path outside the
+                                            #   component's code_location. See
                                             #   references/task-discovery.md.
     outputs:                                # REQUIRED — non-empty. The CONTRACT-LEVEL
       - "auth-service.authenticate() exported"  # result this task makes available to
@@ -233,17 +228,18 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #
 # 1.  Required-field completeness — status:complete requires every REQUIRED
 #     field non-null, `tasks` non-empty, and every task's outputs + acceptance
-#     non-empty.
+#     non-empty. Every kind:implementation task additionally carries a non-empty
+#     target_symbol and EXACTLY ONE target_files entry (the atomic-codegen pin).
 # 2.  TSK-NNN format + uniqueness within this file; WRN-NNN format.
 # 3.  Identity — container_id resolves to a testable ARCH.yaml container, and a
 #     sibling docs/ARCH__<container_id>.yaml exists on disk.
 # 4.  Scope integrity — every implementation task is scoped to one component or
 #     one contract: kind:implementation MUST set component_ref OR touches_operations.
 #     Every component_ref resolves to a components[].component_id in
-#     ARCH__<container_id>.yaml. Every implements_operations entry is OPN-NNN and
-#     resolves to an operations[].op_id of the task's component_ref in
-#     ARCH__<container_id>.yaml (a bare op with no component_ref is rejected).
-#     Blocks complete.
+#     ARCH__<container_id>.yaml. Every kind:implementation task sets target_symbol,
+#     and it resolves to exactly one work_units[].name on the task's component_ref
+#     in ARCH__<container_id>.yaml (a target_symbol with no component_ref is
+#     rejected). No two tasks share a target_symbol. Blocks complete.
 # 5.  implements integrity — every `implements` entry is FR/NFR format, resolves
 #     to a PRD id, AND ⊆ the union of implements_requirements across the
 #     container + the targeted component. Blocks complete.
@@ -293,27 +289,26 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     implements_requirements is realized by a task (`implements`) or transitively
 #     (a realized component declaring it) OR deferred. (Promoted from advisory to
 #     blocking: the user contract is "faithfully convert all FRs/NFRs".)
-# 14a. Operation coverage (granularity-conditional — the atomicity gate) — every
-#     operations[].op_id declared across the container's components in
+# 14a. Work-unit coverage (the atomicity gate — always BLOCKING) — every
+#     work_units[].name declared across the container's components in
 #     ARCH__<cid>.yaml must be realized OR deferred. This is what makes atomic
-#     slicing STICK. Behaviour depends on `granularity`:
-#       * granularity: atomic    → BLOCKING trace-or-defer. An OPN-NNN is realized
-#         only when a task NAMES it in implements_operations; otherwise defer it
-#         with a WRN-NNN. (A bare component_ref does NOT transitively cover its
-#         operations under atomic — that is the whole point.) Only bites for
-#         components that declare operations; a no-operations component falls back
-#         to component-level coverage (#9).
-#       * granularity: component → ADVISORY/transitive: a component_ref task covers
-#         its component's operations; unrealized ops warn but do not block.
-#     Softens to a no-op when no component declares operations (older ARCH files).
+#     slicing STICK. A work_unit is realized only when exactly ONE task NAMES it in
+#     target_symbol (a bare component_ref does NOT transitively cover its
+#     work_units — that is the whole point); otherwise defer it with a WRN-NNN.
+#     Two tasks naming the same target_symbol is an error (each work_unit is built
+#     once). Softens to a no-op only for a component that declares no work_units
+#     (pure plumbing — it yields no implementation task; there is no coarse
+#     whole-component fallback).
 # 15. Design coverage — a token_based_ui frontend that owns surfaces must have a
 #     kind:design (or equivalent) task wiring the design tokens/theme OR defer.
 #     Per-asset (AST-NNN) realization is advisory. Skipped when DESIGN is absent
 #     or functional_structure is headless.
-# 16. target_files grounding (advisory, non-blocking) — for a component-scoped
-#     task, every target_files path SHOULD sit within the owning component's
-#     `code_location` directories in ARCH__<cid>.yaml. Outside ⇒ WARNING
-#     (placement drift). Directory-level; skipped when no code_location.
+# 16. target_files grounding — for a kind:implementation task, EXACTLY ONE
+#     target_files entry (blocks complete; the atomic-codegen pin). Plus an advisory
+#     (non-blocking) placement check: for a component-scoped task the entry SHOULD
+#     sit within the owning component's `code_location` directories in
+#     ARCH__<cid>.yaml. Outside ⇒ WARNING (placement drift). Directory-level;
+#     the placement check is skipped when no code_location.
 # 17. Coverage / integrity failures force metadata.status: draft (they do not
 #     crash the validator) so partial task graphs remain saveable as drafts.
 # =============================================================================

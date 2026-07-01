@@ -14,7 +14,6 @@
     ]
   },
   "overview": "System-level task graph for tinytrack: the repo scaffold, the cross-container system test tasks (e2e/contract/load), and the build_order stitch that orders the per-container subgraphs.",
-  "granularity": "coarse",
   "build_order": ["backend-api", "web-frontend", "digest-worker"],
   "tasks": [
     {

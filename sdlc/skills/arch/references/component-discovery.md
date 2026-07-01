@@ -183,55 +183,71 @@ imports".
 When you persist a drafted component's placement to state, carry it on the
 `defined_components` entry (`code_location: [...]`) so resume doesn't re-draft it.
 
-## Deriving operations
+## Deriving work_units
 
-`operations` is the **component → code seam**: the method/function-level units of
-work the component performs. It is filled during `per_component_deepdive` (an
-`importance: high` mini-section — the agent drafts the full list, the user
-approves or edits). It is the single field that makes **atomic, method-level task
-breakdown** possible downstream: the `task` skill slices **one task per
-operation**, so a component that declares no operations can only be sliced
-coarsely (one task for the whole component). The arch validator emits a
-non-blocking WARNING for a non-trivial component with traces but no operations
-(cross-check #21).
+`work_units` is the **component → code seam**: the named method/function-level
+**callables** the component exposes (C4 interface level). It is filled during
+`per_component_deepdive` (an `importance: high` mini-section — the agent drafts the
+full list, the user approves or edits). It is the single field that makes
+**atomic, method-level task breakdown** possible downstream: the `task` skill
+slices **exactly one implementation task per work_unit** (its `target_symbol` =
+the work_unit `name`), so a component that declares no work_units yields no atomic
+implementation task. The arch validator emits a non-blocking WARNING for a
+non-trivial component with traces but no work_units (cross-check #21).
+
+**Enumerate the contract surface, not every private helper.** A work_unit is a
+PUBLIC / contract-bearing callable — one that realizes a traced contract (an API
+operation, an entity's persistence, a surface's render) or sits on an
+internal/external edge (something another component calls). A private helper that
+no contract or edge names is an implementation detail *of* some work_unit, not a
+work_unit of its own. This keeps the list at the right altitude: one codegen task
+per callable another part of the system depends on.
 
 **Never ask cold — draft from the component's archetype + its traces, then let
 the user trim:**
 
-| Component archetype | Draft one operation per … | Pre-fill |
+| Component archetype | Draft one work_unit per … | Pre-fill |
 |---|---|---|
-| `controller` / `bff` | owned API operation | `traces_api_operation` = the `operation_id`; `implements_requirements` from the endpoint's feature; `name` mirrors the `operation_id` |
+| `controller` / `bff` | owned API operation | `traces_api_operation` = the `operation_id`; `implements_requirements` from the endpoint's feature; `name` = the handler (e.g. `createTask`) |
 | `repository` / `cache_client` / `blob_client` | CRUD verb × traced entity (create/get/list/update/delete) | `touches_entities` = the entity |
 | `service` / `use_case` / `background_worker` | behaviour implied by a responsibility, an `acceptance_criterion`, or an FR it implements | `implements_requirements` ⊆ the component's; `satisfies_acceptance` = the criterion |
 | `view` | user interaction / render path | — |
 | `api_client` | called remote operation | `traces_api_operation` |
-| `validator` / `serializer` | the one transform it performs (often a single op, or skip) | — |
+| `validator` / `serializer` | the one transform it performs (often a single unit, or skip) | — |
 | `middleware` / `scheduler` / `event_handler` | the wrap / tick / handle entry point | — |
 | `config_loader` / `observability_bootstrap` / `error_handler` | usually **none** (plumbing) | — |
 
-Each operation carries:
+Each work_unit carries:
 
-- `op_id` — `OPN-NNN`, writer-managed in `state.last_ids.OPN`, **unique within
-  this `ARCH__<container>.yaml`** (the stable handle `task` references; renaming
-  `name` never changes it).
-- `name` (verb-first), `summary` (one line) — both **required**.
+- `name` — the callable (method / function / `Class.method`), **unique within its
+  owning component**. work_units are addressed as `(component, name)` — there is
+  no id family. This name is the stable handle `task` references as a
+  `target_symbol`; it IS the callable, so renaming the callable renames it.
+- `summary` (one line) — required.
 - Optional traces: `traces_api_operation` (⊆ API operation_ids),
   `implements_requirements` (FR/NFR ⊆ the owning component's),
   `touches_entities` (⊆ the component's `traces_data_entities`),
   `satisfies_acceptance` (the component criterion it fulfils).
-- Optional **signature** (codegen-grade, opt-in): `inputs`, `outputs`, `errors`.
-  Keep it lightweight by default; only fill the signature for components where an
-  unambiguous contract pays off.
+- The **interface contract**, DEFER-OR-DECLARE (`inputs`, `output`, `raises`, and
+  an optional concrete `signature`): a work_unit that realizes a schema-bearing
+  traced contract (e.g. an API operation whose request/response schema lives in
+  `API__*.yaml`) may leave these **empty and defer** to that contract; a domain
+  callable with no schema-bearing upstream contract (a `service`/`use_case`
+  method) **declares** them, so the independently-generated atomic tasks compose
+  against a frozen interface instead of each re-guessing the signature. Fill
+  `signature` only when the signature itself is the contract (a public library
+  API); otherwise codegen renders it from `inputs`/`output` + the tech stack.
 
-**Operation-completeness check (before closing the component).** Reflect on the
-drafted ops against the component's own signals: does every owned API
-`operation_id` map to an op? every `acceptance_criterion`? every entity the
-component reads/writes (a CRUD op)? Add the missing ones. Honour the
-anti-padding rule — a `validator` with one transform has one operation, not five.
+**Work_unit-completeness check (before closing the component).** Reflect on the
+drafted units against the component's own signals: does every owned API
+`operation_id` map to a work_unit? every `acceptance_criterion`? every entity the
+component reads/writes (a CRUD unit)? Add the missing ones. Honour the
+anti-padding rule — a `validator` with one transform has one work_unit, not five,
+and a private helper is not a work_unit.
 
-Persist the confirmed ops to the `defined_components` entry
-(`operations: [...]`) so resume doesn't re-draft them, and bump
-`state.last_ids.OPN` after each accepted op.
+Persist the confirmed units to the `defined_components` entry
+(`work_units: [...]`) so resume doesn't re-draft them. (No id counter — work_units
+are name-addressed.)
 
 ## Scope-completeness sweep (synthesis theme)
 

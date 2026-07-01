@@ -15,9 +15,9 @@ agree:
   * a corrupted container gold (an illegal `implements: [FR-005]` plus a dropped
     component — all its tasks) flips the validator to exit 1 AND flips grade.py
     must-assertions to fail;
-  * an operation-coverage corruption (drop ONE op-task while its component stays
-    covered by its other op-tasks) flips the validator to exit 1 on the
-    granularity:atomic operation-coverage gate ALONE — proving that gate bites
+  * a work-unit-coverage corruption (drop ONE work_unit task while its component
+    stays covered by its other work_unit tasks) flips the validator to exit 1 on
+    the atomic work-unit-coverage gate ALONE — proving that gate bites
     independently of component coverage;
   * a corrupted stitch gold (a system task's cross-file dep pointed at a
     non-existent backend-api/TSK-999) flips the validator to exit 1 AND flips
@@ -148,8 +148,8 @@ def main() -> int:
     corrupt = json.loads((GOLD / "TASKS__backend-api.json").read_text(encoding="utf-8"))
     # 1) illegal cross-scope requirement on a surviving task, 2) drop EVERY
     #    digest-settings-controller task — uncovering the component, its
-    #    operations (OPN-007/008) and its test (TST-004). Both must be caught.
-    #    (id-agnostic so it survives any re-slicing of the atomic gold.)
+    #    work_units (getDigestSettings/updateDigestSettings) and its test (TST-004).
+    #    Both must be caught. (id-agnostic so it survives any re-slicing of the gold.)
     for t in corrupt["tasks"]:
         if t.get("component_ref") == "tasks-controller":
             t.setdefault("implements", []).append("FR-005")
@@ -171,21 +171,21 @@ def main() -> int:
         print(f"      caught: {r['text']}")
     ok = ok and val_red and grade_red
 
-    print("== operation-coverage corruption (atomic gate: drop one op-task, component stays covered) ==")
-    # Drop exactly one op-task (OPN-002 / list-tasks). tasks-controller stays
-    # covered by its other op-tasks, so ONLY the operation-coverage gate should
-    # fire — proving the atomic gate bites independently of component coverage.
+    print("== work-unit-coverage corruption (atomic gate: drop one work_unit task, component stays covered) ==")
+    # Drop exactly one work_unit task (target_symbol == "listTasks"). tasks-controller
+    # stays covered by its other work_unit tasks, so ONLY the work-unit-coverage gate
+    # should fire — proving the atomic gate bites independently of component coverage.
     op_corrupt = json.loads((GOLD / "TASKS__backend-api.json").read_text(encoding="utf-8"))
     op_corrupt["tasks"] = [t for t in op_corrupt["tasks"]
-                           if t.get("implements_operations") != ["OPN-002"]]
+                           if t.get("target_symbol") != "listTasks"]
     odocs = SCRATCH / "op-corrupt" / "test-project" / "docs"
     _copy_tree(FIX / "web-app" / "docs", odocs)
     _copy_tree(FIX / "web-app-container" / "docs", odocs)
     (odocs / "TASKS__backend-api.json").write_text(json.dumps(op_corrupt, indent=2), encoding="utf-8")
     rc_o, out_o = _validate(SCRATCH / "op-corrupt" / "test-project")
-    op_red = rc_o == 1 and "operation coverage" in out_o and "OPN-002" in out_o
+    op_red = rc_o == 1 and "work-unit coverage" in out_o and "listTasks" in out_o
     op_comp_silent = "component coverage" not in out_o   # component stays covered
-    print(f"  drop one op-task: exit={rc_o}  {'RED (correct)' if op_red else 'UNEXPECTED — operation gate silent'}")
+    print(f"  drop one work_unit task: exit={rc_o}  {'RED (correct)' if op_red else 'UNEXPECTED — work-unit gate silent'}")
     print(f"  component stays covered (no component-coverage error): {'yes' if op_comp_silent else 'NO — unexpected'}")
     ok = ok and op_red and op_comp_silent
 

@@ -31,6 +31,10 @@ components:
       - "Pull jobs from the queue and process them."
     code_location:
       - "src/worker/"
+    work_units:
+      - name: processJob
+        summary: "Pull a queued job and process it."
+        status: confirmed
     status: confirmed
 internal_edges: []
 external_edges: []

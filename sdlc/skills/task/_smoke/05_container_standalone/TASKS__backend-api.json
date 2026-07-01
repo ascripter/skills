@@ -8,7 +8,6 @@
   },
   "container_id": "backend-api",
   "overview": "Container task subgraph smoke (no ARCH/TEST upstreams in this dir, so identity + coverage preconditions surface as DRAFT items). Exercises the container code path: scope integrity, depends_on resolution, kind checks.",
-  "granularity": "coarse",
   "tasks": [
     {
       "tsk_id": "TSK-001",
@@ -25,9 +24,10 @@
       "title": "Implement the auth service",
       "kind": "implementation",
       "component_ref": "auth-service",
-      "description": "Implement authenticate()/issue-token behaviour.",
+      "target_symbol": "AuthService.authenticate",
+      "description": "Implement the authenticate() behaviour.",
       "depends_on": ["TSK-001"],
-      "target_files": ["src/auth/service.py", "src/auth/tokens.py"],
+      "target_files": ["src/auth/service.py"],
       "outputs": ["auth-service.authenticate() exported"],
       "acceptance": ["src/auth/service.py exposes authenticate()"],
       "priority": "must",

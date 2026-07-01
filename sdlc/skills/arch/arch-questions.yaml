@@ -1021,27 +1021,32 @@ questions:
     importance: med
 
   - theme: per_component_deepdive
-    id: operations
-    schema_path: component.operations
+    id: work_units
+    schema_path: component.work_units
     question: >
-      What are this component's operations — the method/function-level units of
-      work it performs? (Approve the drafted list, or edit it.)
+      What are this component's work_units — the named method/function-level
+      CALLABLES it exposes? (Approve the drafted list, or edit it.)
     hint: >
-      THE component→code seam. The downstream `task` skill slices ONE atomic task
-      per operation, so this is what makes method-level task breakdown possible;
-      a component with no operations can only be sliced coarsely (one task for the
-      whole component). DRAFT the list, don't ask cold — derive one operation per
-      owned API operation (controllers/api_clients, set traces_api_operation), per
-      entity CRUD verb (repositories, set touches_entities), or per behaviour the
-      responsibilities + acceptance_criteria + implements_requirements imply
-      (services/use_cases). Each op carries op_id (OPN-NNN, writer-managed in
-      state.last_ids.OPN, unique per file), name (verb-first), summary (one line),
-      and optional traces (traces_api_operation, implements_requirements ⊆ the
-      component's, touches_entities) + an optional signature (inputs/outputs/
-      errors) for codegen-grade components. Before closing, cross-check the
-      drafted ops against the component's API operations / acceptance_criteria /
-      traced entities — every one should map to an operation. Skip for trivial
-      plumbing (config_loader, serializer, observability_bootstrap, error_handler).
+      THE component→code seam. The downstream `task` skill slices EXACTLY ONE
+      atomic implementation task per work_unit (its target_symbol = the work_unit
+      name), so this is what makes method-level task breakdown possible; a
+      component with no work_units yields no implementation task. DRAFT the list,
+      don't ask cold — enumerate the PUBLIC / contract-bearing callables (those
+      realizing a traced contract or sitting on an internal/external edge, NOT
+      every private helper): one per owned API operation (controllers/api_clients,
+      set traces_api_operation), per entity CRUD verb (repositories, set
+      touches_entities), or per behaviour the responsibilities + acceptance_criteria
+      + implements_requirements imply (services/use_cases). Each work_unit carries
+      name (the callable — method / function / Class.method — UNIQUE within this
+      component; no id family), summary (one line), optional traces
+      (traces_api_operation, implements_requirements ⊆ the component's,
+      touches_entities), and a DEFER-OR-DECLARE interface contract
+      (inputs/output/raises/signature): defer to a schema-bearing traced contract
+      when one exists, else declare it so atomic tasks compose against a frozen
+      interface. Before closing, cross-check the drafted units against the
+      component's API operations / acceptance_criteria / traced entities — every
+      one should map to a work_unit. Skip for trivial plumbing (config_loader,
+      serializer, observability_bootstrap, error_handler).
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -1058,8 +1063,8 @@ questions:
     question: "Confirm the derived internal edges between components (or edit per row)?"
     hint: >
       Derivation rules:
-       * controller → service (calls)  ⇒ pre-fill via_resource_id +
-         via_operation_id when the controller component traces them.
+       * controller → service (calls)  ⇒ pre-fill via_unit (the service
+         work_unit being invoked) + via_resource_id when the controller traces it.
        * service → repository (calls)  ⇒ pre-fill via_entity.
        * repository → cache_client     ⇒ reads/writes (pre-fill via_entity).
        * service → event_handler       ⇒ publishes (pre-fill via_channel_id).

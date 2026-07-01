@@ -1,49 +1,49 @@
-# Granularity & ordering — the slice and the stitch (sdlc-task)
+# Slicing & ordering — the slice and the stitch (sdlc-task)
 
-Read this in Phases 3–6. Two decisions shape every task graph: how finely work
-is **sliced** into tasks (granularity), and how those tasks are **ordered** into
-a dependency graph that the codegen factory can execute (the stitch). Both come
-straight from the demo PRD's FR-013.
+Read this in Phases 3–6. Two things shape every task graph: how work is **sliced**
+into tasks (always atomic — one task per work_unit) and how those tasks are
+**ordered** into a dependency graph that the codegen factory can execute (the
+stitch). Both come straight from the demo PRD's FR-013.
 
 ---
 
-## Granularity (atomic vs component) — DEFAULT atomic
+## Atomic slicing — always one task per work_unit
 
-The one required structural decision. **Default to `atomic`** — the whole point
-of this skill is to feed the codegen factory *method-level* work units, because
-it fans one sub-agent out per task: atomic tasks mean tight per-task context,
-cheaper + higher-quality generation, and a clean 1:1 between a task and the test
-that verifies it.
+There is no granularity knob and no coarse fallback. The whole point of this skill
+is to feed the codegen factory *method-level* work units, because it fans one
+sub-agent out per task: atomic tasks mean tight per-task context, cheaper +
+higher-quality generation, and a clean 1:1 between a task and the test that
+verifies it.
 
-- **atomic** — slice to the finest unit the *architecture declares*:
-  - **one `implementation` task per component operation** — each `OPN-NNN` in the
-    component's `operations[]` (ARCH__<container>.yaml) becomes its own task,
-    scoped `component_ref` + `implements_operations: [OPN-NNN]`. The op's traces
-    ride up onto the task (`touches_operations` ← the op's `traces_api_operation`,
-    `implements` ← its `implements_requirements`, `touches_entities` ← its
-    `touches_entities`).
-  - **one `test` task per `TST-NNN`** — never grouped (see below).
-  - **one `migration` task per entity**.
-  - A component that declares **no** `operations[]` falls back to **one task for
-    the whole component** (graceful degradation — the validator warns, and ARCH
-    should be enriched with operations to fix it at the source, not papered over
-    here). The atomicity gate only bites for components that *do* declare ops.
-- **component** — the old coarse mode: one `implementation` task per component,
-  regardless of how many operations it has. Reserve for tiny apps / components
-  where per-method tasks would be noise.
+Slice to the finest unit the *architecture declares*:
 
-The trade-off, worth stating to the user: atomic = more, cheaper-context tasks
-but more `depends_on` edges to order and more total orchestration; `component` =
-fewer, larger tasks each carrying a whole component's context. Container
-interviews inherit the system-mode default unless overridden. Legacy files
-written `coarse`/`fine` are read as `component`/`atomic`.
+- **one `implementation` task per component work_unit** — each `work_units[].name`
+  in the component's `work_units[]` (ARCH__<container>.yaml) becomes its own task,
+  scoped `component_ref` + `target_symbol: <the work_unit name>` + a **single**
+  `target_files` entry (the file housing that callable). The unit's traces ride up
+  onto the task (`touches_operations` ← the unit's `traces_api_operation`,
+  `implements` ← its `implements_requirements`, `touches_entities` ← its
+  `touches_entities`). The task inherits the unit's interface contract
+  (`inputs`/`output`/`raises`/`signature`) live from ARCH — don't duplicate it.
+- **one `test` task per `TST-NNN`** — never grouped (see below).
+- **one `migration` task per entity**.
+- A component that declares **no** `work_units[]` yields **no implementation
+  task** — it is pure plumbing (or an ARCH gap to fix at the source, not papered
+  over with a coarse whole-component task). There is no whole-component fallback.
 
-**The operation-coverage gate is what makes atomic stick.** Under `atomic`, the
-validator *blocks* `complete` until every `OPN-NNN` across the container's
-components is realized by a task naming it in `implements_operations` OR deferred
-with a `WRN-NNN`. A bare `component_ref` does **not** transitively cover the
-component's operations under atomic — that is the point. (Under `component` the
-same check is advisory and transitive.) See `coverage-and-defer.md`.
+The trade-off, worth stating to the user: atomic = more, cheaper-context tasks but
+more `depends_on` edges to order and more total orchestration. That's the deal the
+codegen factory wants.
+
+**The work-unit coverage gate is what makes atomic stick.** The validator *blocks*
+`complete` until every `work_units[].name` across the container's components is
+realized by **exactly one** task naming it in `target_symbol` OR deferred with a
+`WRN-NNN`. A bare `component_ref` does **not** transitively cover the component's
+work_units — that is the point — and no two tasks may share a `target_symbol`
+(each callable is built once). See `coverage-and-defer.md`. The per-archetype
+guide to *what counts as a work_unit* (one per API operation / entity CRUD verb /
+service behaviour — contract-bearing callables, not private helpers) lives in
+`sdlc/skills/arch/references/component-discovery.md` → "Deriving work_units".
 
 Whatever the choice, **a test task is always its own task — one per `TST-NNN`,
 never grouped.** Granularity only slices implementation work; a `TST-NNN` is

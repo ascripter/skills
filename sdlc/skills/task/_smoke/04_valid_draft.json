@@ -7,7 +7,6 @@
     "status": "draft"
   },
   "overview": "Smoke fixture: a partial DRAFT (missing build_order + task fields). Expect [OK] DRAFT with items to resolve.",
-  "granularity": "coarse",
   "tasks": [
     {
       "tsk_id": "TSK-001",

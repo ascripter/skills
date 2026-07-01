@@ -7,7 +7,6 @@
     "status": "complete"
   },
   "overview": "Smoke fixture: a dependency cycle TSK-001 <-> TSK-002. Expect [FAIL] cycle.",
-  "granularity": "coarse",
   "build_order": ["backend-api"],
   "tasks": [
     {

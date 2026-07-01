@@ -447,7 +447,7 @@ mode.
 9. `per_component_deepdive` — `critical` per component. Mirrors
    `sdlc:api`'s `per_resource_deepdive`: for each component, an interview
    fills `component_id`, `archetype`, `purpose`, `responsibilities`,
-   `code_location`, `operations`, `inputs`, `outputs`, `failure_modes`,
+   `code_location`, `work_units`, `inputs`, `outputs`, `failure_modes`,
    `traces_api_resources` / `traces_ux_surfaces` / `traces_data_entities`,
    and `implements_requirements` (FR-NNN / NFR-NNN) / `traces_prd_workflows`
    (WKF-NNN) where applicable. A component's `implements_requirements` must
@@ -455,14 +455,18 @@ mode.
    code-module seam) is drafted from the component's archetype + the
    container's source layout (`importance: high` mini-section); downstream
    `task` grounds each task's `target_files` in it, so don't leave it vague
-   for non-trivial components. `operations` (the component → code seam) is the
-   method/function-level unit list, drafted per archetype (`importance: high`):
-   one op per owned API operation / entity CRUD verb / behaviour the
-   responsibilities imply, each an `OPN-NNN` with `name` + `summary` (+ optional
-   traces/signature). Downstream `task` slices **one atomic task per operation**,
-   so a component with no operations can only be sliced coarsely. See
+   for non-trivial components. `work_units` (the component → code seam) is the
+   list of named method/function-level **callables** this component exposes,
+   drafted per archetype (`importance: high`): one per owned API operation /
+   entity CRUD verb / behaviour the responsibilities imply — enumerate the
+   PUBLIC / contract-bearing callables (not every private helper), each with a
+   `name` (the callable, unique within the component — no id family) + `summary`
+   (+ optional traces and a defer-or-declare `inputs`/`output`/`raises`/
+   `signature` contract). Downstream `task` slices **exactly one atomic task per
+   work_unit** (its `target_symbol` = the work_unit name), so a component with no
+   work_units yields no implementation task. See
    `references/component-discovery.md` → "Deriving code_location" and
-   "Deriving operations".
+   "Deriving work_units".
 10. `internal_and_external_edges` — `critical` synthesis (see
     `references/edge-derivation.md`). Once components carry `code_location`,
     keep the call graph **layering-legal**: a `calls`/`reads`/`writes` edge
@@ -547,9 +551,11 @@ checks emit warnings only.
    container (system-level edges) or `<container_id>/<component_id>`
    (container-level external edges) or `<component_id>` (container-level
    internal edges).
-5. **Edge via_\* resolution** — every `via_resource_id` /
-   `via_operation_id` / `via_channel_id` / `via_entity` (when set)
-   resolves to an upstream artifact. Typos in `via_*` are blocking errors.
+5. **Edge via_\* resolution** — every `via_resource_id` / `via_unit`
+   (internal edges → a `work_units[].name` on the `to` component) /
+   `via_operation_id` (external edges → an API operation) / `via_channel_id` /
+   `via_entity` (when set) resolves to an upstream artifact. Typos in `via_*`
+   are blocking errors.
 
 **Container/component consistency** (block complete):
 
@@ -580,15 +586,17 @@ checks emit warnings only.
     `code_location` emits a warning: downstream `task`/codegen will have to
     infer its file placement. Non-blocking (placement can be deferred), but
     filling it is what makes autonomous downstream codegen hold.
-13. **Component `operations` integrity (#21)** — every `operations[].op_id` is
-    `OPN-NNN` + unique in the file; `name`/`summary` non-empty; each op's
+13. **Component `work_units` integrity (#21)** — every `work_units[].name` is
+    non-empty and **unique within its owning component** (work_units are addressed
+    as `(component, name)` — no id family); `summary` non-empty; each unit's
     `traces_api_operation` resolves to an API operation_id,
     `implements_requirements` ⊆ the owning component's, and `touches_entities` ⊆
     the component's `traces_data_entities`. Failures block `complete`. The list
-    itself is optional, but a non-trivial component with no operations emits a
-    non-blocking warning (downstream `task` can only slice it coarsely).
-    `via_operation_id` on an internal/external edge now also resolves against a
-    component operation (`operations[].name`/`op_id`), not just API operations.
+    itself is optional, but a non-trivial component with no work_units emits a
+    non-blocking warning (downstream `task` produces no atomic task for it).
+    A `calls` internal edge's `via_unit` resolves against a `work_units[].name`
+    on the edge's `to` component; an external edge's `via_operation_id` resolves
+    against an API operation.
 
 For merge logic, the recovery flow on `[FAIL]`, and the CLAUDE.md pointer
 rules → see `references/merge-validate.md`.
@@ -708,10 +716,9 @@ sessions:
     mode: container
     container_id: backend-api
     pre_fill_confirmed: false
-    last_ids: {}                # this container file's WRN (arch_warnings) +
-                                # OPN (component operations) spaces, e.g.
-                                # {WRN: 2, OPN: 14}. Bump OPN after each accepted
-                                # operation; reconcile to max(on_disk, state) on resume.
+    last_ids: {}                # this container file's WRN (arch_warnings) space,
+                                # e.g. {WRN: 2}. work_units carry NO id family
+                                # (addressed as (component, name)), so no OPN counter.
     completed_themes: []
     skipped_themes: []
     todo_themes: []

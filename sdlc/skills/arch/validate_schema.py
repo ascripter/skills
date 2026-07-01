@@ -34,7 +34,7 @@ Validates:
          container_id (system level) or component_id (container level),
          and external_edges' `to` resolves against the on-disk graph.
        - Edge via_* resolution against API / DATA upstreams.
-       - Component traces (api/ux/data/operations) resolve upstream and
+       - Component traces (api/ux/data/work_units) resolve upstream and
          sit within the parent container's owns_*.
        - implements_requirements / traces_prd_workflows resolve to PRD
          FR-NNN/NFR-NNN / WKF-NNN ids; component features ⊆ parent
@@ -448,17 +448,20 @@ class SecurityConcern(_Base):
 ContainerSecurityConcern = Union[SecurityConcern, str]
 
 
-class Operation(_Base):
-    """A component's method/function-level unit of work (cross-check #21).
+class WorkUnit(_Base):
+    """A single named callable a component exposes (C4 interface level; cross-check #21).
 
-    op_id (OPN-NNN) is the stable handle the downstream `task` skill references
-    to slice ONE atomic task per operation. name + summary are required; every
-    trace + signature field is optional (lightweight by default, signature
-    opt-in for codegen-grade components). `outputs` is left untyped (str or
-    list) since it is a free-form signature hint.
+    Addressed as (component, name) — there is NO id family. `name` is the callable
+    (method / function / Class.method), unique within its owning component; it is the
+    stable handle the downstream `task` skill references as a Task.target_symbol to
+    slice EXACTLY ONE atomic implementation task per work_unit. name + summary are
+    required; every trace field is optional. The interface contract
+    (inputs/output/raises/signature) is DEFER-OR-DECLARE: a work_unit realizing a
+    schema-bearing traced contract may leave them empty and defer; a domain callable
+    declares them so atomic tasks compose against a frozen interface. `output` is left
+    untyped (str) since it is a free-form return hint.
     """
 
-    op_id: Optional[str] = None
     name: Optional[str] = None
     summary: Optional[str] = None
     traces_api_operation: Optional[str] = None          # operation_id in API__*.yaml
@@ -466,8 +469,9 @@ class Operation(_Base):
     touches_entities: Optional[List[str]] = None         # ⊆ component traces_data_entities
     satisfies_acceptance: Optional[List[str]] = None
     inputs: Optional[List[str]] = None
-    outputs: Optional[Any] = None
-    errors: Optional[List[str]] = None
+    output: Optional[Any] = None
+    raises: Optional[List[str]] = None
+    signature: Optional[str] = None
     status: Optional[ContainerStatus] = None
 
 
@@ -488,7 +492,7 @@ class Component(_Base):
     traces_prd_workflows: Optional[List[str]] = None      # WKF-NNN
     failure_modes: Optional[List[ComponentFailureMode]] = None
     acceptance_criteria: Optional[List[str]] = None
-    operations: Optional[List[Operation]] = None          # OPN-NNN method units
+    work_units: Optional[List[WorkUnit]] = None           # named callables (component,name)
     status: Optional[ContainerStatus] = None
 
 
@@ -497,7 +501,7 @@ class InternalEdge(_Base):
     to: Optional[str] = None
     type: Optional[EdgeType] = None
     via_resource_id: Optional[str] = None
-    via_operation_id: Optional[str] = None
+    via_unit: Optional[str] = None       # work_units[].name on the `to` component
     via_entity: Optional[str] = None
     note: Optional[str] = None
 
@@ -664,7 +668,6 @@ _WKF_PREFIX_RE = re.compile(r"^WKF-\d{3,}$", re.IGNORECASE)
 # (every must-have FR) is unaffected: it only counts FR-NNN entries.
 _FR_OR_NFR_PREFIX_RE = re.compile(r"^(?:FR|NFR)-\d{3,}$", re.IGNORECASE)
 _NFR_ID_RE = re.compile(r"^NFR-\d+", re.IGNORECASE)
-_OPN_PREFIX_RE = re.compile(r"^OPN-\d{3,}$", re.IGNORECASE)
 
 
 def check_warning_ids(warnings: List[str], label: str) -> List[str]:
@@ -745,7 +748,8 @@ def load_api_operation_ids(docs_dir: Path) -> Set[str]:
     """Return the union of every operation_id across all docs/API__*.yaml.
 
     Operation IDs come from API__<resource>.yaml endpoints[].operation_id.
-    Used to validate Component.traces_api_operations and Edge.via_operation_id.
+    Used to validate Component.traces_api_operations, WorkUnit.traces_api_operation,
+    and ExternalEdge.via_operation_id.
     """
     op_ids: Set[str] = set()
     for path in sorted(docs_dir.glob("API__*.yaml")):
@@ -1379,20 +1383,21 @@ def check_component_code_location(
     return warnings
 
 
-def check_component_operations(
+def check_component_work_units(
     container: ArchContainer,
     file_label: str,
     api_operation_ids: Set[str],
     data_entity_names: Set[str],
 ) -> Tuple[List[str], List[str]]:
-    """Cross-check #21 — validate each component's operations[] (the method/
-    function units the downstream `task` skill slices one atomic task per).
+    """Cross-check #21 — validate each component's work_units[] (the named callables
+    the downstream `task` skill slices exactly one atomic task per).
 
     Returns (errs, warns). Errs force draft / block complete; warns are advisory.
 
       errs:
-        * op_id matches OPN-NNN and is unique across the whole file.
-        * name + summary are non-empty.
+        * name is non-empty and UNIQUE within its owning component (work_units are
+          addressed as (component, name) — there is no id family).
+        * summary is non-empty.
         * traces_api_operation resolves to an API operation_id (when API present).
         * implements_requirements are FR/NFR format AND ⊆ the OWNING component's
           implements_requirements.
@@ -1400,21 +1405,21 @@ def check_component_operations(
           DATA-MODEL entity when present).
       warns:
         * a non-trivial component (same set as code_location #20) that carries a
-          trace but declares no operations — `task` can only slice it coarsely.
+          trace but declares no work_units — `task` produces no atomic task for it.
 
-    op_id uniqueness is checked here (not as a raising model_validator) so a draft
-    with duplicate ids stays loadable and reports a fixable error.
+    Name uniqueness is checked here (not as a raising model_validator) so a draft
+    with duplicate names stays loadable and reports a fixable error.
     """
     errs: List[str] = []
     warns: List[str] = []
-    seen_op_ids: Dict[str, str] = {}        # OP_ID(upper) -> component_id
     for i, comp in enumerate(container.components or []):
         cid = comp.component_id
         archetype = comp.archetype.value if comp.archetype else None
         comp_reqs = {str(r).strip().upper() for r in (comp.implements_requirements or [])}
         comp_ents = {str(e).strip() for e in (comp.traces_data_entities or [])}
-        ops = comp.operations or []
-        if not ops and archetype not in _PLUMBING_COMPONENT_ARCHETYPES:
+        units = comp.work_units or []
+        seen_names: Set[str] = set()            # names seen within THIS component
+        if not units and archetype not in _PLUMBING_COMPONENT_ARCHETYPES:
             has_trace = any([
                 comp.traces_api_resources, comp.traces_api_operations,
                 comp.traces_ux_surfaces, comp.traces_data_entities,
@@ -1422,28 +1427,24 @@ def check_component_operations(
             ])
             if has_trace:
                 warns.append(
-                    f"{file_label}: components[{i}]='{cid}' declares no operations "
-                    f"— downstream `task` can only slice it coarsely (one task for "
-                    f"the whole component, not one per method/operation)"
+                    f"{file_label}: components[{i}]='{cid}' declares no work_units "
+                    f"— downstream `task` produces no atomic implementation task for "
+                    f"it (enumerate its public/contract-bearing callables)"
                 )
-        for j, op in enumerate(ops):
-            where = f"{file_label}: components[{i}]='{cid}'.operations[{j}]"
-            op_id = (op.op_id or "").strip()
-            if not op_id:
-                errs.append(f"{where}: missing op_id")
-            elif not _OPN_PREFIX_RE.match(op_id):
-                errs.append(f"{where}.op_id='{op.op_id}' must match OPN-NNN")
+        for j, op in enumerate(units):
+            where = f"{file_label}: components[{i}]='{cid}'.work_units[{j}]"
+            name = (op.name or "").strip()
+            if not name:
+                errs.append(f"{where}: missing name")
             else:
-                key = op_id.upper()
-                if key in seen_op_ids:
+                key = name.lower()
+                if key in seen_names:
                     errs.append(
-                        f"{where}.op_id='{op_id}' is duplicated "
-                        f"(already used by component '{seen_op_ids[key]}')"
+                        f"{where}.name='{name}' is duplicated within component "
+                        f"'{cid}' (work_unit names must be unique per component)"
                     )
                 else:
-                    seen_op_ids[key] = cid
-            if not (op.name or "").strip():
-                errs.append(f"{where}: missing name")
+                    seen_names.add(key)
             if not (op.summary or "").strip():
                 errs.append(f"{where}: missing summary")
             if op.traces_api_operation:
@@ -1516,39 +1517,29 @@ def check_edge_via_fields_container(
     data_entity_names: Set[str],
 ) -> List[str]:
     """Cross-check #15 (container scope) — every InternalEdge/ExternalEdge
-    via_* (when set) resolves to upstream artifact.
+    via_* (when set) resolves to an upstream artifact.
 
-    `via_operation_id` resolves against the API operation set OR a component
-    operation (operations[].name / op_id) of a component in this container, so an
-    INTERNAL (non-API) call edge can name the callee's method.
+    Internal edges name the callee's method via `via_unit` (a work_units[].name on
+    the edge's `to` component). External edges name a called API endpoint via
+    `via_operation_id` (an API operation_id). The shared via_* fields
+    (via_resource_id / via_channel_id / via_entity) resolve as before.
     """
     errs: List[str] = []
 
-    # Component-operation tokens (names + OPN-NNN ids) declared in this container.
-    comp_op_tokens: Set[str] = set()
+    # work_unit names declared per component in this container.
+    units_by_component: Dict[str, Set[str]] = {}
     for comp in container.components or []:
-        for op in (comp.operations or []):
-            if op.op_id:
-                comp_op_tokens.add(str(op.op_id).strip())
-            if op.name:
-                comp_op_tokens.add(str(op.name).strip())
-    known_ops = api_operation_ids | comp_op_tokens
+        names = {str(op.name).strip() for op in (comp.work_units or []) if op.name}
+        units_by_component[comp.component_id] = names
 
-    def _check(label: str, e: Any) -> None:
+    def _check_shared(label: str, e: Any) -> None:
         rid = getattr(e, "via_resource_id", None)
-        oid = getattr(e, "via_operation_id", None)
         cid = getattr(e, "via_channel_id", None)
         ent = getattr(e, "via_entity", None)
         if rid and api_resource_ids and rid not in api_resource_ids:
             errs.append(
                 f"{file_label}: {label}.via_resource_id='{rid}' "
                 f"is not a resource_id in any API__*.yaml"
-            )
-        if oid and known_ops and oid not in known_ops:
-            errs.append(
-                f"{file_label}: {label}.via_operation_id='{oid}' "
-                f"is not an API operation_id (API__*.yaml) or a component "
-                f"operation (operations[].name/op_id) in this container"
             )
         if cid and api_channel_ids and cid not in api_channel_ids:
             errs.append(
@@ -1562,9 +1553,28 @@ def check_edge_via_fields_container(
             )
 
     for i, e in enumerate(container.internal_edges or []):
-        _check(f"internal_edges[{i}]", e)
+        label = f"internal_edges[{i}]"
+        _check_shared(label, e)
+        # via_unit → a work_unit name on the edge's `to` component (which lives in
+        # this container). Only checkable when the `to` component is known here.
+        unit = getattr(e, "via_unit", None)
+        if unit and e.to and e.to in units_by_component:
+            known = units_by_component[e.to]
+            if known and unit not in known:
+                errs.append(
+                    f"{file_label}: {label}.via_unit='{unit}' is not a "
+                    f"work_units[].name on component '{e.to}'"
+                )
     for i, e in enumerate(container.external_edges or []):
-        _check(f"external_edges[{i}]", e)
+        label = f"external_edges[{i}]"
+        _check_shared(label, e)
+        # via_operation_id → an API endpoint on the called (external) container.
+        oid = getattr(e, "via_operation_id", None)
+        if oid and api_operation_ids and oid not in api_operation_ids:
+            errs.append(
+                f"{file_label}: {label}.via_operation_id='{oid}' "
+                f"is not an operation_id in any API__*.yaml"
+            )
     return errs
 
 
@@ -1800,7 +1810,7 @@ def validate_all(arch_path: Path) -> int:
         edge_errs_containers.extend(check_container_edges(c, name, arch))
         consistency_errs.extend(check_container_self_consistency(c, arch, name))
         code_location_warnings.extend(check_component_code_location(c, name))
-        op_errs, op_warns = check_component_operations(
+        op_errs, op_warns = check_component_work_units(
             c, name, api_operation_ids, data_entity_names
         )
         component_op_errs.extend(op_errs)
@@ -1851,7 +1861,7 @@ def validate_all(arch_path: Path) -> int:
         ("PRD trace ID-format error(s) (expected FR-NNN / WKF-NNN)", id_format_errs),
         ("PRD must-have FR-NNN feature(s) implemented by no container", uncovered_features),
         ("implements_requirements / traces_prd_workflows resolution error(s)", prd_trace_errs),
-        ("component operation integrity error(s) (cross-check 21)", component_op_errs),
+        ("component work_unit integrity error(s) (cross-check 21)", component_op_errs),
     ]
 
     # 6) Reporting — hard problems force draft / block complete.
@@ -2069,7 +2079,7 @@ def _print_warnings(
             print(f"  - {w}")
     if operation_warnings:
         print()
-        print(f"WARNINGS ({len(operation_warnings)} component(s) without operations):")
+        print(f"WARNINGS ({len(operation_warnings)} component(s) without work_units):")
         for w in operation_warnings:
             print(f"  - {w}")
 

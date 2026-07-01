@@ -53,13 +53,6 @@ metadata:                                  # REQUIRED
 overview: <two or three sentences>          # REQUIRED — what bootstrapping + wiring this system entails
 
 # ---------------------------------------------------------------------------
-# granularity — global default the per-container interviews inherit. DEFAULT:
-# atomic (one task per component operation / per TST-NNN). `component` = coarse
-# (one task per component). Legacy aliases on read: fine→atomic, coarse→component.
-# ---------------------------------------------------------------------------
-granularity: atomic | component             # REQUIRED (default: atomic)
-
-# ---------------------------------------------------------------------------
 # build_order — the container sequence the codegen orchestrator builds in.
 # Topologically ordered by ARCH.yaml inter-container edges: a provider (the
 # target of a `calls`/`depends_on` edge) comes before its consumers, so a

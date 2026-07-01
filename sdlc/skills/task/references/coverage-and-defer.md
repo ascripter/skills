@@ -22,34 +22,34 @@ An upstream item counts as **realized** if *either*:
    building that component reads its `ARCH__<cid>` trace, so the operation /
    surface / entity / requirement is reachable for it.
 
-So you do **not** have to re-list every operation on every coarse controller, nor
+So you do **not** have to re-list every API operation on every controller task, nor
 every entity on the repository task. Realize the component and the things it
 traces ride along. The gate only forces an explicit choice for items that *no*
 realized component traces — the genuinely orphaned ones, which are exactly the
 silent-drop risks. Everything not realized must be **deferred** (named in a
 `WRN-NNN`).
 
-**The one exception is component operations under `granularity: atomic`.** There,
-transitive credit is deliberately switched OFF for `OPN-NNN`: a bare
-`component_ref` does not cover the component's operations — each must be named in
-some task's `implements_operations` (or deferred). That is what forces the
-one-task-per-method slicing atomic exists to produce. (Everything else — surfaces,
-API operations, entities, requirements — still gets transitive credit as above.)
+**The one exception is component work_units.** There, transitive credit is
+deliberately switched OFF: a bare `component_ref` does not cover the component's
+work_units — each must be named by **exactly one** task's `target_symbol` (or
+deferred), and no two tasks may share a `target_symbol`. That is what forces the
+one-task-per-method slicing this skill exists to produce. (Everything else —
+surfaces, API operations, entities, requirements — still gets transitive credit
+as above.)
 
 ## What is gated (all block `complete` — trace-or-defer)
 
 ### Container file (`TASKS__<container>.json`)
 
 - **Components** — every `components[].component_id` in `ARCH__<cid>.yaml`.
-- **Component operations (the atomicity gate, granularity-conditional)** — every
-  `OPN-NNN` in any `components[].operations[]` of `ARCH__<cid>.yaml`. Under
-  **`granularity: atomic`** (the default) this is a **blocking** trace-or-defer
-  gate: an `OPN-NNN` is realized only when a task **names it** in
-  `implements_operations`; a bare `component_ref` does **not** transitively cover
-  it. Under **`granularity: component`** the same check is **advisory** and a
-  realized component covers its operations. Softens to a no-op when no component
-  declares operations (older ARCH files). This is distinct from the API
-  **Operations** gate below (component methods vs API endpoint operation_ids).
+- **Component work_units (the atomicity gate — always blocking)** — every
+  `work_units[].name` in any `components[].work_units[]` of `ARCH__<cid>.yaml`.
+  A work_unit is realized only when **exactly one** task **names it** in
+  `target_symbol`; a bare `component_ref` does **not** transitively cover it, and
+  no two tasks may share a `target_symbol`. Softens to a no-op only for a
+  component that declares no work_units (pure plumbing — no coarse fallback). This
+  is distinct from the API **Operations** gate below (component callables vs API
+  endpoint operation_ids).
 - **Tests** — every `tests[].tst_id` in `TEST-STRATEGY__<cid>.yaml` (first-class).
 - **Surfaces** — every `SCR` in the container's `owns_ux_surfaces` (ARCH.yaml,
   resolved slug→SCR via `UX.yaml`). Backend containers own none ⇒ trivially met.
@@ -97,8 +97,8 @@ API operations, entities, requirements — still gets transitive credit as above
 Realize the item from a task (or rely on a realized component that traces it):
 
 - a component → a task with `component_ref: <that component>` (kind:implementation).
-- a component operation (`OPN-NNN`) → a task with `component_ref` set AND
-  `implements_operations: [<OPN-NNN>]` (the atomic unit under granularity:atomic).
+- a component work_unit (`work_units[].name`) → a task with `component_ref` set AND
+  `target_symbol: <that name>` + a single `target_files` (the atomic unit).
 - a test → a task with `implements_tests: [<TST-NNN>]` (kind:test).
 - a surface → a frontend task with `implements_surfaces: [<SCR-NNN>]`.
 - an operation → a task with `touches_operations: [<operation_id>]` (or a realized
@@ -151,9 +151,9 @@ flow → dynamic scope-completeness sweep"). For `task`, reflect on:
   tasks for a container that has repository components and DATA entities? no
   `scaffold` task at all? a token_based_ui frontend with no `design` task?);
 - **every upstream ID family**, not just the most direct one — ARCH components
-  AND their `operations[]` (`OPN-NNN` — under atomic, is every operation sliced
-  into its own task?) AND internal edges, TEST `TST-NNN`, PRD FR/NFR, PRD `WKF`,
-  DATA entities
+  AND their `work_units[]` (is every work_unit sliced into its own task with a
+  matching `target_symbol`?) AND internal edges, TEST `TST-NNN`, PRD FR/NFR, PRD
+  `WKF`, DATA entities
   (migrations), API operations (endpoint tasks), UX `SCR` surfaces (frontend impl
   tasks), DESIGN tokens/`AST` assets (design tasks), `config_loader` components
   (config tasks);

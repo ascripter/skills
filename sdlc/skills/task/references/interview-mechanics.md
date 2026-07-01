@@ -35,9 +35,9 @@ Both themes are `critical synthesis: true`. Run each candidate task through:
    `TST-007`" / "integration task for edge `web-frontend`→`backend-api`").
 2. **challenge** — confirm the `kind` and the scope. An implementation task must
    be scoped to one component (`component_ref`) or one contract
-   (`touches_operations`) — push back on a task that tries to do two components
-   at once (split it) or a vague task with no scope. Confirm the granularity slice
-   matches the build_plan choice.
+   (`touches_operations`) and build exactly one work_unit (`target_symbol`) in one
+   file (`target_files`) — push back on a task that tries to do two work_units /
+   two components at once (split it) or a vague task with no scope.
 3. **detail** — fill `depends_on` (the ordering edges), `inputs`, `outputs`
    (what the codegen agent emits), `acceptance` (machine-checkable done
    conditions), and `priority`. For a `test` task, `acceptance` is usually "the

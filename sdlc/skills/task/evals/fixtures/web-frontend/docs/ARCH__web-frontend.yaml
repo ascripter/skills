@@ -63,6 +63,11 @@ components:
     traces_prd_workflows: [WKF-001]
     acceptance_criteria:
       - "The list renders tasks newest-first and a create action is reachable."
+    work_units:
+      - name: TaskListPage
+        summary: "Render the paginated task list with create/triage actions."
+        implements_requirements: [FR-001]
+        status: confirmed
     status: confirmed
 
   - component_id: task-detail-view
@@ -76,6 +81,11 @@ components:
     traces_prd_workflows: [WKF-001]
     acceptance_criteria:
       - "Marking a task done updates the view without a full reload."
+    work_units:
+      - name: TaskDetailPage
+        summary: "Render one task with its status controls."
+        implements_requirements: [FR-001, FR-003]
+        status: confirmed
     status: confirmed
 
   - component_id: comments-panel-view
@@ -87,6 +97,11 @@ components:
     traces_ux_surfaces: [comments-panel]
     implements_requirements: [FR-002]
     traces_prd_workflows: [WKF-002]
+    work_units:
+      - name: CommentsPanel
+        summary: "List and add comments on the open task."
+        implements_requirements: [FR-002]
+        status: confirmed
     status: confirmed
 
   - component_id: digest-settings-view
@@ -98,6 +113,11 @@ components:
     traces_ux_surfaces: [digest-settings]
     implements_requirements: [FR-004]
     traces_prd_workflows: [WKF-003]
+    work_units:
+      - name: DigestSettingsPage
+        summary: "Render the weekly digest settings form and recent runs."
+        implements_requirements: [FR-004]
+        status: confirmed
     status: confirmed
 
   - component_id: api-client
@@ -107,6 +127,10 @@ components:
       - "Call the tasks/comments/digest-settings endpoints with auth."
     code_location: ["src/lib/api/"]
     traces_api_resources: [tasks, comments, digest-settings]
+    work_units:
+      - name: ApiClient
+        summary: "Typed client over the backend REST API (tasks/comments/digest-settings) with auth."
+        status: confirmed
     status: confirmed
 
 internal_edges:

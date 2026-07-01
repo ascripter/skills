@@ -85,8 +85,10 @@ This validates:
 
    - `via_resource_id` (when set) resolves to a resource_id in some
      `API__*.yaml`.
-   - `via_operation_id` (when set) resolves to an `operation_id` under
-     `API__*.yaml.endpoints[].operation_id`.
+   - `via_unit` (internal edges, when set) resolves to a `work_units[].name`
+     on the edge's `to` component.
+   - `via_operation_id` (external edges, when set) resolves to an
+     `operation_id` under `API__*.yaml.endpoints[].operation_id`.
    - `via_channel_id` (when set) resolves to a `channel_id` in
      `API.yaml.events.channels[]`.
    - `via_entity` (when set) resolves to an entity name in

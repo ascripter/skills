@@ -1,9 +1,9 @@
-# 18 — component operations cross-check (#21) failures.
-# The `app` container's ARCH__app.yaml has a component whose operations[] carry
-#   (a) a malformed op_id (OPN-1, not OPN-NNN), and
+# 18 — component work_units cross-check (#21) failures.
+# The `app` container's ARCH__app.yaml has a component whose work_units[] carry
+#   (a) a duplicate name (`create_task` appears twice in one component), and
 #   (b) an implements_requirements (FR-002) not owned by the component (FR-001).
 # No PRD.yaml on purpose, so feature-coverage / PRD-trace resolution soften and
-# the ONLY errors are the operation ones.
+# the ONLY errors are the work_unit ones.
 # Expectation: validator exits 1 ([FAIL]) — status 'complete' with op errors.
 metadata:
   arch_version: "1.1"

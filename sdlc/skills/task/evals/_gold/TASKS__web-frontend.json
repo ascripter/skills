@@ -1,11 +1,12 @@
 {
   "metadata": {
-    "tasks_container_version": "1.0",
-    "last_updated": "2026-06-26T10:00:00Z",
+    "tasks_container_version": "1.1",
+    "last_updated": "2026-07-01T10:00:00Z",
     "generated_by": "sdlc-task",
     "session_id": "gold0003-front-front-fr-taskwebfrontnd",
     "status": "complete",
     "changelog": [
+      "1.1 (2026-07-01): Atomic on work_units — each view/client impl task names its component work_unit via target_symbol; dropped the granularity knob.",
       "1.0 (2026-06-26): Initial web-frontend container task subgraph (gold reference output — exercises surface + design coverage)."
     ],
     "upstream_provenance": [
@@ -16,7 +17,6 @@
   "container_id": "web-frontend",
   "overview": "Task subgraph for the web-frontend container: app scaffold, design-token wiring, one view task per surface, the API client, and the component test tasks.",
   "inherits_from": "docs/TASKS.json",
-  "granularity": "coarse",
   "tasks": [
     {
       "tsk_id": "TSK-001",
@@ -48,6 +48,7 @@
       "kind": "implementation",
       "description": "Render the paginated task list with create/triage actions, calling the API client.",
       "component_ref": "task-list-view",
+      "target_symbol": "TaskListPage",
       "implements": ["FR-001"],
       "implements_surfaces": ["SCR-001"],
       "implements_workflows": ["WKF-001"],
@@ -64,6 +65,7 @@
       "kind": "implementation",
       "description": "Render one task with status controls; mark-done updates optimistically.",
       "component_ref": "task-detail-view",
+      "target_symbol": "TaskDetailPage",
       "implements": ["FR-001", "FR-003"],
       "implements_surfaces": ["SCR-002"],
       "implements_workflows": ["WKF-001"],
@@ -80,6 +82,7 @@
       "kind": "implementation",
       "description": "Render and submit comments on the open task.",
       "component_ref": "comments-panel-view",
+      "target_symbol": "CommentsPanel",
       "implements": ["FR-002"],
       "implements_surfaces": ["SCR-003"],
       "implements_workflows": ["WKF-002"],
@@ -96,6 +99,7 @@
       "kind": "implementation",
       "description": "Render the weekly digest settings form and recent runs.",
       "component_ref": "digest-settings-view",
+      "target_symbol": "DigestSettingsPage",
       "implements": ["FR-004"],
       "implements_surfaces": ["SCR-004"],
       "implements_workflows": ["WKF-003"],
@@ -112,6 +116,7 @@
       "kind": "implementation",
       "description": "Typed client over the backend tasks/comments/digest-settings resources with auth.",
       "component_ref": "api-client",
+      "target_symbol": "ApiClient",
       "depends_on": ["TSK-001"],
       "target_files": ["src/lib/api/client.ts"],
       "outputs": ["a typed apiClient with tasks/comments/digest-settings methods"],

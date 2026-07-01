@@ -7,7 +7,6 @@
     "status": "complete"
   },
   "overview": "Smoke fixture: malformed tsk_id 'TSK-1' (needs >=3 digits). Expect [FAIL].",
-  "granularity": "coarse",
   "build_order": ["backend-api"],
   "tasks": [
     {

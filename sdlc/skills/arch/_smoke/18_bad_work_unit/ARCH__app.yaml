@@ -1,6 +1,7 @@
-# Deep-dive with two operation (#21) errors:
-#   * OPN-1 is not OPN-NNN (zero-padded >=3 digits).
-#   * the op's implements_requirements FR-002 is not in the owning component's
+# Deep-dive with two work_unit (#21) errors:
+#   * two work_units share the name `create_task` within one component (names
+#     must be unique per component — work_units are addressed as (component, name)).
+#   * the unit's implements_requirements FR-002 is not in the owning component's
 #     implements_requirements {FR-001}.
 metadata:
   arch_container_version: "1.2"
@@ -42,12 +43,14 @@ components:
       - "src/tasks/"
     implements_requirements:
       - "FR-001"
-    operations:
-      - op_id: OPN-1            # BAD: not OPN-NNN
-        name: create-task
+    work_units:
+      - name: create_task
         summary: "Validate the payload and persist a new task."
         implements_requirements:
           - "FR-002"            # BAD: not in the component's {FR-001}
+        status: confirmed
+      - name: create_task       # BAD: duplicate name within this component
+        summary: "A second callable with the same name."
         status: confirmed
     status: confirmed
 

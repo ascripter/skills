@@ -8,7 +8,7 @@ metadata:
   session_id: "16161616-bbbb-1616-1616-161616161616"
   status: "complete"
   changelog:
-    - "1.1 (2026-06-26): Add component operations (OPN family)."
+    - "1.1 (2026-06-26): Add component work_units (name-addressed callables)."
     - "1.0 (2026-05-26): Initial container deep-dive."
 
 container_id: app
@@ -47,9 +47,8 @@ components:
       - "FR-001"
     traces_prd_workflows:
       - "WKF-001"
-    operations:
-      - op_id: OPN-001
-        name: create-task
+    work_units:
+      - name: create_task
         summary: "Validate the payload and persist a new task."
         implements_requirements:
           - "FR-001"

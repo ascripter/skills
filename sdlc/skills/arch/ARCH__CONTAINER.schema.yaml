@@ -271,47 +271,61 @@ components:                                # REQUIRED — non-empty
                                            #            for this component (e.g. "all
                                            #            owned endpoints return 2xx for
                                            #            happy-path fixtures").
-    operations:                            # OPTIONAL but strongly encouraged for non-
+    work_units:                            # OPTIONAL but strongly encouraged for non-
                                            #   plumbing components — the method/function
-                                           #   units of work this component performs. This
-                                           #   is the component → CODE seam: the downstream
-                                           #   `task` skill slices ONE atomic task per
-                                           #   operation, so a component with no operations
-                                           #   can only be sliced coarsely (one task for the
-                                           #   whole component). Draft one op per owned API
-                                           #   operation (controllers), per entity CRUD verb
-                                           #   (repositories), or per behaviour the
-                                           #   responsibilities / acceptance_criteria imply
-                                           #   (services/use_cases). The validator emits a
-                                           #   non-blocking WARNING for a non-trivial
-                                           #   component that declares none (cross-check 21).
-      - op_id: OPN-001                     # REQUIRED — stable id, unique within THIS file.
-                                           #   Family OPN-NNN (writer-managed counter in arch
-                                           #   state.last_ids.OPN). Renaming `name` never
-                                           #   changes op_id.
-        name: create-task                  # REQUIRED — method/function name (verb-first;
-                                           #   mirrors the API operation_id for a controller).
-        summary: <one line>                # REQUIRED — what this operation does.
-        # --- traces: the contract this operation realizes (ALL OPTIONAL) ---
+                                           #   CALLABLES this component exposes (C4 interface
+                                           #   level). This is the component → CODE seam: the
+                                           #   downstream `task` skill slices EXACTLY ONE
+                                           #   atomic implementation task per work_unit (its
+                                           #   target_symbol = the work_unit `name`), so a
+                                           #   component with no work_units yields no
+                                           #   implementation task. Enumerate the PUBLIC /
+                                           #   contract-bearing callables (those realizing a
+                                           #   traced contract or sitting on an internal /
+                                           #   external edge) — NOT every private helper.
+                                           #   Draft one per owned API operation (controllers),
+                                           #   per entity CRUD verb (repositories), or per
+                                           #   behaviour the responsibilities /
+                                           #   acceptance_criteria imply (services/use_cases).
+                                           #   Addressed as (component, name) — there is NO
+                                           #   id family. The validator emits a non-blocking
+                                           #   WARNING for a non-trivial component that
+                                           #   declares none (cross-check 21).
+      - name: create_task                  # REQUIRED — the callable's name (method /
+                                           #   function / Class.method), e.g. "createTask" or
+                                           #   "TasksController.createTask". UNIQUE within
+                                           #   THIS component. Becomes the downstream Task's
+                                           #   target_symbol (the atomic codegen unit).
+        summary: <one line>                # REQUIRED — what this callable does.
+        # --- traces: the contract this work_unit realizes (ALL OPTIONAL) ---
         traces_api_operation: create-task  # OPTIONAL — an operation_id from API__*.yaml
                                            #   (controllers / api_clients). Validated ⊆ the
                                            #   API operation set; lets `task`/`test` slice
                                            #   endpoint-level work. The component-level
                                            #   `traces_api_operations` stays the union.
-        implements_requirements:           # OPTIONAL — FR-NNN/NFR-NNN this op realizes. MUST
-          - FR-001                         #   be ⊆ the OWNING component's
+        implements_requirements:           # OPTIONAL — FR-NNN/NFR-NNN this work_unit realizes.
+          - FR-001                         #   MUST be ⊆ the OWNING component's
                                            #   implements_requirements (validated).
-        touches_entities:                  # OPTIONAL — DATA-MODEL entity name(s) this op
-          - Task                           #   reads/writes. Validated ⊆ the entities the
-                                           #   owning component traces.
+        touches_entities:                  # OPTIONAL — DATA-MODEL entity name(s) this
+          - Task                           #   work_unit reads/writes. Validated ⊆ the
+                                           #   entities the owning component traces.
         satisfies_acceptance:              # OPTIONAL — the component acceptance_criterion
-          - "Creating a task returns 201 with a persisted id."  # string(s) this op fulfils.
-        # --- optional signature (codegen-grade; opt-in, omit for lightweight) ---
-        inputs:                            # OPTIONAL — params/args.
-          - "payload: TaskCreate"
-        outputs: Task                      # OPTIONAL — return shape.
-        errors:                            # OPTIONAL — error cases.
+          - "Creating a task returns 201 with a persisted id."  # string(s) this fulfils.
+        # --- interface contract (codegen-grade). DEFER-OR-DECLARE: a work_unit that
+        #     realizes a schema-bearing traced contract (e.g. an API operation whose
+        #     request/response schema lives in API__*.yaml) may leave inputs/output/raises
+        #     EMPTY and defer to that contract; a domain callable with no schema-bearing
+        #     upstream contract (service / use_case methods) DECLARES them so the
+        #     independently-generated atomic tasks compose against a frozen interface. ---
+        inputs:                            # OPTIONAL — parameter contract (named params /
+          - "payload: TaskCreate"          #   types / ENT refs).
+        output: Task                       # OPTIONAL — return contract (a type / entity / None).
+        raises:                            # OPTIONAL — error / exception contract.
           - "ValidationError -> 400"
+        signature: <optional>              # OPTIONAL — concrete language-specific signature,
+                                           #   filled ONLY when the signature itself is the
+                                           #   contract (public library API). Else codegen
+                                           #   renders it from inputs/output + the tech stack.
         status: draft | confirmed          # REQUIRED — interview progress.
     status: defined | draft | confirmed    # REQUIRED — interview progress
 
@@ -330,8 +344,12 @@ internal_edges:                            # OPTIONAL — empty for very small c
       # depends_on | calls | reads | writes | publishes | subscribes_to | implements
     via_resource_id: <api_resource_id>     # OPTIONAL — for `calls` edges into a
                                            #            controller component
-    via_operation_id: <operation_id>       # OPTIONAL — for `calls` edges that target
-                                           #            a specific endpoint operation
+    via_unit: <work_unit_name>             # OPTIONAL — for `calls` edges between two
+                                           #            components: the WORK_UNIT name on the
+                                           #            `to` component being invoked (resolves
+                                           #            to a work_units[].name on `to`). The
+                                           #            intra-container analogue of an API
+                                           #            operation for internal callables.
     via_entity: <PascalCaseEntityName>     # OPTIONAL — for `reads`/`writes` against a
                                            #            repository component
     note: <short string>                   # OPTIONAL
@@ -392,10 +410,12 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     Cross-check failures force `metadata.status: draft`.
 # 15. Edge via_* resolution — for every edge with a via_* field set:
 #       * via_resource_id  → must resolve to a resource_id in API__*.yaml
-#       * via_operation_id → must resolve to an API operation_id in API__*.yaml
-#                            OR a component operation (operations[].name / op_id)
-#                            of a component in this container — so an INTERNAL
-#                            (non-API) call can name the callee's method.
+#       * via_operation_id → (external_edges) must resolve to an API operation_id in
+#                            API__*.yaml endpoints — an external call to another
+#                            container's API surface.
+#       * via_unit         → (internal_edges) must resolve to a work_units[].name on the
+#                            edge's `to` component — so an INTERNAL (non-API) call names
+#                            the callee's method.
 #       * via_channel_id   → must resolve to API.events.channels[].channel_id
 #       * via_entity       → must resolve to a DATA-MODEL entity name
 # 16. Deployment shape compatibility — `deployment.shape` must be
@@ -418,18 +438,18 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     infer its file placement. Does NOT block status: complete (placement can
 #     legitimately be deferred), but filling it is what makes "mostly
 #     autonomous" downstream codegen actually hold.
-# 21. Component operations — for every operations[] entry on every component:
-#       * op_id matches OPN-NNN (zero-padded ≥3 digits) and is UNIQUE across all
-#         components in this file (it is the stable handle `task` references).
-#       * name + summary are non-empty (required per op).
+# 21. Component work_units — for every work_units[] entry on every component:
+#       * name is non-empty and UNIQUE within its owning component (work_units are
+#         addressed as (component, name) — there is NO id family). It is the stable
+#         handle the downstream `task` skill references as a Task.target_symbol.
+#       * summary is non-empty (required per work_unit).
 #       * traces_api_operation       → resolves to an operation_id in API__*.yaml.
 #       * implements_requirements     → FR-NNN/NFR-NNN format + exists in PRD.yaml
 #         AND ⊆ the OWNING component's implements_requirements.
 #       * touches_entities            → ⊆ the owning component's traces_data_entities
 #         (and a DATA-MODEL entity name).
-#     Cross-check failures force `metadata.status: draft`. The operations LIST
+#     Cross-check failures force `metadata.status: draft`. The work_units LIST
 #     itself is optional (does NOT block complete), but a non-trivial component
-#     (same set as #20) that declares no operations emits a non-blocking WARNING:
-#     downstream `task` can only slice it coarsely (one task for the whole
-#     component) rather than one atomic task per operation.
+#     (same set as #20) that declares no work_units emits a non-blocking WARNING:
+#     downstream `task` then produces NO atomic implementation task for it.
 # =============================================================================
