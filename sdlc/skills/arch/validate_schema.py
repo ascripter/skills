@@ -39,6 +39,18 @@ Validates:
        - implements_requirements / traces_prd_workflows resolve to PRD
          FR-NNN/NFR-NNN / WKF-NNN ids; component features ⊆ parent
          container's.
+    7. Component work_units (block status: complete):
+       - #21 per-unit integrity (unique name, summary, trace subsets) AND
+         — the blocking upgrade — a NON-TRIVIAL component (archetype outside
+         the plumbing set, carrying implements_requirements or a traced
+         contract) that declares no work_units blocks complete unless it
+         records an explicit `work_units_waiver`. work_units are parsed from
+         the YAML (block- or flow-style entries both count) — never grepped.
+       - #22 callable-level FR coverage: for every component that declares
+         work_units, each FR-NNN in its implements_requirements must appear in
+         at least one of its work_units[].implements_requirements (waivable per
+         component). Rolls up to a per-container report of FRs unreachable
+         through any work_unit.
 
 Exit codes:
     0 — schema valid; status='complete' (with all checks passing) or
@@ -493,6 +505,10 @@ class Component(_Base):
     failure_modes: Optional[List[ComponentFailureMode]] = None
     acceptance_criteria: Optional[List[str]] = None
     work_units: Optional[List[WorkUnit]] = None           # named callables (component,name)
+    work_units_waiver: Optional[str] = None               # recorded reason a non-trivial
+                                                          # component legitimately declares no
+                                                          # work_units, or realizes some FR
+                                                          # purely by wiring (waives #21/#22).
     status: Optional[ContainerStatus] = None
 
 
@@ -1403,9 +1419,16 @@ def check_component_work_units(
           implements_requirements.
         * touches_entities ⊆ the owning component's traces_data_entities (and a
           DATA-MODEL entity when present).
+        * a NON-TRIVIAL component (archetype outside the plumbing set AND carrying
+          implements_requirements or a traced contract) that declares no work_units
+          and records no `work_units_waiver` — this BLOCKS complete. Without it a
+          container could be "complete" while downstream `task` silently seeds no
+          implementation task for a third of it. The escape hatch is an explicit
+          per-component waiver: `work_units: []` plus a non-empty `work_units_waiver`
+          note (e.g. "realized purely by wiring"), which downgrades this to advisory.
       warns:
-        * a non-trivial component (same set as code_location #20) that carries a
-          trace but declares no work_units — `task` produces no atomic task for it.
+        * a non-trivial component that declares no work_units but records a
+          `work_units_waiver` — surfaced so a reviewer sees the waiver, non-blocking.
 
     Name uniqueness is checked here (not as a raising model_validator) so a draft
     with duplicate names stays loadable and reports a fixable error.
@@ -1418,6 +1441,7 @@ def check_component_work_units(
         comp_reqs = {str(r).strip().upper() for r in (comp.implements_requirements or [])}
         comp_ents = {str(e).strip() for e in (comp.traces_data_entities or [])}
         units = comp.work_units or []
+        waiver = (comp.work_units_waiver or "").strip()
         seen_names: Set[str] = set()            # names seen within THIS component
         if not units and archetype not in _PLUMBING_COMPONENT_ARCHETYPES:
             has_trace = any([
@@ -1426,11 +1450,19 @@ def check_component_work_units(
                 comp.implements_requirements,
             ])
             if has_trace:
-                warns.append(
-                    f"{file_label}: components[{i}]='{cid}' declares no work_units "
-                    f"— downstream `task` produces no atomic implementation task for "
-                    f"it (enumerate its public/contract-bearing callables)"
-                )
+                if waiver:
+                    warns.append(
+                        f"{file_label}: components[{i}]='{cid}' declares no work_units "
+                        f"but records work_units_waiver ('{waiver}') — waived, non-blocking"
+                    )
+                else:
+                    errs.append(
+                        f"{file_label}: components[{i}]='{cid}' is non-trivial "
+                        f"(archetype '{archetype}' with traced requirements/contracts) but "
+                        f"declares no work_units — downstream `task` would seed no atomic "
+                        f"implementation task for it. Enumerate its public/contract-bearing "
+                        f"callables in work_units, or record an explicit work_units_waiver."
+                    )
         for j, op in enumerate(units):
             where = f"{file_label}: components[{i}]='{cid}'.work_units[{j}]"
             name = (op.name or "").strip()
@@ -1479,6 +1511,70 @@ def check_component_work_units(
                         f"component '{cid}' traces_data_entities"
                     )
     return errs, warns
+
+
+def check_component_fr_work_unit_coverage(
+    container: ArchContainer,
+    file_label: str,
+) -> Tuple[List[str], List[str]]:
+    """Cross-check #22 — callable-level FR coverage.
+
+    Containment (#21) only checks that each work_unit's implements_requirements is
+    a SUBSET of its component's — so a component can claim an FR at the container
+    seam yet realize it in NO work_unit, leaving callable-level coverage vacuous
+    and the downstream `task` graph with no atomic task that actually builds the
+    feature. #22 closes that: for every component that declares at least one
+    work_unit, every FR-NNN in its implements_requirements must appear in at least
+    one of its own work_units[].implements_requirements.
+
+    Returns (errs, rollup). `errs` block complete (each is one component's FR that
+    no work_unit realizes). `rollup` is one advisory line per container naming the
+    distinct FRs unreachable through ANY work_unit in the container.
+
+    Waivable per component: a non-empty `work_units_waiver` (e.g. "FR-012 is
+    realized purely by composition-root wiring, not a standalone callable") skips
+    the component — both its blocking errors and its contribution to the rollup.
+    NFR-NNN are intentionally out of scope: they are frequently cross-cutting and
+    realized by wiring rather than a named callable. Zero-work_unit components are
+    handled by #21, not here.
+    """
+    errs: List[str] = []
+    declared: Set[str] = set()      # FRs any non-waived component claims
+    unit_reached: Set[str] = set()  # FRs some work_unit (any non-waived comp) realizes
+    for i, comp in enumerate(container.components or []):
+        cid = comp.component_id
+        units = comp.work_units or []
+        if (comp.work_units_waiver or "").strip():
+            continue
+        comp_frs = {
+            str(r).strip().upper() for r in (comp.implements_requirements or [])
+            if _FR_PREFIX_RE.match(str(r).strip())
+        }
+        this_unit_frs: Set[str] = set()
+        for op in units:
+            for r in op.implements_requirements or []:
+                ru = str(r).strip().upper()
+                if _FR_PREFIX_RE.match(ru):
+                    this_unit_frs.add(ru)
+        declared |= comp_frs
+        unit_reached |= this_unit_frs
+        if not units:
+            continue  # zero-work_unit components are #21's job, not #22's
+        for fr in sorted(comp_frs - this_unit_frs):
+            errs.append(
+                f"{file_label}: components[{i}]='{cid}'.implements_requirements '{fr}' "
+                f"is realized by none of the component's work_units — push it down to "
+                f"the callable that implements it (or record a work_units_waiver if it "
+                f"is realized purely by wiring)"
+            )
+    rollup: List[str] = []
+    unreachable = sorted(declared - unit_reached)
+    if unreachable:
+        rollup.append(
+            f"{file_label}: {len(unreachable)} FR(s) unreachable through any work_unit "
+            f"in this container: {unreachable}"
+        )
+    return errs, rollup
 
 
 def check_edge_via_fields_arch(
@@ -1803,6 +1899,8 @@ def validate_all(arch_path: Path) -> int:
     code_location_warnings: List[str] = []
     component_op_errs: List[str] = []
     component_op_warnings: List[str] = []
+    fr_wu_errs: List[str] = []
+    fr_wu_rollup: List[str] = []
     warning_id_errs: List[str] = check_warning_ids(arch.arch_warnings, "arch_warnings")
     id_format_errs: List[str] = check_arch_id_formats(arch)
     for name, c in containers.items():
@@ -1815,6 +1913,9 @@ def validate_all(arch_path: Path) -> int:
         )
         component_op_errs.extend(op_errs)
         component_op_warnings.extend(op_warns)
+        fr_errs, fr_roll = check_component_fr_work_unit_coverage(c, name)
+        fr_wu_errs.extend(fr_errs)
+        fr_wu_rollup.extend(fr_roll)
         component_trace_errs.extend(
             check_component_traces(
                 c, arch, name,
@@ -1862,6 +1963,7 @@ def validate_all(arch_path: Path) -> int:
         ("PRD must-have FR-NNN feature(s) implemented by no container", uncovered_features),
         ("implements_requirements / traces_prd_workflows resolution error(s)", prd_trace_errs),
         ("component work_unit integrity error(s) (cross-check 21)", component_op_errs),
+        ("component FR->work_unit coverage error(s) (cross-check 22)", fr_wu_errs),
     ]
 
     # 6) Reporting — hard problems force draft / block complete.
@@ -1903,7 +2005,7 @@ def validate_all(arch_path: Path) -> int:
             store_ids,
         )
         _print_extra_problems(extra_problems)
-        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings)
+        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings, fr_wu_rollup)
         return 1
 
     if status == "complete":
@@ -1922,7 +2024,7 @@ def validate_all(arch_path: Path) -> int:
             f"{len(ux_ids)} data-bearing UX surface(s) all owned; "
             f"{store_note}; {feat_note}; edges resolve."
         )
-        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings)
+        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings, fr_wu_rollup)
         return 0
 
     # status == "draft"
@@ -1960,7 +2062,7 @@ def validate_all(arch_path: Path) -> int:
             "\nAll required fields filled, coverage complete, edges resolve. "
             "Set metadata.status: complete when done."
         )
-    _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings)
+    _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings, fr_wu_rollup)
     return 0
 
 
@@ -2061,6 +2163,7 @@ def _print_warnings(
     upstream_warnings: List[str],
     code_location_warnings: Optional[List[str]] = None,
     operation_warnings: Optional[List[str]] = None,
+    fr_work_unit_rollup: Optional[List[str]] = None,
 ) -> None:
     if external_warnings:
         print()
@@ -2079,8 +2182,13 @@ def _print_warnings(
             print(f"  - {w}")
     if operation_warnings:
         print()
-        print(f"WARNINGS ({len(operation_warnings)} component(s) without work_units):")
+        print(f"WARNINGS ({len(operation_warnings)} component(s) without work_units [waived or advisory]):")
         for w in operation_warnings:
+            print(f"  - {w}")
+    if fr_work_unit_rollup:
+        print()
+        print(f"WARNINGS ({len(fr_work_unit_rollup)} container(s) with FR(s) unreachable through any work_unit):")
+        for w in fr_work_unit_rollup:
             print(f"  - {w}")
 
 

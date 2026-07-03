@@ -327,7 +327,27 @@ components:                                # REQUIRED — non-empty
                                            #   contract (public library API). Else codegen
                                            #   renders it from inputs/output + the tech stack.
         status: draft | confirmed          # REQUIRED — interview progress.
+    work_units_waiver: <one sentence>      # OPTIONAL — the escape hatch for the #21/#22
+                                           #   blocking gates. Set it (alongside
+                                           #   work_units: []) when a NON-TRIVIAL component
+                                           #   legitimately exposes no standalone callable —
+                                           #   realized purely by wiring (a decorator, a
+                                           #   composition root) — OR when a specific FR it
+                                           #   claims is realized by wiring rather than a
+                                           #   named callable. A non-empty waiver downgrades
+                                           #   #21 (no work_units) and #22 (FR not pushed to a
+                                           #   callable) from blocking to a reviewer-visible
+                                           #   WARNING for THIS component. Don't use it to
+                                           #   dodge decomposition — use it when a callable
+                                           #   breakdown genuinely doesn't apply.
     status: defined | draft | confirmed    # REQUIRED — interview progress
+
+# WORK_UNITS EMISSION STYLE (normative): write each work_unit BLOCK-style — one
+# field per line under a `- name:` entry (as shown above). Do NOT use flow-style
+# one-liner mappings (`- {name: x, summary: y}`): block-style is diff-reviewable
+# and robust to line-oriented tooling. On an update flow, normalize any existing
+# flow-style entries to block-style. (Both styles parse identically — the rule is
+# about reviewability, and downstream tools MUST parse, never line-grep, to count.)
 
 # ---------------------------------------------------------------------------
 # internal_edges — edges between two components inside this container.
@@ -448,8 +468,23 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #         AND ⊆ the OWNING component's implements_requirements.
 #       * touches_entities            → ⊆ the owning component's traces_data_entities
 #         (and a DATA-MODEL entity name).
-#     Cross-check failures force `metadata.status: draft`. The work_units LIST
-#     itself is optional (does NOT block complete), but a non-trivial component
-#     (same set as #20) that declares no work_units emits a non-blocking WARNING:
-#     downstream `task` then produces NO atomic implementation task for it.
+#     Cross-check failures force `metadata.status: draft`. The work_units LIST is
+#     still OPTIONAL for a trivial/plumbing component, BUT a NON-TRIVIAL component
+#     (same set as #20: non-plumbing archetype carrying implements_requirements or
+#     a traced contract) that declares NO work_units now BLOCKS `complete` —
+#     unless it records a non-empty `work_units_waiver`. This is the blocking
+#     upgrade: without it a container could be "complete" while downstream `task`
+#     silently seeds no implementation task for a third of its components. The
+#     count is taken from a real YAML PARSE (block- and flow-style entries both
+#     count) — never a line-grep, which would miss flow-style units.
+# 22. Component FR → work_unit coverage — for every component that declares at
+#     least one work_unit: every FR-NNN in the component's implements_requirements
+#     must appear in at least one of that component's work_units[].implements_
+#     requirements. Containment (#21) only checks the reverse (unit FRs ⊆ component
+#     FRs), so without #22 a component could claim an FR at the seam yet realize it
+#     in NO callable — leaving `task` with no atomic task that builds the feature.
+#     Failures BLOCK `complete`; waivable per component via `work_units_waiver`
+#     (e.g. an FR realized purely by wiring). NFR-NNN are out of scope (frequently
+#     cross-cutting). The validator also prints a per-container advisory roll-up of
+#     the FRs unreachable through ANY work_unit.
 # =============================================================================

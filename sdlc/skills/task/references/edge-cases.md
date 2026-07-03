@@ -38,6 +38,28 @@ silently guess.
   that lives in a shared system task). `defer <component_id>` with a reason — the
   coverage gate accepts the named deferral.
 
+## Work_unit counting & the closed preflight set
+
+- **Don't miscount work_units with a grep.** `work_units[]` items are legitimately
+  block-style (`- name: x`) or flow-style (`- {name: x, ...}`). A `grep '- name:'`
+  matches only the block ones — it once reported "16 of 24 components have zero
+  work_units" against a fully-backfilled 178-unit ARCH and wrongly REFUSED the run
+  (37 counted, 141 missed). Always run
+  `python "${CLAUDE_SKILL_DIR}/count_work_units.py" docs/ARCH__<cid>.yaml` (a real
+  parse) and ground any readiness/refusal in its output. Exit 0 = proceed; exit 1
+  = a genuine non-trivial gap → "fix upstream in `/sdlc:arch <cid>`".
+- **Zero-work_unit components that are NOT gaps.** A plumbing component
+  (`config_loader`/`serializer`/`observability_bootstrap`/`error_handler`) or one
+  with an explicit `work_units_waiver` is legitimately unit-free — the counter
+  marks it as such. Only a non-trivial, unwaived, zero-unit component is an
+  upstream gap; do not lump the plumbing/waived ones into a refusal.
+- **Don't invent preconditions.** The gates are exactly: `ARCH.yaml` complete;
+  `ARCH__<cid>.yaml` + `TEST-STRATEGY__<cid>.yaml` present and complete; validators
+  pass. A dirty git working tree, an "uncommitted-modified file", changelog-entry
+  counts, or commit history are **not** gates this skill defines and must never be
+  refusal grounds. Mention them, if at all, as a separate non-blocking FYI after
+  you've decided to proceed.
+
 ## The dependency graph
 
 - **User requests a dependency that closes a cycle.** Refuse and print the path

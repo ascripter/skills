@@ -108,7 +108,19 @@ forms, then proceed exactly as that form:
    resume prompt.
 2. **No `docs/ARCH.yaml`** (or it has no `containers`) → resolve to **system
    mode** (as if `/sdlc:arch`).
-3. **`docs/ARCH.yaml` exists with a drillable container still undrilled** →
+3. **`docs/ARCH.yaml` exists with a drillable container that is drilled but
+   INTERNALLY INCOMPLETE** → resolve to **container mode** to *resume its
+   deep-dive* (as if `/sdlc:arch <container_id>`), announcing it as "drilled but
+   incomplete". "Drilled" must mean *internally complete*, not merely
+   *file-exists*: a `docs/ARCH__<cid>.yaml` that exists but has
+   `metadata.status != complete`, OR that the validator flags with a work_unit
+   integrity (#21) or FR→work_unit coverage (#22) error, is **not** done — it is
+   the exact state two successive backfill passes ended in silently. Detect it by
+   running `python "${CLAUDE_SKILL_DIR}/validate_schema.py" --path docs/ARCH.yaml`
+   and reading its output: a container whose file is draft, or that appears in a
+   "cross-check 21" / "cross-check 22" error line, is incomplete. Resume the
+   first such container in **drill order** (below).
+4. **`docs/ARCH.yaml` exists with a drillable container still UNDRILLED** →
    resolve to **container mode** for the next one (as if
    `/sdlc:arch <container_id>`). A container is **drillable** if container mode
    would actually author a file for it: `external: false` AND `archetype` not in
@@ -118,17 +130,21 @@ forms, then proceed exactly as that form:
    "External / data-store containers"). A drillable container is **undrilled**
    if it has no `file_path` and no `docs/ARCH__<container_id>.yaml` on disk.
    Pick the first undrilled drillable container in **drill order** (below).
-4. **Every drillable container already has its `ARCH__<container>.yaml`** →
-   print and abort:
+5. **Every drillable container has its `ARCH__<container>.yaml` AND each is
+   internally complete** (status complete, no #21/#22 error) → print and abort:
    > "All containers are already specified. To change one explicitly, invoke
    > `/sdlc:arch <container-name>`. Otherwise the architecture is fully
    > specified — go on with `/sdlc:test`."
 
+   Do NOT reach this message while any drilled file is draft or carries a #21/#22
+   error — that is rule 3's "drilled but incomplete", which must be resumed first.
+
 Before launching a resolved container interview, confirm the target with one
 `AskUserQuestion` so `--next` never silently drops the user into a long
 interview:
-> "`<k>` of `<n>` drillable containers specified. Next undrilled: `<id>`
-> (`<archetype>`). Start it, pick a different container, or stop?"
+> "`<k>` of `<n>` drillable containers fully specified. Next: `<id>`
+> (`<archetype>`) — `<undrilled ⇒ start | drilled but incomplete ⇒ resume its
+> deep-dive>`. Start it, pick a different container, or stop?"
 
 Options: `"Start <id>"` / `"Pick another"` / `"Stop"`. On "Pick another", list
 the remaining undrilled drillable container_ids and let the user choose. On
@@ -210,7 +226,12 @@ Check for `.claude/skills-state/sdlc-arch.state.yaml`:
   The state file holds a `sessions:` map keyed by `mode|container_id` —
   multiple modes can live in the same file (see "Session state file").
 - If `status: complete` or `aborted` and the target output yaml exists, treat
-  this as an update flow — see `references/merge-validate.md`.
+  this as an update flow — see `references/merge-validate.md`. In container mode,
+  re-validate the existing `docs/ARCH__<cid>.yaml` first: if it is on-disk
+  `complete` but the validator flags a work_unit (#21) or FR→work_unit (#22)
+  error, it is **drilled but incomplete** — say so and resume the deep-dive
+  (fill the missing `work_units` / push each FR to a callable / record a
+  `work_units_waiver`) rather than treating it as finished.
 - If no state file, continue to Phase 2.
 
 ### Phase 2 — Scan inputs
@@ -467,6 +488,23 @@ mode.
    work_units yields no implementation task. See
    `references/component-discovery.md` → "Deriving code_location" and
    "Deriving work_units".
+   **Emit work_units block-style** — one field per line under each `- name:`
+   entry; do NOT write flow-style one-liner mappings (`- {name: x, summary: y}`).
+   Block-style is diff-reviewable and robust to any line-oriented tooling
+   downstream. On an update flow, normalize any existing flow-style entries you
+   encounter to block-style. **Non-trivial components must not be left unbacked:**
+   a component whose archetype is outside the plumbing set
+   (`config_loader`/`serializer`/`observability_bootstrap`/`error_handler`) AND
+   which carries `implements_requirements` or a traced contract must declare
+   `work_units` — or, if it genuinely has none (realized purely by wiring), record
+   an explicit `work_units_waiver: <reason>` alongside `work_units: []`. Without
+   one, the validator blocks `complete` (cross-check #21) rather than letting
+   downstream `task` silently seed no implementation task. **Push every FR down to
+   a callable:** each FR-NNN in a component's `implements_requirements` must appear
+   in at least one of that component's `work_units[].implements_requirements`
+   (cross-check #22) — else `task` has no atomic task that actually builds the
+   feature. Waive per component with `work_units_waiver` when an FR is realized
+   purely by wiring.
 10. `internal_and_external_edges` — `critical` synthesis (see
     `references/edge-derivation.md`). Once components carry `code_location`,
     keep the call graph **layering-legal**: a `calls`/`reads`/`writes` edge
@@ -570,6 +608,17 @@ checks emit warnings only.
 9. **`file_path` integrity** — every `containers[].file_path` resolves
    to a file on disk, and every sibling `docs/ARCH__*.yaml` is
    referenced by some `containers[].file_path`.
+9a. **Component `work_units` integrity & FR coverage (#21/#22 — block
+    `complete`)** — per-unit integrity (unique `name` within the component,
+    non-empty `summary`, `traces_api_operation`/`implements_requirements`/
+    `touches_entities` subsets), PLUS two coverage gates: **#21** — a
+    non-trivial component (non-plumbing archetype carrying
+    `implements_requirements` or a traced contract) with **no** `work_units`
+    and **no** `work_units_waiver` blocks `complete`; **#22** — every FR-NNN in
+    a component's `implements_requirements` must appear in one of that
+    component's `work_units[].implements_requirements` (waivable via
+    `work_units_waiver`). work_units are read by a real YAML parse (block- or
+    flow-style entries both count), never a line-grep.
 
 **Non-blocking warnings**:
 
@@ -586,17 +635,14 @@ checks emit warnings only.
     `code_location` emits a warning: downstream `task`/codegen will have to
     infer its file placement. Non-blocking (placement can be deferred), but
     filling it is what makes autonomous downstream codegen hold.
-13. **Component `work_units` integrity (#21)** — every `work_units[].name` is
-    non-empty and **unique within its owning component** (work_units are addressed
-    as `(component, name)` — no id family); `summary` non-empty; each unit's
-    `traces_api_operation` resolves to an API operation_id,
-    `implements_requirements` ⊆ the owning component's, and `touches_entities` ⊆
-    the component's `traces_data_entities`. Failures block `complete`. The list
-    itself is optional, but a non-trivial component with no work_units emits a
-    non-blocking warning (downstream `task` produces no atomic task for it).
-    A `calls` internal edge's `via_unit` resolves against a `work_units[].name`
-    on the edge's `to` component; an external edge's `via_operation_id` resolves
-    against an API operation.
+13. **Component `work_units` waiver notice** — a non-trivial component that
+    declares no work_units but records a `work_units_waiver` is surfaced as a
+    non-blocking warning (so a reviewer sees the waiver), and the container-level
+    "FR(s) unreachable through any work_unit" roll-up is printed as advisory
+    context. The blocking half of #21/#22 lives in item 9a above. A `calls`
+    internal edge's `via_unit` resolves against a `work_units[].name` on the
+    edge's `to` component; an external edge's `via_operation_id` resolves against
+    an API operation.
 
 For merge logic, the recovery flow on `[FAIL]`, and the CLAUDE.md pointer
 rules → see `references/merge-validate.md`.
@@ -605,7 +651,11 @@ Set `metadata.status`:
 
 - `"complete"` — only when all required fields are filled, the validator
   passes with `[OK]`, AND every cross-check passes (coverage, edge/trace
-  integrity, container/system consistency, ID-prefix formats).
+  integrity, container/system consistency, ID-prefix formats, and — in
+  container mode — component `work_units` integrity + FR coverage #21/#22).
+  A container file that is on-disk `complete` but that the validator flags with
+  a #21/#22 error is **not** done: it is "drilled but incomplete" and `--next`
+  will route back to resume its deep-dive.
 - `"draft"` — on early EXIT, when any required field is null, or when
   any cross-check fails.
 
@@ -677,8 +727,15 @@ Unlike single-mode skills, arch keeps **per-mode sub-sessions** in a single
 file. Each invocation reads or writes one entry under `sessions:`:
 
 ```yaml
+# changelog:
+#   1.2 (2026-07-03): work_units cross-check #21 upgraded to BLOCKING for
+#     non-trivial components (waivable via work_units_waiver); new #22 FR->work_unit
+#     coverage cross-check; work_units emit block-style; "drilled" now means
+#     internally complete (#21/#22), so --next resumes drilled-but-incomplete
+#     containers instead of counting them as specified.
+#   1.1: per-component work_units (#21), code_location (#20), upstream provenance.
 session_file_version: "1"
-skill_version: "1.1"
+skill_version: "1.2"
 last_updated: <iso8601>
 
 sessions:

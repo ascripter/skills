@@ -1,0 +1,49 @@
+# 20 — INCOMPLETE: an ARCH__api.yaml that claims status 'complete' but leaves a
+# non-trivial component unbacked and an FR unreachable through any work_unit.
+# This is the exact "drilled but incomplete" state two backfill passes ended in.
+# Feature coverage passes (all FRs are in the container), so the ONLY blocking
+# errors are the two work_unit ones:
+#   * #21 — `tasks-service` (service, has an FR) declares no work_units + no waiver.
+#   * #22 — `tasks-controller` claims FR-003 but no work_unit realizes it.
+# Styles are still mixed to prove the parse, not a grep, drives the reasoning.
+# Expectation: validator exits 1 → [FAIL].
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-07-03T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "20202020-aaaa-2020-2020-202020202020"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Single deployable; fixture for incomplete work_units."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: api
+    archetype: backend-api
+    purpose: "Serves task CRUD."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "FR-001"
+      - "FR-002"
+      - "FR-003"
+      - "FR-004"
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: "docs/ARCH__api.yaml"
+
+edges: []
+
+non_container_features: []
+
+arch_warnings: []

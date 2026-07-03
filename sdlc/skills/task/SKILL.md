@@ -101,6 +101,7 @@ many containers they touch:
 | `TASKS.schema.yaml` | Human-readable canonical schema for `docs/TASKS.json`. |
 | `TASKS__CONTAINER.schema.yaml` | Human-readable canonical schema for `docs/TASKS__<container>.json`. |
 | `validate_schema.py` | Pydantic v2 validator (system + every container file + coverage + the union-graph acyclicity check). Loads the JSON artifacts. |
+| `count_work_units.py` | Deterministic, plumbing-aware per-component work_unit counter for an `ARCH__<container>.yaml` — a real YAML parse, never a grep. Run it in Phase 2 preflight; quote its output in any readiness/refusal message. |
 | `set_claude_md_pointer.py` | Deterministic CLAUDE.md pointer injector, called in Phase 8. |
 | `references/interview-mechanics.md` | AskUserQuestion batch format, EXIT semantics, importance-tier flows. Read on entering Phase 6. |
 | `references/task-discovery.md` | How to seed the task graph from ARCH components + TEST tests + API + DATA (system and container). Read in Phase 3. |
@@ -199,7 +200,9 @@ Otherwise, classify a non-`--next` invocation:
    not, list valid container_ids and abort. It MUST be buildable (not external,
    not a storage/infra archetype); if not, explain and abort. Both
    `docs/ARCH__<cid>.yaml` and `docs/TEST-STRATEGY__<cid>.yaml` MUST exist; if
-   not, tell the user which upstream to run first and abort. Output:
+   not, tell the user which upstream to run first and abort. These existence +
+   `status: complete` + validator checks are the **only** gates — do not invent
+   others (git cleanliness, changelog counts, etc.). Output:
    `docs/TASKS__<container>.json`.
 3. **More than one positional argument, or unknown flag** → print the three
    valid invocations and abort.
@@ -288,6 +291,40 @@ format-only and a WRN-NNN is appended.
 If any required validator exits non-zero, or any required artifact has
 `metadata.status != complete`, **stop**. Print a clear message naming the
 offending file and the upstream skill to run.
+
+**The preflight is a CLOSED set of gates.** The ONLY preconditions for running
+are the documented ones: `docs/ARCH.yaml` complete; in container mode
+`docs/ARCH__<cid>.yaml` + `docs/TEST-STRATEGY__<cid>.yaml` present and
+`metadata.status: complete`; the upstream validators pass. **Do not invent
+additional gates.** Git working-tree cleanliness, an "uncommitted-modified file",
+`metadata.changelog`-count reconciliation, commit-message archaeology, and the
+like are NOT preconditions this skill defines — they must never be grounds for a
+refusal. If you happen to observe one and think it worth mentioning, put it in a
+clearly-separated, non-blocking **FYI** note *after* you have decided to proceed —
+never as a reason not to run.
+
+**Deterministic work_unit counting (container mode).** Any step that reasons
+about whether components have `work_units` — a readiness check, a "this container
+isn't drilled" note, or a refusal — MUST derive the counts from a real YAML
+parse, never from `grep`/line-matching. A `work_units[]` item is legitimately
+written block-style (`- name: x`) or flow-style (`- {name: x, ...}`); a grep for
+`- name:` silently misses the flow-style ones and undercounts a fully-backfilled
+document (the exact bug that once wrongly refused a 178-work_unit container —
+grep found 37, missed 141). Run the bundled counter and read its output:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/count_work_units.py" docs/ARCH__<cid>.yaml
+```
+
+It prints per-component counts and marks each zero-work_unit component as
+plumbing (legitimately unit-free: `config_loader`/`serializer`/
+`observability_bootstrap`/`error_handler`), waived (`work_units_waiver`), or a
+**non-trivial gap** (exit 1) — the only kind that warrants "fix upstream in
+`/sdlc:arch <cid>`". **Any readiness or refusal message that names zero-work_unit
+components MUST quote this tool's output** and be grounded in its parsed counts,
+not a grep. A backfilled container the parse shows as fully covered proceeds — do
+not refuse it. (This does not change the atomic slicing: still one implementation
+task per work_unit, `target_symbol` = the unit name.)
 
 Optional enrichers (read only if present, slice large ones via `INDEX.yaml`):
 `docs/DATA-MODEL.yaml` (entities → `migration`/repository tasks;
@@ -593,8 +630,14 @@ Path: `.claude/skills-state/sdlc-task.state.yaml`
 Like `arch`/`test`, `task` keeps **per-mode sub-sessions** in one file:
 
 ```yaml
+# changelog:
+#   1.1 (2026-07-03): Phase 2 preflight hardened — work_unit presence/counts must
+#     come from a real YAML parse (new count_work_units.py helper, quoted in any
+#     readiness/refusal), never a line-grep that misses flow-style entries; the
+#     preflight gate set is explicitly closed (no invented git/changelog gates).
+#   1.0: initial two-mode (system/container) task graph + --next resolver.
 session_file_version: "1"
-skill_version: "1.0"
+skill_version: "1.1"
 last_updated: <iso8601>
 spec_order: []                  # container_ids in --next / build_order sequence (providers first)
 

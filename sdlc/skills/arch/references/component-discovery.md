@@ -241,9 +241,34 @@ Each work_unit carries:
 **Work_unit-completeness check (before closing the component).** Reflect on the
 drafted units against the component's own signals: does every owned API
 `operation_id` map to a work_unit? every `acceptance_criterion`? every entity the
-component reads/writes (a CRUD unit)? Add the missing ones. Honour the
-anti-padding rule — a `validator` with one transform has one work_unit, not five,
-and a private helper is not a work_unit.
+component reads/writes (a CRUD unit)? **every FR-NNN in the component's
+`implements_requirements`?** Cross-check #22 holds you to the last one: each FR
+the component claims must appear in at least one of its `work_units[].
+implements_requirements`, or `task` gets no atomic task that actually builds the
+feature. Add the missing ones. Honour the anti-padding rule — a `validator` with
+one transform has one work_unit, not five, and a private helper is not a
+work_unit.
+
+**Emit block-style; normalize flow-style on update.** Write each work_unit
+block-style — one field per line under a `- name:` entry — NOT as a flow-style
+one-liner mapping (`- {name: x, summary: y}`). Both parse identically, but
+block-style is diff-reviewable and robust to any line-oriented tooling. On an
+update flow, rewrite any existing flow-style entries you touch as block-style.
+(Downstream `task` counts work_units with a real YAML parse via
+`count_work_units.py`, never a grep — so the style never changes the count; the
+rule is purely about reviewability.)
+
+**Non-trivial components block `complete` without work_units — or a waiver.** A
+component whose archetype is outside the plumbing set (`config_loader` /
+`serializer` / `observability_bootstrap` / `error_handler`) AND which carries
+`implements_requirements` or a traced contract must declare `work_units`. If it
+genuinely exposes no standalone callable (its behaviour is realized purely by
+wiring — a decorator, a composition root), record `work_units: []` plus a
+`work_units_waiver: <one-sentence reason>`. The waiver also waives #22 for that
+component (use it when a specific FR is realized by wiring, not a callable).
+Without units and without a waiver, cross-check #21 blocks `complete`: this is
+the guard that stopped a container being "complete" while a third of its
+components seeded no downstream implementation task.
 
 Persist the confirmed units to the `defined_components` entry
 (`work_units: [...]`) so resume doesn't re-draft them. (No id counter — work_units

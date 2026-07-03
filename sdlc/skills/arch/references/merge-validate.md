@@ -142,6 +142,27 @@ This validates:
     `complete`. This catches the case where someone hand-edits
     ARCH.yaml against a half-finished upstream chain.
 
+14. Component `work_units` integrity + coverage (block `complete`):
+
+    - **#21 per-unit integrity** — each `work_units[].name` is non-empty and
+      unique within its component; `summary` non-empty; `traces_api_operation`,
+      `implements_requirements` (⊆ the component's), `touches_entities` resolve.
+    - **#21 blocking upgrade** — a NON-TRIVIAL component (non-plumbing archetype
+      carrying `implements_requirements` or a traced contract) that declares no
+      `work_units` and no `work_units_waiver` blocks `complete`. Counts come from
+      a real YAML parse (block- AND flow-style entries), never a line-grep.
+    - **#22 FR → work_unit coverage** — for each component with work_units, every
+      FR-NNN in its `implements_requirements` must appear in some
+      `work_units[].implements_requirements`. Waivable per component via
+      `work_units_waiver`. A per-container advisory roll-up lists FRs unreachable
+      through any work_unit.
+
+    These are the checks that make "drilled" mean *internally complete*. A
+    `docs/ARCH__<cid>.yaml` that is on-disk `complete` but fails #21/#22 is
+    **drilled but incomplete**; `--next` routes back to resume its deep-dive and
+    it does not count toward "all containers specified" (SKILL.md → Invocation
+    dispatch).
+
 ### Exit-code recovery
 
 | Exit | Meaning                                  | Action                                                     |
@@ -162,9 +183,14 @@ This validates:
   - all edge + trace integrity checks pass (zero unresolved edges, all
     component traces resolve, all PRD traces resolve);
   - all container-vs-system consistency checks pass;
-  - all ID-prefix formats are valid (WRN/FR/WKF).
+  - all ID-prefix formats are valid (WRN/FR/WKF);
+  - (container mode) component `work_units` integrity + FR coverage
+    (#21/#22) pass — every non-trivial component has work_units or a
+    `work_units_waiver`, and every component FR is realized by a work_unit
+    or waived.
 - `draft` — set on early EXIT, on any missing required field, or on
-  any failing check.
+  any failing check. A container that is on-disk `complete` but fails
+  #21/#22 is "drilled but incomplete" — resume its deep-dive.
 
 If the user is about to set `complete` but the validator flags
 problems, surface them via AskUserQuestion and let the user choose:

@@ -1044,9 +1044,16 @@ questions:
       (inputs/output/raises/signature): defer to a schema-bearing traced contract
       when one exists, else declare it so atomic tasks compose against a frozen
       interface. Before closing, cross-check the drafted units against the
-      component's API operations / acceptance_criteria / traced entities — every
-      one should map to a work_unit. Skip for trivial plumbing (config_loader,
-      serializer, observability_bootstrap, error_handler).
+      component's API operations / acceptance_criteria / traced entities / every
+      FR in implements_requirements — each should map to a work_unit (#22 blocks
+      complete if an FR maps to none). EMIT BLOCK-STYLE — one field per line under
+      each `- name:` entry, never a flow-style `- {name: x, ...}` one-liner; on an
+      update flow normalize existing flow-style entries. Trivial plumbing
+      (config_loader, serializer, observability_bootstrap, error_handler) may
+      declare none. A NON-TRIVIAL component (non-plumbing, with a trace) that has
+      no callable of its own must record `work_units: []` + a `work_units_waiver`
+      (one-sentence reason, e.g. "realized purely by decorator wiring") — else #21
+      blocks complete. The same waiver also waives #22 for an FR realized by wiring.
     suggested_answers: []
     free_text_allowed: true
     required: false

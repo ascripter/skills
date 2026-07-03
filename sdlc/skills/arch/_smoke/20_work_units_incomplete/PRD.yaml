@@ -1,0 +1,23 @@
+# Same minimal PRD as fixture 19 (FR-001..FR-004 must-have + NFR-001).
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-07-03T12:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "20202020-0000-2020-2020-202020202020"
+  status: "complete"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Create a task."
+    - "FR-002: List tasks."
+    - "FR-003: Update a task."
+    - "FR-004: Delete a task."
+  nice_to_have_features: []
+
+non_functional_requirements:
+  performance_targets: []
+  other:
+    - "NFR-001: Every task mutation is audit-logged."
+
+use_cases:
+  core_workflows: []

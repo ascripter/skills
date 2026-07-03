@@ -46,6 +46,17 @@ gap: the right fix is `/sdlc:arch <container>` to add `work_units[]`, not to
 invent a method breakdown here (inventing structure at the task stage is the
 hallucination the provenance guard exists to prevent). Note it in a `WRN-NNN`.
 
+**Count work_units by PARSE, never by grep.** Before you conclude a component has
+no work_units — a claim that gates seeding, readiness, or a refusal — derive the
+count from a real YAML parse. `work_units[]` items are legitimately block-style
+(`- name: x`) or flow-style (`- {name: x, ...}`); a `grep '- name:'` matches only
+the block ones and undercounts a fully-backfilled ARCH. Run
+`python "${CLAUDE_SKILL_DIR}/count_work_units.py" docs/ARCH__<cid>.yaml`, which is
+plumbing- and waiver-aware, and quote its output. A "non-trivial gap" (its exit 1)
+is the only signal that warrants "fix upstream in `/sdlc:arch`"; a plumbing or
+waived zero-unit component is expected, not a gap. See SKILL.md Phase 2 →
+"Deterministic work_unit counting".
+
 `implements` (FR/NFR) on an impl task = the subset of that component's
 `implements_requirements` the task realizes. Keep it a subset — the validator
 rejects an `implements` outside the component/container's declared requirements.

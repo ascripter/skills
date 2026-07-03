@@ -1,0 +1,95 @@
+# 19 — VALID container deep-dive. NOTE the deliberately MIXED work_unit styles:
+# `tasks-controller` declares createTask/listTasks BLOCK-style and
+# updateTask/deleteTask FLOW-style ("- {name: ...}"). Both are legal YAML
+# sequence items; a real parse counts all four. A line-grep for "- name:" would
+# see only two — exactly the miscount that wrongly refused a fully-backfilled
+# container. Downstream `task` (and count_work_units.py) MUST parse, not grep.
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-07-03T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "19191919-bbbb-1919-1919-191919191919"
+  status: "complete"
+
+container_id: api
+archetype: backend-api
+overview: "Serves task CRUD over HTTP."
+
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+  framework: "FastAPI"
+
+deployment:
+  shape: container
+  shape_confidence: confirmed
+
+observability:
+  logs: "stdout structured json"
+
+failure_modes:
+  - id: db-timeout
+    description: "Primary store connection times out."
+    likelihood: low
+    impact: high
+    mitigation: "Connection pool with retry/backoff."
+
+components:
+  # Non-trivial component, fully backfilled — mixed block + flow work_unit styles.
+  - component_id: tasks-controller
+    archetype: controller
+    purpose: "HTTP handlers for task CRUD."
+    responsibilities:
+      - "Map HTTP requests to task operations."
+    code_location:
+      - "src/tasks/controller.py"
+    implements_requirements:
+      - "FR-001"
+      - "FR-002"
+      - "FR-003"
+      - "FR-004"
+    work_units:
+      # --- block style ---
+      - name: createTask
+        summary: "Handle POST /tasks."
+        implements_requirements:
+          - "FR-001"
+        status: confirmed
+      - name: listTasks
+        summary: "Handle GET /tasks."
+        implements_requirements:
+          - "FR-002"
+        status: confirmed
+      # --- flow style (one-liner mappings) ---
+      - {name: updateTask, summary: "Handle PATCH /tasks/{id}.", implements_requirements: ["FR-003"], status: confirmed}
+      - {name: deleteTask, summary: "Handle DELETE /tasks/{id}.", implements_requirements: ["FR-004"], status: confirmed}
+    status: confirmed
+
+  # Plumbing archetype — legitimately unit-free (config_loader); no block, no warn.
+  - component_id: config-loader
+    archetype: config_loader
+    purpose: "Loads settings from the environment."
+    responsibilities:
+      - "Parse env vars into a typed settings object."
+    status: confirmed
+
+  # Non-trivial archetype (service) with a trace but NO work_units — permitted
+  # ONLY because it records an explicit work_units_waiver. Without the waiver this
+  # would block complete under cross-check #21.
+  - component_id: audit-logger
+    archetype: service
+    purpose: "Emits an audit record for every task mutation."
+    responsibilities:
+      - "Wrap mutating handlers and append an audit line."
+    code_location:
+      - "src/tasks/audit.py"
+    implements_requirements:
+      - "NFR-001"
+    work_units: []
+    work_units_waiver: "Audit logging is realized purely by decorator wiring around the controller handlers; it exposes no standalone callable of its own."
+    status: confirmed
+
+internal_edges: []
+external_edges: []
+
+arch_warnings: []

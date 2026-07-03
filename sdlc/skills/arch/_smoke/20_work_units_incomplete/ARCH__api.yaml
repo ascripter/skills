@@ -1,0 +1,74 @@
+# 20 — INCOMPLETE container deep-dive. Two blocking work_unit failures:
+#   * tasks-controller (mixed block+flow styles) declares FR-001/FR-002 on its
+#     work_units but claims FR-003 at the component seam with NO work_unit for it
+#     → cross-check #22 (callable-level FR coverage) fires for FR-003.
+#   * tasks-service is a non-trivial `service` carrying FR-004 but declares no
+#     work_units and no work_units_waiver → cross-check #21 (blocking) fires.
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-07-03T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "20202020-bbbb-2020-2020-202020202020"
+  status: "complete"
+
+container_id: api
+archetype: backend-api
+overview: "Serves task CRUD over HTTP."
+
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+  framework: "FastAPI"
+
+deployment:
+  shape: container
+  shape_confidence: confirmed
+
+observability:
+  logs: "stdout structured json"
+
+failure_modes:
+  - id: db-timeout
+    description: "Primary store connection times out."
+    likelihood: low
+    impact: high
+    mitigation: "Connection pool with retry/backoff."
+
+components:
+  # Has work_units (mixed styles) but claims FR-003 with no unit realizing it → #22.
+  - component_id: tasks-controller
+    archetype: controller
+    purpose: "HTTP handlers for task CRUD."
+    responsibilities:
+      - "Map HTTP requests to task operations."
+    code_location:
+      - "src/tasks/controller.py"
+    implements_requirements:
+      - "FR-001"
+      - "FR-002"
+      - "FR-003"          # BAD: no work_unit below realizes FR-003 → #22.
+    work_units:
+      - name: createTask
+        summary: "Handle POST /tasks."
+        implements_requirements:
+          - "FR-001"
+        status: confirmed
+      - {name: listTasks, summary: "Handle GET /tasks.", implements_requirements: ["FR-002"], status: confirmed}
+    status: confirmed
+
+  # Non-trivial (service) with an FR but NO work_units and NO waiver → #21 (blocking).
+  - component_id: tasks-service
+    archetype: service
+    purpose: "Task domain logic."
+    responsibilities:
+      - "Apply task business rules and persist."
+    code_location:
+      - "src/tasks/service.py"
+    implements_requirements:
+      - "FR-004"
+    status: confirmed
+
+internal_edges: []
+external_edges: []
+
+arch_warnings: []

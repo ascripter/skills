@@ -1,0 +1,26 @@
+# Minimal PRD for the mixed block-/flow-style work_units fixtures (19 valid + 20
+# incomplete). Supplies FR-001..FR-004 (must-have) + NFR-001 so the container's
+# implements_requirements resolve and the FR->work_unit coverage check (#22) has
+# real FR ids to reason about.
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-07-03T12:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "19191919-0000-1919-1919-191919191919"
+  status: "complete"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Create a task."
+    - "FR-002: List tasks."
+    - "FR-003: Update a task."
+    - "FR-004: Delete a task."
+  nice_to_have_features: []
+
+non_functional_requirements:
+  performance_targets: []
+  other:
+    - "NFR-001: Every task mutation is audit-logged."
+
+use_cases:
+  core_workflows: []
