@@ -21,7 +21,7 @@ project from a structured chain of artifacts. Skills are invoked as
 | `arch`       | `sdlc/skills/arch`  | `docs/PRD.yaml` + `docs/UX.yaml` (+ `UX__*`) + `docs/DATA-MODEL.yaml` (+ `docs/API.yaml` (+ `API__*`)) + interview                              | `docs/ARCH.yaml`, `docs/ARCH__<container>.yaml`      |
 | `test`       | `sdlc/skills/test`  | `docs/PRD.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH.yaml` (+ `docs/ARCH__<container>.yaml` in container mode) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) + interview | `docs/TEST-STRATEGY.yaml` (system mode), `docs/TEST-STRATEGY__<container>.yaml` (container mode) |
 | `task`       | `sdlc/skills/task`  | **system:** `docs/ARCH.yaml` + `docs/TEST-STRATEGY.yaml` + interview; **container:** `docs/ARCH__<container>.yaml` + `docs/TEST-STRATEGY__<container>.yaml` (+ `docs/DATA-MODEL.yaml`) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) (+ `docs/DESIGN.yaml` (+ `DESIGN__*`)) + interview; both read `docs/PRD.yaml` for FR/NFR id resolution. UX/API/DATA/DESIGN drive the surface/operation/entity/design coverage gates | `docs/TASKS.json` (system mode), `docs/TASKS__<container>.json` (container mode) |
-| `code`       | `sdlc/skills/code`  | `docs/TASKS.json` + `docs/TASKS__<container>.json` (must be `complete` + task-validator-green) + `docs/ARCH__<container>.yaml` + `docs/TEST-STRATEGY__<container>.yaml` (contract resolution) (+ `docs/API.yaml`/`API__*`) (+ `docs/DATA-MODEL.yaml`) (+ `docs/UX.yaml`) (+ `docs/DESIGN*`) — **no interview** | generated source files at each task's `target_files`, `docs/CODE-MANIFEST.json`, execution ledger in `.claude/skills-state/sdlc-code.state.yaml` |
+| `code`       | `sdlc/skills/code`  | `docs/TASKS.json` + `docs/TASKS__<container>.json` (must be `complete` + task-validator-green; v1.3 tasks are self-contained) + `docs/ARCH__<container>.yaml` (tech-stack slice; full contract fallback for pre-1.3 artifacts) (+ `docs/TEST-STRATEGY__<container>.yaml` pre-1.3) (+ `docs/DATA-MODEL.yaml` entity slices) — **no interview** | generated source files at each task's `target_files`, `docs/CODE-MANIFEST.json`, execution ledger in `.claude/skills-state/sdlc-code.state.yaml` |
 | `deploy`     | `sdlc/skills/deploy` | `docs/ARCH.yaml` + interview                                                                | `docs/DEPLOY.yaml`                                   |
 
 **Downstream consumers of every output are AI agents, not humans.** Optimize artifacts for unambiguous machine consumption (typed enums, no prose blobs, explicit `null` for unanswered fields).
@@ -32,7 +32,10 @@ the factory. It consumes the task graph and *writes the actual source files*
 each task's provenance pins (`target_files` / `target_symbol`), interleaving
 implementation tasks with their test tasks (test-first ready-queue policy) and
 running a test-and-heal loop (≤3 attempts; attempt 3 escalates to a fresh opus
-subagent). Three forms: `/sdlc:code` (whole remaining stitched graph),
+subagent). Tasks are **self-contained** as of task-artifact v1.3: each
+implementation task embeds its `interface_contract` (and `unit_kind` /
+`unit_summary`), each test task its `test_spec`, so codegen needs no per-task
+ARCH/TEST-STRATEGY lookups — only the container's tech stack stays upstream. Three forms: `/sdlc:code` (whole remaining stitched graph),
 `/sdlc:code <container>` (one subgraph), `/sdlc:code --next` (next incomplete
 unit in `build_order`). Its per-task execution ledger
 (`.claude/skills-state/sdlc-code.state.yaml`) makes every invocation resumable

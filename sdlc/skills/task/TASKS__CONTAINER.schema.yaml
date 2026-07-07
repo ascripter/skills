@@ -56,7 +56,11 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  tasks_container_version: "1.1"           # REQUIRED
+  tasks_container_version: "1.3"           # REQUIRED — 1.3 introduced the embedded
+                                           #   per-task specifics (unit_kind, unit_summary,
+                                           #   interface_contract, test_spec); the validator
+                                           #   gates their presence checks on >= 1.3 so older
+                                           #   artifacts warn instead of failing
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-task                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -128,6 +132,42 @@ tasks:                                      # REQUIRED — list[Task], non-empty
                                              #   deferred (the work-unit coverage gate);
                                              #   target_symbol is UNIQUE across tasks.
                                              #   Empty for non-code tasks (docs / analysis).
+    unit_kind: callable                     # OPTIONAL (implementation tasks; default callable) —
+                                            #   the deliverable class copied from the ARCH
+                                            #   work_unit's `kind`: callable | module | content |
+                                            #   tooling. A pure RENDERING-MODE switch for the
+                                            #   codegen agent (callable → render the method;
+                                            #   module/content/tooling → the FILE is the
+                                            #   deliverable). Every work_unit-derived task stays
+                                            #   kind: implementation regardless — the atomicity
+                                            #   invariants (one target_symbol, exactly one
+                                            #   target_files) apply identically to all four.
+    unit_summary: <one line>                # OPTIONAL (implementation tasks) — the work_unit's
+                                            #   one-line summary, copied so the codegen prompt is
+                                            #   self-contained.
+    interface_contract:                     # REQUIRED for kind:implementation at artifact
+                                            #   version >= 1.3 (older artifacts warn instead; a
+                                            #   non-callable unit_kind is exempt — the file IS
+                                            #   the contract). EMBEDDED AT WRITE TIME from the
+                                            #   ARCH work_unit — or resolved from the API
+                                            #   operation the unit defers to — so the Stage-14
+                                            #   codegen agent needs NO per-task ARCH/API lookup.
+                                            #   Principle: per-task specifics live ON the task;
+                                            #   container-general facts (tech stack) stay
+                                            #   upstream. Deliberate divergence from demo FR-013
+                                            #   ("inherits live — not duplicated"): per-task
+                                            #   lookups in a huge ARCH file are the wrong cost
+                                            #   model, and CLAUDE.md §7 upstream-provenance
+                                            #   already catches drift — re-running /sdlc:task
+                                            #   after an ARCH edit reconciles the copies.
+      source: work_unit                     #   work_unit | api_operation (unit deferred via
+                                            #   traces_api_operation; task resolved the
+                                            #   operation's schemas at write time)
+      inputs: ["payload: TaskCreate"]       #   parameter contract ([] = no args)
+      output: Task                          #   return contract ("None" = no return)
+      raises: ["ValidationError -> 400"]    #   error contract ([] = language defaults only)
+      signature: null                       #   verbatim only when the signature IS the contract
+      operation_id: null                    #   set when source: api_operation
     implements:                             # OPTIONAL — FR/NFR ids this task realizes.
       - FR-008                              #   Subset of the targeted component's /
       - NFR-011                             #   container's implements_requirements.
@@ -136,6 +176,21 @@ tasks:                                      # REQUIRED — list[Task], non-empty
                                             #   this task authors. Test tasks are
                                             #   first-class: every TST-NNN must be
                                             #   realized by some task OR deferred.
+    test_spec:                              # REQUIRED for kind:test at artifact version >= 1.3
+                                            #   (older artifacts warn instead) — the TST entry's
+                                            #   per-task specifics EMBEDDED from
+                                            #   TEST-STRATEGY__<container>.yaml, same rationale
+                                            #   as interface_contract: the test-authoring agent
+                                            #   works from the task alone. Container-general
+                                            #   facts (coverage_target, mock policy) stay in
+                                            #   TEST-STRATEGY.
+      tier: unit                            #   the TST's tier (unit | integration | ...)
+      directives:                           #   the TST's arrange/act/assert directives
+        - "Arrange a valid create payload."
+        - "Act: call createTask()."
+        - "Assert: 201 with a persisted id."
+      acceptance: "Creating a task returns 201 with a persisted id."
+      covers: [FR-001]                      #   the TST's covered requirement ids
     touches_entities:                       # OPTIONAL — DATA-MODEL entity names
       - User                                #   (PascalCase) this task reads/writes.
                                             #   VALIDATED ⊆ DATA-MODEL.yaml entities
@@ -311,4 +366,27 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     the placement check is skipped when no code_location.
 # 17. Coverage / integrity failures force metadata.status: draft (they do not
 #     crash the validator) so partial task graphs remain saveable as drafts.
+# 18. Embedded per-task specifics (VERSION-GATED at tasks_container_version
+#     >= 1.3; older artifacts get warnings instead of errors) — every
+#     kind:implementation task carries interface_contract with source +
+#     inputs + output + raises present (explicit empties count: inputs: [],
+#     raises: [], output: "None"); a non-callable unit_kind (module / content /
+#     tooling) is exempt (mirrors arch #23's FILE case). Every kind:test task
+#     carries test_spec with tier + directives + acceptance. unit_kind is
+#     vocabulary-checked (callable | module | content | tooling); an
+#     interface_contract on a non-implementation task or a test_spec on a
+#     non-test task is an error at any version. Blocks complete.
+# 19. All-confirmed gate — a file claiming metadata.status: complete must have
+#     every task status: confirmed. The SKILL confirms tasks through its
+#     drill-down/sweep flow (no manual step); a leftover draft task in a
+#     complete artifact means the interview didn't finish. Blocks complete.
+# 20. Embedded-copy drift (advisory, never blocks) — when the upstream is
+#     readable, an interface_contract differing from the current ARCH
+#     work_unit's declared fields, or a test_spec differing from the current
+#     TST entry, emits a WARNING suggesting a /sdlc:task re-run (the §7
+#     delta-review reconciles the copies).
+# 21. File-producing kinds without write targets (advisory) — a scaffold /
+#     test / migration / config / design task with neither target_files nor a
+#     path-shaped outputs entry emits a WARNING: the codegen agent will have
+#     to derive the paths from code_location + stack conventions.
 # =============================================================================

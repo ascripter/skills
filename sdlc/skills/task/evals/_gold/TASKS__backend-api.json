@@ -1,18 +1,29 @@
 {
   "metadata": {
-    "tasks_container_version": "1.2",
-    "last_updated": "2026-07-01T10:00:00Z",
+    "tasks_container_version": "1.3",
+    "last_updated": "2026-07-07T15:00:00Z",
     "generated_by": "sdlc-task",
     "session_id": "gold0002-back-back-back-taskbackendap",
     "status": "complete",
     "changelog": [
+      "1.3 (2026-07-07): Embedded per-task specifics (schema v1.3) — interface_contract + unit_summary on every implementation task, test_spec on every test task; write targets moved into target_files (outputs stay contract-level).",
       "1.2 (2026-07-01): Re-sliced atomic on work_units — one impl task per component work_unit (target_symbol) with exactly one target_files each; dropped the granularity knob.",
       "1.1 (2026-06-26): Re-sliced atomic — one impl task per component operation, one test task per TST-NNN.",
       "1.0 (2026-06-06): Initial backend-api container task subgraph (gold reference output)."
     ],
     "upstream_provenance": [
-      {"file": "docs/ARCH__backend-api.yaml", "session_id": "archcm01-arcm-arcm-arcm-archcontainr02", "last_updated": "2026-06-26T00:00:00Z", "sha256": "0000000000000000"},
-      {"file": "docs/TEST-STRATEGY__backend-api.yaml", "session_id": "testbe01-tbe1-tbe1-tbe1-testbackendapi", "last_updated": "2026-05-28T10:00:00Z", "sha256": "0000000000000000"}
+      {
+        "file": "docs/ARCH__backend-api.yaml",
+        "session_id": "archcm01-arcm-arcm-arcm-archcontainr02",
+        "last_updated": "2026-06-26T00:00:00Z",
+        "sha256": "0000000000000000"
+      },
+      {
+        "file": "docs/TEST-STRATEGY__backend-api.yaml",
+        "session_id": "testbe01-tbe1-tbe1-tbe1-testbackendapi",
+        "last_updated": "2026-05-28T10:00:00Z",
+        "sha256": "0000000000000000"
+      }
     ]
   },
   "container_id": "backend-api",
@@ -24,8 +35,17 @@
       "title": "Scaffold the backend-api package",
       "kind": "scaffold",
       "description": "Fastify app skeleton, package manifest, Prisma client wiring and the test harness. (Built standalone before the system stitch, so this subgraph carries only same-file dependencies; the system repo-scaffold edge is added when /sdlc:task builds docs/TASKS.json.)",
-      "outputs": ["services/backend-api/package.json", "services/backend-api/src/app.ts"],
-      "acceptance": ["pnpm --filter backend-api install resolves", "the app boots and serves a health route"],
+      "target_files": [
+        "services/backend-api/package.json",
+        "services/backend-api/src/app.ts"
+      ],
+      "outputs": [
+        "the package resolves and the app boots with a health route"
+      ],
+      "acceptance": [
+        "pnpm --filter backend-api install resolves",
+        "the app boots and serves a health route"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -34,12 +54,28 @@
       "title": "Define the Postgres schema and migrations",
       "kind": "migration",
       "description": "Author the Prisma schema and initial migration for the Task, Comment and DigestRun entities (the persistence layer the repository binds to). The entity realization task — distinct from the repository code that queries it.",
-      "touches_entities": ["Task", "Comment", "DigestRun"],
-      "depends_on": ["TSK-001"],
-      "inputs": ["DATA-MODEL.yaml#entities"],
-      "target_files": ["services/backend-api/prisma/schema.prisma", "services/backend-api/prisma/migrations/0001_init/migration.sql"],
-      "outputs": ["the Task, Comment and DigestRun tables exist after migrate"],
-      "acceptance": ["prisma migrate deploy creates the Task, Comment and DigestRun tables", "the schema matches DATA-MODEL.yaml field types"],
+      "touches_entities": [
+        "Task",
+        "Comment",
+        "DigestRun"
+      ],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "inputs": [
+        "DATA-MODEL.yaml#entities"
+      ],
+      "target_files": [
+        "services/backend-api/prisma/schema.prisma",
+        "services/backend-api/prisma/migrations/0001_init/migration.sql"
+      ],
+      "outputs": [
+        "the Task, Comment and DigestRun tables exist after migrate"
+      ],
+      "acceptance": [
+        "prisma migrate deploy creates the Task, Comment and DigestRun tables",
+        "the schema matches DATA-MODEL.yaml field types"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -50,10 +86,32 @@
       "description": "Verify the bearer JWT against the OIDC JWKS and reject unauthenticated requests with 401, before routing.",
       "component_ref": "auth-middleware",
       "target_symbol": "verifyToken",
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/backend-api/src/middleware/auth.ts"],
-      "outputs": ["services/backend-api/src/middleware/auth.ts exports verifyToken()"],
-      "acceptance": ["a request with a valid token is routed", "a request with no/invalid token gets 401"],
+      "unit_summary": "Verify the bearer JWT against the OIDC JWKS; reject unauthenticated requests with 401.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [
+          "request: FastifyRequest",
+          "reply: FastifyReply"
+        ],
+        "output": "None (request.user populated on success)",
+        "raises": [
+          "Unauthorized -> 401 reply, request not routed"
+        ],
+        "signature": null
+      },
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/backend-api/src/middleware/auth.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/middleware/auth.ts exports verifyToken()"
+      ],
+      "acceptance": [
+        "a request with a valid token is routed",
+        "a request with no/invalid token gets 401"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -64,11 +122,34 @@
       "description": "GET /v1/tasks — return the caller's tasks (paginated).",
       "component_ref": "tasks-controller",
       "target_symbol": "listTasks",
-      "touches_operations": ["list-tasks"],
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/backend-api/src/controllers/tasks.ts"],
-      "outputs": ["services/backend-api/src/controllers/tasks.ts exports listTasks()"],
-      "acceptance": ["GET /v1/tasks returns 200 with the caller's tasks"],
+      "unit_summary": "Return the caller's tasks (paginated).",
+      "interface_contract": {
+        "source": "api_operation",
+        "inputs": [
+          "query: ListTasksQuery (pagination)"
+        ],
+        "output": "TaskPage (200)",
+        "raises": [
+          "Unauthorized -> 401"
+        ],
+        "signature": null,
+        "operation_id": "list-tasks"
+      },
+      "touches_operations": [
+        "list-tasks"
+      ],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/backend-api/src/controllers/tasks.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/controllers/tasks.ts exports listTasks()"
+      ],
+      "acceptance": [
+        "GET /v1/tasks returns 200 with the caller's tasks"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -79,13 +160,41 @@
       "description": "POST /v1/tasks — validate the payload, persist a new task, return 201.",
       "component_ref": "tasks-controller",
       "target_symbol": "createTask",
-      "implements": ["FR-001"],
-      "touches_operations": ["create-task"],
-      "touches_entities": ["Task"],
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/backend-api/src/controllers/tasks.ts"],
-      "outputs": ["services/backend-api/src/controllers/tasks.ts exports createTask()"],
-      "acceptance": ["creating a task returns 201 with a persisted id"],
+      "unit_summary": "Validate the payload, persist a new task, return 201.",
+      "interface_contract": {
+        "source": "api_operation",
+        "inputs": [
+          "payload: TaskCreate"
+        ],
+        "output": "Task (201)",
+        "raises": [
+          "ValidationError -> 400",
+          "Unauthorized -> 401"
+        ],
+        "signature": null,
+        "operation_id": "create-task"
+      },
+      "implements": [
+        "FR-001"
+      ],
+      "touches_entities": [
+        "Task"
+      ],
+      "touches_operations": [
+        "create-task"
+      ],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/backend-api/src/controllers/tasks.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/controllers/tasks.ts exports createTask()"
+      ],
+      "acceptance": [
+        "creating a task returns 201 with a persisted id"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -96,13 +205,42 @@
       "description": "PATCH /v1/tasks/{id} — update a task (e.g. mark done) and persist the new status.",
       "component_ref": "tasks-controller",
       "target_symbol": "updateTask",
-      "implements": ["FR-003"],
-      "touches_operations": ["update-task"],
-      "touches_entities": ["Task"],
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/backend-api/src/controllers/tasks.ts"],
-      "outputs": ["services/backend-api/src/controllers/tasks.ts exports updateTask()"],
-      "acceptance": ["marking a task done flips its status and is reflected on next read"],
+      "unit_summary": "Update a task (e.g. mark done) and persist the new status.",
+      "interface_contract": {
+        "source": "api_operation",
+        "inputs": [
+          "id: TaskId",
+          "patch: TaskUpdate"
+        ],
+        "output": "Task (200)",
+        "raises": [
+          "ValidationError -> 400",
+          "NotFound -> 404"
+        ],
+        "signature": null,
+        "operation_id": "update-task"
+      },
+      "implements": [
+        "FR-003"
+      ],
+      "touches_entities": [
+        "Task"
+      ],
+      "touches_operations": [
+        "update-task"
+      ],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/backend-api/src/controllers/tasks.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/controllers/tasks.ts exports updateTask()"
+      ],
+      "acceptance": [
+        "marking a task done flips its status and is reflected on next read"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -113,11 +251,34 @@
       "description": "GET comments on a task — return the task's comments.",
       "component_ref": "comments-controller",
       "target_symbol": "listComments",
-      "touches_operations": ["list-comments"],
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/backend-api/src/controllers/comments.ts"],
-      "outputs": ["services/backend-api/src/controllers/comments.ts exports listComments()"],
-      "acceptance": ["listing comments returns the task's comments"],
+      "unit_summary": "Return the comments on a task.",
+      "interface_contract": {
+        "source": "api_operation",
+        "inputs": [
+          "taskId: TaskId"
+        ],
+        "output": "list[Comment] (200)",
+        "raises": [
+          "NotFound -> 404"
+        ],
+        "signature": null,
+        "operation_id": "list-comments"
+      },
+      "touches_operations": [
+        "list-comments"
+      ],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/backend-api/src/controllers/comments.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/controllers/comments.ts exports listComments()"
+      ],
+      "acceptance": [
+        "listing comments returns the task's comments"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -128,13 +289,42 @@
       "description": "POST a comment on a task — add a comment and persist it.",
       "component_ref": "comments-controller",
       "target_symbol": "createComment",
-      "implements": ["FR-002"],
-      "touches_operations": ["create-comment"],
-      "touches_entities": ["Comment"],
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/backend-api/src/controllers/comments.ts"],
-      "outputs": ["services/backend-api/src/controllers/comments.ts exports createComment()"],
-      "acceptance": ["adding a comment persists it and returns it on the task"],
+      "unit_summary": "Add a comment to a task and persist it.",
+      "interface_contract": {
+        "source": "api_operation",
+        "inputs": [
+          "taskId: TaskId",
+          "payload: CommentCreate"
+        ],
+        "output": "Comment (201)",
+        "raises": [
+          "ValidationError -> 400",
+          "NotFound -> 404"
+        ],
+        "signature": null,
+        "operation_id": "create-comment"
+      },
+      "implements": [
+        "FR-002"
+      ],
+      "touches_entities": [
+        "Comment"
+      ],
+      "touches_operations": [
+        "create-comment"
+      ],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/backend-api/src/controllers/comments.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/controllers/comments.ts exports createComment()"
+      ],
+      "acceptance": [
+        "adding a comment persists it and returns it on the task"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -145,12 +335,33 @@
       "description": "GET the current digest schedule and recent runs (newest-first).",
       "component_ref": "digest-settings-controller",
       "target_symbol": "getDigestSettings",
-      "touches_operations": ["get-digest-settings"],
-      "touches_entities": ["DigestRun"],
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/backend-api/src/controllers/digest-settings.ts"],
-      "outputs": ["services/backend-api/src/controllers/digest-settings.ts exports getDigestSettings()"],
-      "acceptance": ["recent digest runs are listed newest-first"],
+      "unit_summary": "Return the current digest schedule and recent runs (newest-first).",
+      "interface_contract": {
+        "source": "api_operation",
+        "inputs": [],
+        "output": "DigestSettingsView (200; runs newest-first)",
+        "raises": [],
+        "signature": null,
+        "operation_id": "get-digest-settings"
+      },
+      "touches_entities": [
+        "DigestRun"
+      ],
+      "touches_operations": [
+        "get-digest-settings"
+      ],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/backend-api/src/controllers/digest-settings.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/controllers/digest-settings.ts exports getDigestSettings()"
+      ],
+      "acceptance": [
+        "recent digest runs are listed newest-first"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -161,12 +372,37 @@
       "description": "PATCH the digest schedule — enable/disable the digest and set the send time; persist it.",
       "component_ref": "digest-settings-controller",
       "target_symbol": "updateDigestSettings",
-      "implements": ["FR-004"],
-      "touches_operations": ["update-digest-settings"],
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/backend-api/src/controllers/digest-settings.ts"],
-      "outputs": ["services/backend-api/src/controllers/digest-settings.ts exports updateDigestSettings()"],
-      "acceptance": ["enabling the digest and setting a send time persists and reads back"],
+      "unit_summary": "Enable/disable the digest and set the send time; persist the schedule.",
+      "interface_contract": {
+        "source": "api_operation",
+        "inputs": [
+          "patch: DigestSettingsUpdate"
+        ],
+        "output": "DigestSettingsView (200)",
+        "raises": [
+          "ValidationError -> 400"
+        ],
+        "signature": null,
+        "operation_id": "update-digest-settings"
+      },
+      "implements": [
+        "FR-004"
+      ],
+      "touches_operations": [
+        "update-digest-settings"
+      ],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/backend-api/src/controllers/digest-settings.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/controllers/digest-settings.ts exports updateDigestSettings()"
+      ],
+      "acceptance": [
+        "enabling the digest and setting a send time persists and reads back"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -177,11 +413,36 @@
       "description": "Insert or update a Task, Comment or DigestRun row via Prisma.",
       "component_ref": "persistence-repository",
       "target_symbol": "writeRow",
-      "touches_entities": ["Task", "Comment", "DigestRun"],
-      "depends_on": ["TSK-001", "TSK-002"],
-      "target_files": ["services/backend-api/src/repository/index.ts"],
-      "outputs": ["services/backend-api/src/repository/index.ts exports writeRow()"],
-      "acceptance": ["Task, Comment and DigestRun rows can be written"],
+      "unit_summary": "Insert or update a Task, Comment or DigestRun row.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [
+          "row: Task | Comment | DigestRun"
+        ],
+        "output": "the persisted row",
+        "raises": [
+          "StorageUnavailable -> retried, then 503"
+        ],
+        "signature": null
+      },
+      "touches_entities": [
+        "Task",
+        "Comment",
+        "DigestRun"
+      ],
+      "depends_on": [
+        "TSK-001",
+        "TSK-002"
+      ],
+      "target_files": [
+        "services/backend-api/src/repository/index.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/repository/index.ts exports writeRow()"
+      ],
+      "acceptance": [
+        "Task, Comment and DigestRun rows can be written"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -192,11 +453,37 @@
       "description": "Read a Task, Comment or DigestRun row (or list) via Prisma.",
       "component_ref": "persistence-repository",
       "target_symbol": "readRow",
-      "touches_entities": ["Task", "Comment", "DigestRun"],
-      "depends_on": ["TSK-001", "TSK-002"],
-      "target_files": ["services/backend-api/src/repository/index.ts"],
-      "outputs": ["services/backend-api/src/repository/index.ts exports readRow()"],
-      "acceptance": ["Task, Comment and DigestRun rows can be read back"],
+      "unit_summary": "Read a Task, Comment or DigestRun row (or list).",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [
+          "kind: EntityKind",
+          "selector: RowId | ListFilter"
+        ],
+        "output": "the row, list, or null",
+        "raises": [
+          "StorageUnavailable -> retried, then 503"
+        ],
+        "signature": null
+      },
+      "touches_entities": [
+        "Task",
+        "Comment",
+        "DigestRun"
+      ],
+      "depends_on": [
+        "TSK-001",
+        "TSK-002"
+      ],
+      "target_files": [
+        "services/backend-api/src/repository/index.ts"
+      ],
+      "outputs": [
+        "services/backend-api/src/repository/index.ts exports readRow()"
+      ],
+      "acceptance": [
+        "Task, Comment and DigestRun rows can be read back"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -206,10 +493,31 @@
       "kind": "test",
       "description": "Realize TST-001 — happy-path create on the tasks controller.",
       "component_ref": "tasks-controller",
-      "implements_tests": ["TST-001"],
-      "depends_on": ["TSK-005"],
-      "outputs": ["services/backend-api/test/tasks-controller.create.spec.ts"],
-      "acceptance": ["the test realizing TST-001 passes"],
+      "implements_tests": [
+        "TST-001"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Arrange a valid create payload; act: POST; assert 201 + persisted id."
+        ],
+        "acceptance": "Creating a task returns 201 with a persisted task id.",
+        "covers": [
+          "FR-001"
+        ]
+      },
+      "depends_on": [
+        "TSK-005"
+      ],
+      "target_files": [
+        "services/backend-api/test/tasks-controller.create.spec.ts"
+      ],
+      "outputs": [
+        "TST-001 green"
+      ],
+      "acceptance": [
+        "the test realizing TST-001 passes"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -219,10 +527,31 @@
       "kind": "test",
       "description": "Realize TST-002 — status transition on the tasks controller.",
       "component_ref": "tasks-controller",
-      "implements_tests": ["TST-002"],
-      "depends_on": ["TSK-006"],
-      "outputs": ["services/backend-api/test/tasks-controller.update.spec.ts"],
-      "acceptance": ["the test realizing TST-002 passes"],
+      "implements_tests": [
+        "TST-002"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Arrange an open task; act: mark done; assert status flips and persists."
+        ],
+        "acceptance": "Marking a task done flips its status and is reflected on next read.",
+        "covers": [
+          "FR-003"
+        ]
+      },
+      "depends_on": [
+        "TSK-006"
+      ],
+      "target_files": [
+        "services/backend-api/test/tasks-controller.update.spec.ts"
+      ],
+      "outputs": [
+        "TST-002 green"
+      ],
+      "acceptance": [
+        "the test realizing TST-002 passes"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -232,10 +561,31 @@
       "kind": "test",
       "description": "Realize TST-003 — happy-path comment add.",
       "component_ref": "comments-controller",
-      "implements_tests": ["TST-003"],
-      "depends_on": ["TSK-008"],
-      "outputs": ["services/backend-api/test/comments-controller.spec.ts"],
-      "acceptance": ["the test realizing TST-003 passes"],
+      "implements_tests": [
+        "TST-003"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Arrange a task; act: add a comment; assert it is persisted and listed."
+        ],
+        "acceptance": "A comment is persisted and returned on the task.",
+        "covers": [
+          "FR-002"
+        ]
+      },
+      "depends_on": [
+        "TSK-008"
+      ],
+      "target_files": [
+        "services/backend-api/test/comments-controller.spec.ts"
+      ],
+      "outputs": [
+        "TST-003 green"
+      ],
+      "acceptance": [
+        "the test realizing TST-003 passes"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -245,10 +595,32 @@
       "kind": "test",
       "description": "Realize TST-004 — digest enable/disable + send-time round trip.",
       "component_ref": "digest-settings-controller",
-      "implements_tests": ["TST-004"],
-      "depends_on": ["TSK-009", "TSK-010"],
-      "outputs": ["services/backend-api/test/digest-settings-controller.spec.ts"],
-      "acceptance": ["the test realizing TST-004 passes"],
+      "implements_tests": [
+        "TST-004"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Arrange settings payload; act: save; assert read-back matches; runs newest-first."
+        ],
+        "acceptance": "Enabling the digest and setting a send time persists and reads back; runs listed newest-first.",
+        "covers": [
+          "FR-004"
+        ]
+      },
+      "depends_on": [
+        "TSK-009",
+        "TSK-010"
+      ],
+      "target_files": [
+        "services/backend-api/test/digest-settings-controller.spec.ts"
+      ],
+      "outputs": [
+        "TST-004 green"
+      ],
+      "acceptance": [
+        "the test realizing TST-004 passes"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -258,10 +630,32 @@
       "kind": "test",
       "description": "Realize TST-005 — repository + a real test Postgres round-trip.",
       "component_ref": "persistence-repository",
-      "implements_tests": ["TST-005"],
-      "depends_on": ["TSK-011", "TSK-012"],
-      "outputs": ["services/backend-api/test/repository.roundtrip.int.spec.ts"],
-      "acceptance": ["a written Task reads back identically"],
+      "implements_tests": [
+        "TST-005"
+      ],
+      "test_spec": {
+        "tier": "integration",
+        "directives": [
+          "Arrange a test DB; act: write then read a Task; assert equality."
+        ],
+        "acceptance": "A written Task reads back identically.",
+        "covers": [
+          "FR-001"
+        ]
+      },
+      "depends_on": [
+        "TSK-011",
+        "TSK-012"
+      ],
+      "target_files": [
+        "services/backend-api/test/repository.roundtrip.int.spec.ts"
+      ],
+      "outputs": [
+        "TST-005 green"
+      ],
+      "acceptance": [
+        "a written Task reads back identically"
+      ],
       "priority": "should",
       "status": "confirmed"
     },
@@ -271,10 +665,30 @@
       "kind": "test",
       "description": "Realize TST-006 — abuse case for the jwt-forgery concern.",
       "component_ref": "auth-middleware",
-      "implements_tests": ["TST-006"],
-      "depends_on": ["TSK-003"],
-      "outputs": ["services/backend-api/test/auth.security.spec.ts"],
-      "acceptance": ["a forged/expired token yields 401 and never reaches a controller"],
+      "implements_tests": [
+        "TST-006"
+      ],
+      "test_spec": {
+        "tier": "security",
+        "directives": [
+          "Arrange a token signed by a wrong key / expired.",
+          "Act: call any protected endpoint.",
+          "Assert: 401, request not routed."
+        ],
+        "acceptance": "A forged or expired token yields 401 and never reaches a controller."
+      },
+      "depends_on": [
+        "TSK-003"
+      ],
+      "target_files": [
+        "services/backend-api/test/auth.security.spec.ts"
+      ],
+      "outputs": [
+        "TST-006 green"
+      ],
+      "acceptance": [
+        "a forged/expired token yields 401 and never reaches a controller"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -283,10 +697,29 @@
       "title": "Security test: no PII in logs (TST-007)",
       "kind": "test",
       "description": "Realize TST-007 — scan emitted logs for the raw email / comment body.",
-      "implements_tests": ["TST-007"],
-      "depends_on": ["TSK-005", "TSK-008"],
-      "outputs": ["services/backend-api/test/pii-redaction.spec.ts"],
-      "acceptance": ["no log line contains the raw email or comment body"],
+      "implements_tests": [
+        "TST-007"
+      ],
+      "test_spec": {
+        "tier": "security",
+        "directives": [
+          "Act: create a user-bearing request; scan emitted logs for the email."
+        ],
+        "acceptance": "No log line contains the raw email or comment body."
+      },
+      "depends_on": [
+        "TSK-005",
+        "TSK-008"
+      ],
+      "target_files": [
+        "services/backend-api/test/pii-redaction.spec.ts"
+      ],
+      "outputs": [
+        "TST-007 green"
+      ],
+      "acceptance": [
+        "no log line contains the raw email or comment body"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -296,10 +729,29 @@
       "kind": "test",
       "description": "Realize TST-008 — negative case for the postgres-unavailable failure mode.",
       "component_ref": "persistence-repository",
-      "implements_tests": ["TST-008"],
-      "depends_on": ["TSK-011", "TSK-012"],
-      "outputs": ["services/backend-api/test/repository.outage.int.spec.ts"],
-      "acceptance": ["a DB outage surfaces as a retried then graceful 503"],
+      "implements_tests": [
+        "TST-008"
+      ],
+      "test_spec": {
+        "tier": "integration",
+        "directives": [
+          "Inject a connection failure; assert retry/backoff then a clean 503."
+        ],
+        "acceptance": "A DB outage surfaces as a retried, then graceful, 503 — never a crash."
+      },
+      "depends_on": [
+        "TSK-011",
+        "TSK-012"
+      ],
+      "target_files": [
+        "services/backend-api/test/repository.outage.int.spec.ts"
+      ],
+      "outputs": [
+        "TST-008 green"
+      ],
+      "acceptance": [
+        "a DB outage surfaces as a retried then graceful 503"
+      ],
       "priority": "must",
       "status": "confirmed"
     }

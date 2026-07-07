@@ -3,6 +3,22 @@
 Status: standalone diagnostic, 2026-07-07. **Not runtime logic** — nothing here
 feeds the `code` skill's behavior except where marked `[contract gap]`.
 
+> **Implementation outcomes (same day, user-directed Step 2):**
+> - **A2 → done** — target_files seeding rule in `task-discovery.md` + validator
+>   check 21 (advisory) + gold fixtures remodeled.
+> - **A3 → done, strengthened** — the skill writes `status: confirmed` itself;
+>   validator check 19 *blocks* complete on any draft task (not just advisory).
+> - **A4 → done, beyond the note** — user chose full task self-sufficiency:
+>   schema v1.3 embeds `interface_contract` (impl tasks) + `test_spec` (test
+>   tasks) at write time; checks 18 (presence, version-gated) + 20 (drift
+>   advisory). Only tech stack stays in ARCH.
+> - **B2 → resolved** — `unit_kind` field on tasks (all four WorkUnit kinds map
+>   to `kind: implementation`); mapping documented in `task-discovery.md`.
+> - **B3 → done** — `WorkUnit.kind` added to the arch schema + validator (#23
+>   FILE exemption); demo ARCH validates green.
+> - **C4 → done** — CLAUDE.md documents `code` as an execution skill.
+> - A5/A6/B1/B4–B7, C1–C3/C5 — accepted/no change, as recommended.
+
 Framing: the demo docs in `docs/` spec **AICF, a product** (an AI coding factory
 built on LangGraph). The sdlc skills are a *different implementation of the same
 factory idea* (Claude Code plugin). Divergence is only a defect when it is

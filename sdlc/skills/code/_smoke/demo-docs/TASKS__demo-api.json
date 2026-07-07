@@ -1,10 +1,13 @@
 {
   "metadata": {
-    "tasks_container_version": "1.1",
-    "last_updated": "2026-07-07T10:00:00Z",
+    "tasks_container_version": "1.3",
+    "last_updated": "2026-07-07T15:00:00Z",
     "generated_by": "sdlc-task",
     "session_id": "smoke000-code-code-code-taskdemoapi0",
-    "status": "complete"
+    "status": "complete",
+    "changelog": [
+      "1.3 (2026-07-07): Embedded per-task specifics (schema v1.3)."
+    ]
   },
   "container_id": "demo-api",
   "overview": "Container subgraph for the sdlc-code scheduler smoke: scaffold, migration, two atomic implementation tasks on one controller file, one test task per TST.",
@@ -15,10 +18,18 @@
       "title": "Scaffold demo-api",
       "kind": "scaffold",
       "description": "Package skeleton + manifest + test harness.",
-      "depends_on": ["TASKS/TSK-001"],
-      "target_files": ["services/demo-api/package.json"],
-      "outputs": ["the package resolves and the test runner starts"],
-      "acceptance": ["npm --workspace demo-api install resolves"],
+      "depends_on": [
+        "TASKS/TSK-001"
+      ],
+      "target_files": [
+        "services/demo-api/package.json"
+      ],
+      "outputs": [
+        "the package resolves and the test runner starts"
+      ],
+      "acceptance": [
+        "npm --workspace demo-api install resolves"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -27,11 +38,21 @@
       "title": "Define the Item schema migration",
       "kind": "migration",
       "description": "DDL for the Item entity.",
-      "touches_entities": ["Item"],
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/demo-api/migrations/0001_init.sql"],
-      "outputs": ["the Item table exists after migrate"],
-      "acceptance": ["migrate creates the Item table"],
+      "touches_entities": [
+        "Item"
+      ],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/demo-api/migrations/0001_init.sql"
+      ],
+      "outputs": [
+        "the Item table exists after migrate"
+      ],
+      "acceptance": [
+        "migrate creates the Item table"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -42,11 +63,34 @@
       "description": "POST /items — validate, persist, 201.",
       "component_ref": "items-controller",
       "target_symbol": "createItem",
-      "touches_entities": ["Item"],
-      "depends_on": ["TSK-001", "TSK-002"],
-      "target_files": ["services/demo-api/src/controllers/items.ts"],
-      "outputs": ["items.ts exports createItem()"],
-      "acceptance": ["creating an item returns 201 with a persisted id"],
+      "unit_summary": "POST /items — validate, persist, 201.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [
+          "payload: ItemCreate"
+        ],
+        "output": "Item",
+        "raises": [
+          "ValidationError -> 400"
+        ],
+        "signature": null
+      },
+      "touches_entities": [
+        "Item"
+      ],
+      "depends_on": [
+        "TSK-001",
+        "TSK-002"
+      ],
+      "target_files": [
+        "services/demo-api/src/controllers/items.ts"
+      ],
+      "outputs": [
+        "items.ts exports createItem()"
+      ],
+      "acceptance": [
+        "creating an item returns 201 with a persisted id"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -57,10 +101,26 @@
       "description": "GET /items — return items.",
       "component_ref": "items-controller",
       "target_symbol": "listItems",
-      "depends_on": ["TSK-001"],
-      "target_files": ["services/demo-api/src/controllers/items.ts"],
-      "outputs": ["items.ts exports listItems()"],
-      "acceptance": ["GET /items returns 200"],
+      "unit_summary": "GET /items — return items.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [],
+        "output": "list[Item]",
+        "raises": [],
+        "signature": null
+      },
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "services/demo-api/src/controllers/items.ts"
+      ],
+      "outputs": [
+        "items.ts exports listItems()"
+      ],
+      "acceptance": [
+        "GET /items returns 200"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -70,11 +130,30 @@
       "kind": "test",
       "description": "Realize TST-001 against createItem.",
       "component_ref": "items-controller",
-      "implements_tests": ["TST-001"],
-      "depends_on": ["TSK-003"],
-      "target_files": ["services/demo-api/tests/items.create.test.ts"],
-      "outputs": ["TST-001 green"],
-      "acceptance": ["the tests realizing TST-001 pass"],
+      "implements_tests": [
+        "TST-001"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Arrange a valid create payload.",
+          "Act: call createItem().",
+          "Assert: 201 with a persisted id."
+        ],
+        "acceptance": "Creating an item returns 201 with a persisted id."
+      },
+      "depends_on": [
+        "TSK-003"
+      ],
+      "target_files": [
+        "services/demo-api/tests/items.create.test.ts"
+      ],
+      "outputs": [
+        "TST-001 green"
+      ],
+      "acceptance": [
+        "the tests realizing TST-001 pass"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -84,11 +163,30 @@
       "kind": "test",
       "description": "Realize TST-002 against listItems.",
       "component_ref": "items-controller",
-      "implements_tests": ["TST-002"],
-      "depends_on": ["TSK-004"],
-      "target_files": ["services/demo-api/tests/items.list.test.ts"],
-      "outputs": ["TST-002 green"],
-      "acceptance": ["the tests realizing TST-002 pass"],
+      "implements_tests": [
+        "TST-002"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Arrange two persisted items.",
+          "Act: call listItems().",
+          "Assert: both items are returned."
+        ],
+        "acceptance": "GET /items returns the persisted items."
+      },
+      "depends_on": [
+        "TSK-004"
+      ],
+      "target_files": [
+        "services/demo-api/tests/items.list.test.ts"
+      ],
+      "outputs": [
+        "TST-002 green"
+      ],
+      "acceptance": [
+        "the tests realizing TST-002 pass"
+      ],
       "priority": "must",
       "status": "confirmed"
     }

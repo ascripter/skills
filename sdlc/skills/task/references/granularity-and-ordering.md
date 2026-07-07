@@ -23,8 +23,13 @@ Slice to the finest unit the *architecture declares*:
   `target_files` entry (the file housing that callable). The unit's traces ride up
   onto the task (`touches_operations` ← the unit's `traces_api_operation`,
   `implements` ← its `implements_requirements`, `touches_entities` ← its
-  `touches_entities`). The task inherits the unit's interface contract
-  (`inputs`/`output`/`raises`/`signature`) live from ARCH — don't duplicate it.
+  `touches_entities`), and — schema v1.3 — the unit's interface contract is
+  **embedded on the task** as `interface_contract` (copied from the unit's
+  declared `inputs`/`output`/`raises`/`signature`, or resolved from the API
+  operation it defers to), plus `unit_kind`/`unit_summary`. The codegen agent
+  works from the task alone; see `task-discovery.md` → "Embed the per-task
+  specifics" for the mechanics and the rationale for diverging from the demo's
+  inherit-live model.
 - **one `test` task per `TST-NNN`** — never grouped (see below).
 - **one `migration` task per entity**.
 - A component that declares **no** `work_units[]` yields **no implementation

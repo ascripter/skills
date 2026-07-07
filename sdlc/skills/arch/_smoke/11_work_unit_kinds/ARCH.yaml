@@ -1,0 +1,37 @@
+# 11 — WorkUnit.kind deliverable classes (demo FR-013 v1.30).
+# The container's dev-tools component declares one `kind: content` and one
+# `kind: tooling` unit with NO interface-contract fields — legal (#23 FILE
+# exemption) — plus a normal callable that declares all three.
+# Expectation: validator exits 0 with the file complete (no #23 error).
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-07-07T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "11111111-bbbb-1111-1111-111111111111"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Single CLI tool with shipped content."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: cli
+    archetype: cli
+    purpose: "The command-line tool."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: batch_job
+    external: false
+    status: confirmed
+    file_path: ARCH__cli.yaml
+
+edges: []
+arch_warnings: []

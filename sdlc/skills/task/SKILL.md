@@ -39,6 +39,13 @@ code-generation factory fans out over. Two artifacts:
   that container's scaffold, per-component implementation tasks, first-class
   test tasks, and within-container wiring.
 
+Container tasks are **self-contained for codegen** (schema v1.3): each
+implementation task embeds its work_unit's interface contract
+(`interface_contract`, plus `unit_kind`/`unit_summary`) and each test task
+embeds its TST's specifics (`test_spec`), so `/sdlc:code` acts on a task
+without per-task ARCH/TEST-STRATEGY lookups — only container-general facts
+(tech stack) stay upstream.
+
 This is the SDLC factory's Stage-13 "Task Breakdown": per-container task
 subgraphs are produced one container at a time, then **deterministically
 stitched** into one global dependency-ordered graph via `build_order` and
@@ -379,12 +386,18 @@ than inventing from a blank page. Load `references/task-discovery.md` and
    seeds one `implementation` task scoped `component_ref` + `target_symbol: <the
    work_unit name>` + a single `target_files` entry, with the unit's traces copied
    up (`touches_operations` ← `traces_api_operation`, `implements` ←
-   `implements_requirements`, `touches_entities`). A component with no work_units
-   seeds no implementation task (pure plumbing — there is no coarse whole-component
-   fallback). Tag `✓ found`.
+   `implements_requirements`, `touches_entities`) — plus the **embedded
+   specifics** (schema v1.3): `interface_contract` (the unit's declared
+   `inputs`/`output`/`raises`/`signature`, or the resolved API-operation shape
+   when the unit defers), `unit_kind` (the unit's `kind`; omit for `callable`),
+   and `unit_summary`. The codegen agent works from the task alone — see
+   `references/task-discovery.md` → "Embed the per-task specifics". A component
+   with no work_units seeds no implementation task (pure plumbing — there is no
+   coarse whole-component fallback). Tag `✓ found`.
 2. **`TEST-STRATEGY__<container>.tests[]`** — each `TST-NNN` seeds its own
    first-class `test` task (`implements_tests`) — **one per `TST-NNN`, never
-   grouped**. Tag `✓ found`.
+   grouped** — with the TST's `tier`/`directives`/`acceptance`/`covers`
+   embedded as `test_spec` (v1.3). Tag `✓ found`.
 3. **`ARCH__<container>.internal_edges`** — `calls` edges between components seed
    `integration` tasks. Tag `✓ found`.
 4. **Container `scaffold`** — one task for the package skeleton/manifest. Tag
@@ -458,10 +471,13 @@ straight to the task graph.
    `tsk_id`, `title`, `kind` (∈ scaffold / implementation / test / integration /
    migration / config / design / chore), `description`, `component_ref`,
    `target_symbol` (the ONE work_unit name this atomic impl task builds — must
-   equal a `work_units[].name` on `component_ref`), `implements` (FR/NFR),
-   `implements_tests` (TST), `implements_surfaces` (SCR), `implements_workflows`
-   (WKF), `touches_entities`, `touches_operations`, `touches_assets` (AST),
-   `depends_on`, `inputs`, `target_files`, `outputs`, `acceptance`, `priority`.
+   equal a `work_units[].name` on `component_ref`), `unit_kind` + `unit_summary`
+   + `interface_contract` (embedded from the ARCH work_unit / resolved API
+   operation — v1.3), `implements` (FR/NFR), `implements_tests` (TST) +
+   `test_spec` (embedded from the TST entry — v1.3), `implements_surfaces` (SCR),
+   `implements_workflows` (WKF), `touches_entities`, `touches_operations`,
+   `touches_assets` (AST), `depends_on`, `inputs`, `target_files`, `outputs`,
+   `acceptance`, `priority`.
    `target_files` (the codegen write targets) is drafted from the owning
    component's `code_location` in `ARCH__<container>.yaml` — an implementation task
    carries **exactly one** entry (the file housing `target_symbol`), which must sit
@@ -583,6 +599,13 @@ Set `metadata.status`:
   `[OK]`, AND every coverage / stitch / ID-format check passes.
 - `"draft"` — on early EXIT, when any required field is null, or any check fails.
 
+**The skill confirms tasks — never leave that to the user's editor.** Every task
+the user accepted in the drill-down / sweep is written `status: "confirmed"` by
+this skill at write time; `status: "draft"` marks only work still mid-interview.
+The validator blocks `complete` while any task is a draft (check 19), so a
+`complete` artifact always means "every task went through the confirmation
+flow".
+
 ### Phase 8 — CLAUDE.md pointer & close
 
 Call `set_claude_md_pointer.py` to inject or update this skill's bullet in the
@@ -631,13 +654,18 @@ Like `arch`/`test`, `task` keeps **per-mode sub-sessions** in one file:
 
 ```yaml
 # changelog:
+#   1.2 (2026-07-07): Schema v1.3 — embed per-task specifics at seeding/write
+#     time (interface_contract from the ARCH work_unit or resolved API operation;
+#     test_spec from the TST entry; unit_kind/unit_summary), draft target_files
+#     for every file-producing kind, and write status: confirmed on every
+#     user-accepted task (validator checks 18-21).
 #   1.1 (2026-07-03): Phase 2 preflight hardened — work_unit presence/counts must
 #     come from a real YAML parse (new count_work_units.py helper, quoted in any
 #     readiness/refusal), never a line-grep that misses flow-style entries; the
 #     preflight gate set is explicitly closed (no invented git/changelog gates).
 #   1.0: initial two-mode (system/container) task graph + --next resolver.
 session_file_version: "1"
-skill_version: "1.1"
+skill_version: "1.2"
 last_updated: <iso8601>
 spec_order: []                  # container_ids in --next / build_order sequence (providers first)
 

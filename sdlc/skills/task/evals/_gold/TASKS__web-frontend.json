@@ -1,17 +1,28 @@
 {
   "metadata": {
-    "tasks_container_version": "1.1",
-    "last_updated": "2026-07-01T10:00:00Z",
+    "tasks_container_version": "1.3",
+    "last_updated": "2026-07-07T15:00:00Z",
     "generated_by": "sdlc-task",
     "session_id": "gold0003-front-front-fr-taskwebfrontnd",
     "status": "complete",
     "changelog": [
+      "1.3 (2026-07-07): Embedded per-task specifics (schema v1.3) — interface_contract + unit_summary on every implementation task, test_spec on every test task.",
       "1.1 (2026-07-01): Atomic on work_units — each view/client impl task names its component work_unit via target_symbol; dropped the granularity knob.",
       "1.0 (2026-06-26): Initial web-frontend container task subgraph (gold reference output — exercises surface + design coverage)."
     ],
     "upstream_provenance": [
-      {"file": "docs/ARCH__web-frontend.yaml", "session_id": "archcm02-arcm-arcm-arcm-archcontainr03", "last_updated": "2026-05-26T00:00:00Z", "sha256": "0000000000000000"},
-      {"file": "docs/TEST-STRATEGY__web-frontend.yaml", "session_id": "testfe01-tfe1-tfe1-tfe1-testfrontend01", "last_updated": "2026-05-28T10:00:00Z", "sha256": "0000000000000000"}
+      {
+        "file": "docs/ARCH__web-frontend.yaml",
+        "session_id": "archcm02-arcm-arcm-arcm-archcontainr03",
+        "last_updated": "2026-05-26T00:00:00Z",
+        "sha256": "0000000000000000"
+      },
+      {
+        "file": "docs/TEST-STRATEGY__web-frontend.yaml",
+        "session_id": "testfe01-tfe1-tfe1-tfe1-testfrontend01",
+        "last_updated": "2026-05-28T10:00:00Z",
+        "sha256": "0000000000000000"
+      }
     ]
   },
   "container_id": "web-frontend",
@@ -23,9 +34,17 @@
       "title": "Scaffold the web-frontend app",
       "kind": "scaffold",
       "description": "Next.js app skeleton, package manifest, routing shell and the test harness.",
-      "target_files": ["apps/web-frontend/package.json", "apps/web-frontend/next.config.mjs"],
-      "outputs": ["apps/web-frontend/package.json", "the app boots and serves the shell route"],
-      "acceptance": ["pnpm --filter web-frontend dev boots the shell"],
+      "target_files": [
+        "apps/web-frontend/package.json",
+        "apps/web-frontend/next.config.mjs"
+      ],
+      "outputs": [
+        "apps/web-frontend/package.json",
+        "the app boots and serves the shell route"
+      ],
+      "acceptance": [
+        "pnpm --filter web-frontend dev boots the shell"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -34,11 +53,23 @@
       "title": "Wire the design tokens and theme",
       "kind": "design",
       "description": "Materialize the DESIGN token_based_ui system into Tailwind config + CSS custom-properties so every surface renders against the design tokens.",
-      "depends_on": ["TSK-001"],
-      "inputs": ["DESIGN.yaml", "DESIGN__tokens.yaml"],
-      "target_files": ["apps/web-frontend/tailwind.config.ts", "apps/web-frontend/src/styles/tokens.css"],
-      "outputs": ["the design tokens are importable as Tailwind theme + CSS vars"],
-      "acceptance": ["a sample component resolves the token colors/spacing from the theme"],
+      "depends_on": [
+        "TSK-001"
+      ],
+      "inputs": [
+        "DESIGN.yaml",
+        "DESIGN__tokens.yaml"
+      ],
+      "target_files": [
+        "apps/web-frontend/tailwind.config.ts",
+        "apps/web-frontend/src/styles/tokens.css"
+      ],
+      "outputs": [
+        "the design tokens are importable as Tailwind theme + CSS vars"
+      ],
+      "acceptance": [
+        "a sample component resolves the token colors/spacing from the theme"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -49,13 +80,41 @@
       "description": "Render the paginated task list with create/triage actions, calling the API client.",
       "component_ref": "task-list-view",
       "target_symbol": "TaskListPage",
-      "implements": ["FR-001"],
-      "implements_surfaces": ["SCR-001"],
-      "implements_workflows": ["WKF-001"],
-      "depends_on": ["TSK-001", "TSK-002", "TSK-007"],
-      "target_files": ["src/app/tasks/task-list.tsx"],
-      "outputs": ["the task-list route renders tasks newest-first"],
-      "acceptance": ["the list renders tasks newest-first and a create action is reachable"],
+      "unit_summary": "Render the paginated task list with create/triage actions.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [
+          "tasks: TaskPage (from apiClient)"
+        ],
+        "output": "the rendered task-list route (tasks newest-first, create affordance)",
+        "raises": [
+          "ApiUnreachable -> inline error state"
+        ],
+        "signature": null
+      },
+      "implements": [
+        "FR-001"
+      ],
+      "implements_surfaces": [
+        "SCR-001"
+      ],
+      "implements_workflows": [
+        "WKF-001"
+      ],
+      "depends_on": [
+        "TSK-001",
+        "TSK-002",
+        "TSK-007"
+      ],
+      "target_files": [
+        "src/app/tasks/task-list.tsx"
+      ],
+      "outputs": [
+        "the task-list route renders tasks newest-first"
+      ],
+      "acceptance": [
+        "the list renders tasks newest-first and a create action is reachable"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -66,13 +125,42 @@
       "description": "Render one task with status controls; mark-done updates optimistically.",
       "component_ref": "task-detail-view",
       "target_symbol": "TaskDetailPage",
-      "implements": ["FR-001", "FR-003"],
-      "implements_surfaces": ["SCR-002"],
-      "implements_workflows": ["WKF-001"],
-      "depends_on": ["TSK-001", "TSK-002", "TSK-007"],
-      "target_files": ["src/app/tasks/task-detail.tsx"],
-      "outputs": ["the task-detail route renders a task and its status controls"],
-      "acceptance": ["marking a task done updates the view without a full reload"],
+      "unit_summary": "Render one task with its status controls.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [
+          "taskId: TaskId"
+        ],
+        "output": "the rendered task-detail route (optimistic mark-done)",
+        "raises": [
+          "NotFound -> 404 page"
+        ],
+        "signature": null
+      },
+      "implements": [
+        "FR-001",
+        "FR-003"
+      ],
+      "implements_surfaces": [
+        "SCR-002"
+      ],
+      "implements_workflows": [
+        "WKF-001"
+      ],
+      "depends_on": [
+        "TSK-001",
+        "TSK-002",
+        "TSK-007"
+      ],
+      "target_files": [
+        "src/app/tasks/task-detail.tsx"
+      ],
+      "outputs": [
+        "the task-detail route renders a task and its status controls"
+      ],
+      "acceptance": [
+        "marking a task done updates the view without a full reload"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -83,13 +171,41 @@
       "description": "Render and submit comments on the open task.",
       "component_ref": "comments-panel-view",
       "target_symbol": "CommentsPanel",
-      "implements": ["FR-002"],
-      "implements_surfaces": ["SCR-003"],
-      "implements_workflows": ["WKF-002"],
-      "depends_on": ["TSK-001", "TSK-002", "TSK-007"],
-      "target_files": ["src/app/comments/comments-panel.tsx"],
-      "outputs": ["the comments panel lists and posts comments"],
-      "acceptance": ["a new comment appears in the panel after submit"],
+      "unit_summary": "List and add comments on the open task.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [
+          "taskId: TaskId"
+        ],
+        "output": "the rendered comments panel (list + submit)",
+        "raises": [
+          "ApiUnreachable -> inline error state"
+        ],
+        "signature": null
+      },
+      "implements": [
+        "FR-002"
+      ],
+      "implements_surfaces": [
+        "SCR-003"
+      ],
+      "implements_workflows": [
+        "WKF-002"
+      ],
+      "depends_on": [
+        "TSK-001",
+        "TSK-002",
+        "TSK-007"
+      ],
+      "target_files": [
+        "src/app/comments/comments-panel.tsx"
+      ],
+      "outputs": [
+        "the comments panel lists and posts comments"
+      ],
+      "acceptance": [
+        "a new comment appears in the panel after submit"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -100,13 +216,39 @@
       "description": "Render the weekly digest settings form and recent runs.",
       "component_ref": "digest-settings-view",
       "target_symbol": "DigestSettingsPage",
-      "implements": ["FR-004"],
-      "implements_surfaces": ["SCR-004"],
-      "implements_workflows": ["WKF-003"],
-      "depends_on": ["TSK-001", "TSK-002", "TSK-007"],
-      "target_files": ["src/app/digest/digest-settings.tsx"],
-      "outputs": ["the digest-settings route saves and reads back the schedule"],
-      "acceptance": ["saving the digest schedule reads back the same values"],
+      "unit_summary": "Render the weekly digest settings form and recent runs.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [],
+        "output": "the rendered digest-settings route (form + runs newest-first)",
+        "raises": [
+          "ValidationError -> inline field errors"
+        ],
+        "signature": null
+      },
+      "implements": [
+        "FR-004"
+      ],
+      "implements_surfaces": [
+        "SCR-004"
+      ],
+      "implements_workflows": [
+        "WKF-003"
+      ],
+      "depends_on": [
+        "TSK-001",
+        "TSK-002",
+        "TSK-007"
+      ],
+      "target_files": [
+        "src/app/digest/digest-settings.tsx"
+      ],
+      "outputs": [
+        "the digest-settings route saves and reads back the schedule"
+      ],
+      "acceptance": [
+        "saving the digest schedule reads back the same values"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -117,10 +259,32 @@
       "description": "Typed client over the backend tasks/comments/digest-settings resources with auth.",
       "component_ref": "api-client",
       "target_symbol": "ApiClient",
-      "depends_on": ["TSK-001"],
-      "target_files": ["src/lib/api/client.ts"],
-      "outputs": ["a typed apiClient with tasks/comments/digest-settings methods"],
-      "acceptance": ["the client issues authenticated requests and parses typed responses"],
+      "unit_summary": "Typed client over the backend REST API (tasks/comments/digest-settings) with auth.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": [
+          "baseUrl: string",
+          "getToken: () => Promise<string>"
+        ],
+        "output": "ApiClient (typed tasks/comments/digest-settings methods)",
+        "raises": [
+          "HttpError -> typed error with status",
+          "Unreachable -> retried, then surfaced"
+        ],
+        "signature": null
+      },
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "src/lib/api/client.ts"
+      ],
+      "outputs": [
+        "a typed apiClient with tasks/comments/digest-settings methods"
+      ],
+      "acceptance": [
+        "the client issues authenticated requests and parses typed responses"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -130,11 +294,31 @@
       "kind": "test",
       "description": "Realize the task-list rendering test.",
       "component_ref": "task-list-view",
-      "implements_tests": ["TST-001"],
-      "depends_on": ["TSK-003"],
-      "target_files": ["src/app/tasks/task-list.test.tsx"],
-      "outputs": ["the test realizing TST-001 passes"],
-      "acceptance": ["the test realizing TST-001 passes"],
+      "implements_tests": [
+        "TST-001"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Render with a fixture of tasks; assert order + create affordance."
+        ],
+        "acceptance": "The list renders tasks newest-first and a create action is reachable.",
+        "covers": [
+          "FR-001"
+        ]
+      },
+      "depends_on": [
+        "TSK-003"
+      ],
+      "target_files": [
+        "src/app/tasks/task-list.test.tsx"
+      ],
+      "outputs": [
+        "the test realizing TST-001 passes"
+      ],
+      "acceptance": [
+        "the test realizing TST-001 passes"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -144,11 +328,31 @@
       "kind": "test",
       "description": "Realize the task-detail mark-done test.",
       "component_ref": "task-detail-view",
-      "implements_tests": ["TST-002"],
-      "depends_on": ["TSK-004"],
-      "target_files": ["src/app/tasks/task-detail.test.tsx"],
-      "outputs": ["the test realizing TST-002 passes"],
-      "acceptance": ["the test realizing TST-002 passes"],
+      "implements_tests": [
+        "TST-002"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Render a task; act: mark done; assert optimistic update."
+        ],
+        "acceptance": "Marking a task done updates the view without a full reload.",
+        "covers": [
+          "FR-003"
+        ]
+      },
+      "depends_on": [
+        "TSK-004"
+      ],
+      "target_files": [
+        "src/app/tasks/task-detail.test.tsx"
+      ],
+      "outputs": [
+        "the test realizing TST-002 passes"
+      ],
+      "acceptance": [
+        "the test realizing TST-002 passes"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -158,11 +362,31 @@
       "kind": "test",
       "description": "Realize the comments-panel add test.",
       "component_ref": "comments-panel-view",
-      "implements_tests": ["TST-003"],
-      "depends_on": ["TSK-005"],
-      "target_files": ["src/app/comments/comments-panel.test.tsx"],
-      "outputs": ["the test realizing TST-003 passes"],
-      "acceptance": ["the test realizing TST-003 passes"],
+      "implements_tests": [
+        "TST-003"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Render the panel; act: submit a comment; assert it appears."
+        ],
+        "acceptance": "A new comment appears in the panel after submit.",
+        "covers": [
+          "FR-002"
+        ]
+      },
+      "depends_on": [
+        "TSK-005"
+      ],
+      "target_files": [
+        "src/app/comments/comments-panel.test.tsx"
+      ],
+      "outputs": [
+        "the test realizing TST-003 passes"
+      ],
+      "acceptance": [
+        "the test realizing TST-003 passes"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -172,11 +396,31 @@
       "kind": "test",
       "description": "Realize the digest-settings save test.",
       "component_ref": "digest-settings-view",
-      "implements_tests": ["TST-004"],
-      "depends_on": ["TSK-006"],
-      "target_files": ["src/app/digest/digest-settings.test.tsx"],
-      "outputs": ["the test realizing TST-004 passes"],
-      "acceptance": ["the test realizing TST-004 passes"],
+      "implements_tests": [
+        "TST-004"
+      ],
+      "test_spec": {
+        "tier": "unit",
+        "directives": [
+          "Render the form; act: save; assert read-back."
+        ],
+        "acceptance": "Saving the digest schedule reads back the same values.",
+        "covers": [
+          "FR-004"
+        ]
+      },
+      "depends_on": [
+        "TSK-006"
+      ],
+      "target_files": [
+        "src/app/digest/digest-settings.test.tsx"
+      ],
+      "outputs": [
+        "the test realizing TST-004 passes"
+      ],
+      "acceptance": [
+        "the test realizing TST-004 passes"
+      ],
       "priority": "must",
       "status": "confirmed"
     },
@@ -186,11 +430,28 @@
       "kind": "test",
       "description": "Realize the api-unreachable negative case (TST-005).",
       "component_ref": "api-client",
-      "implements_tests": ["TST-005"],
-      "depends_on": ["TSK-007"],
-      "target_files": ["src/lib/api/client.test.ts"],
-      "outputs": ["the test realizing TST-005 passes"],
-      "acceptance": ["an unreachable backend surfaces as an inline error, not a crash"],
+      "implements_tests": [
+        "TST-005"
+      ],
+      "test_spec": {
+        "tier": "integration",
+        "directives": [
+          "Stub a 503; assert retry then an inline error state (no crash)."
+        ],
+        "acceptance": "An unreachable backend surfaces as an inline error, not a crash."
+      },
+      "depends_on": [
+        "TSK-007"
+      ],
+      "target_files": [
+        "src/lib/api/client.test.ts"
+      ],
+      "outputs": [
+        "the test realizing TST-005 passes"
+      ],
+      "acceptance": [
+        "an unreachable backend surfaces as an inline error, not a crash"
+      ],
       "priority": "must",
       "status": "confirmed"
     }

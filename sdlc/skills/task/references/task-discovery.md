@@ -41,6 +41,43 @@ fallback. The work-unit coverage gate holds you to realizing every
 `work_units[].name` by exactly one task's `target_symbol` (or deferring it) — see
 `coverage-and-defer.md`. See `granularity-and-ordering.md` for the full model.
 
+**Every work_unit kind maps to `kind: implementation`.** A unit may carry a
+`kind` (`callable` default, or `module` / `content` / `tooling` — demo FR-013
+v1.30 deliverable classes). The task derivation is identical for all four —
+same `component_ref`/`target_symbol`/one-`target_files` shape, same coverage
+gates — because a non-callable unit is still exactly one deliverable in one
+file. Copy the unit's `kind` onto the task as `unit_kind` (omit for
+`callable`): it is the codegen agent's rendering-mode switch (render a method
+vs. emit the module/content/tool file), nothing more. Do NOT map content →
+`chore` or tooling → some other kind — that would strip the atomicity pins.
+
+### Embed the per-task specifics (schema v1.3 — the self-sufficiency contract)
+
+The codegen agent works from **the task alone**: per-task specifics are
+embedded on the task at seeding/write time; only container-general facts (tech
+stack, coverage targets) stay upstream. This deliberately diverges from the
+demo's "inherit the contract live" — a per-task lookup in a huge ARCH file is
+the wrong cost model, and the §7 upstream-provenance re-run reconciles the
+embedded copies when ARCH/TEST-STRATEGY move (the validator's drift advisory,
+check 20, names exactly which tasks to re-confirm).
+
+- **`interface_contract`** (every `implementation` task; non-callable
+  `unit_kind` exempt — the file IS the contract):
+  - unit **declares** `inputs`/`output`/`raises` (explicit empties count) →
+    copy them verbatim, `source: work_unit`; copy `signature` only when set.
+  - unit **defers** via `traces_api_operation` → resolve the operation in
+    `API__*.yaml` and render its request/response/exception shape into
+    `inputs`/`output`/`raises`, with `source: api_operation` +
+    `operation_id`. When no `API__*.yaml` is readable, render the best
+    contract the UX/DATA slices support and note a `WRN-NNN`.
+  - Also copy the unit's `summary` → `unit_summary`.
+- **`test_spec`** (every `test` task): copy the TST entry's `tier`,
+  `directives`, `acceptance`, and `covers` from
+  `TEST-STRATEGY__<cid>.yaml` — the test-authoring agent must not need to
+  open it.
+
+The validator blocks `complete` on a v1.3 artifact missing either (check 18).
+
 When ARCH declares no work_units on a non-trivial component, that is an upstream
 gap: the right fix is `/sdlc:arch <container>` to add `work_units[]`, not to
 invent a method breakdown here (inventing structure at the task stage is the
@@ -104,6 +141,16 @@ cross-cutting file), either widen the component's `code_location` in ARCH or mak
 it an `integration`/system task. **`target_files` is the raw write-target list;
 `outputs` stays the contract-level result** (an exported symbol, an applied
 migration, a passing suite) that downstream tasks depend on — fill both.
+
+**Draft `target_files` for every file-producing task, not just implementation.**
+`scaffold` (the skeleton files), `test` (the spec file), `migration` (schema +
+migration files), `config` (settings/env files), `design` (token/theme files)
+all produce files at known paths — name them in `target_files` so the codegen
+agent never derives a path the graph could have pinned. Don't smuggle the paths
+into `outputs` instead (the gold fixtures once modeled that weaker style);
+`outputs` says what dependents rely on ("TST-003 green"), `target_files` says
+where the bytes go. The validator's check 21 warns on a file-producing task
+with neither.
 
 A component with no `code_location` (ARCH left it blank) means you have nothing
 to ground against — note it (`WRN-NNN`) and either ask the user for the path or

@@ -1,0 +1,53 @@
+# 11 — container file exercising WorkUnit.kind: a content unit and a tooling
+# unit with no inputs/output/raises (legal — FILE exemption in #23) beside a
+# declared callable.
+metadata:
+  arch_container_version: "1.1"
+  last_updated: "2026-07-07T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "11111111-bbbb-1111-1111-111111111112"
+  status: "complete"
+container_id: cli
+archetype: cli
+overview: "CLI that ships a prompt pack and a lint tool alongside its runtime command."
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+deployment:
+  shape: cli_binary
+  shape_confidence: confirmed
+observability:
+  logs: "stdout, Python logging at INFO"
+failure_modes:
+  - id: bad-input
+    description: "Malformed input file."
+    likelihood: medium
+    impact: low
+    mitigation: "Typed error with the offending line."
+components:
+  - component_id: cli-runtime
+    archetype: controller
+    purpose: "Runs the tool's one command."
+    responsibilities:
+      - "Parse args and run the pipeline."
+    code_location:
+      - "src/cli/"
+    work_units:
+      - name: run
+        summary: "Entry point: parse args, run, exit code."
+        inputs: ["argv: list[str]"]
+        output: "int"
+        raises: ["UsageError -> exit 2"]
+        status: confirmed
+      - name: prompt_pack
+        summary: "The shipped default prompt pack."
+        kind: content
+        status: confirmed
+      - name: lint_config
+        summary: "The shipped repo lint tool."
+        kind: tooling
+        status: confirmed
+    status: confirmed
+internal_edges: []
+external_edges: []
+arch_warnings: []

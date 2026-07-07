@@ -310,6 +310,21 @@ components:                                # REQUIRED — non-empty
                                            #   THIS component. Becomes the downstream Task's
                                            #   target_symbol (the atomic codegen unit).
         summary: <one line>                # REQUIRED — what this callable does.
+        kind: callable                     # OPTIONAL — deliverable class (demo FR-013 v1.30):
+                                           #   callable (DEFAULT when omitted) — a runtime
+                                           #     method/function; the normal case.
+                                           #   module   — a source module whose DEFINITION SET
+                                           #     is the interface (e.g. a Pydantic schemas
+                                           #     file); `name` names the module deliverable.
+                                           #   content  — a shipped content file (prompt pack,
+                                           #     question inventory, template).
+                                           #   tooling  — a repo tool/validator/migration
+                                           #     script.
+                                           #   The SAME 1:1 unit→task rule applies to every
+                                           #   kind (downstream `task` copies it onto the
+                                           #   task's `unit_kind`); non-callable kinds deliver
+                                           #   a FILE, so the #23 DEFER-OR-DECLARE
+                                           #   interface-contract check does not apply to them.
         # --- traces: the contract this work_unit realizes (ALL OPTIONAL) ---
         traces_api_operation: create-task  # OPTIONAL — an operation_id from API__*.yaml
                                            #   (controllers / api_clients). Validated ⊆ the
@@ -533,11 +548,14 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     traces_api_operation (no schema-bearing traced contract) must declare ALL
 #     THREE of inputs / output / raises (explicit empties count: `inputs: []`,
 #     `raises: []`, `output: "None"`). A unit WITH traces_api_operation may
-#     defer to the API schema. Blocks `complete`; the component's
-#     work_units_waiver downgrades its units' gaps to warnings. This is the
-#     lint that catches an emitter which fills only the trace fields
-#     (implements_requirements/touches_entities/…) and leaves every contract
-#     field empty — downstream atomic tasks then re-guess each signature.
+#     defer to the API schema. A unit with a NON-CALLABLE kind (module /
+#     content / tooling) is EXEMPT — its deliverable is a file, not a callable,
+#     so the interface-contract fields don't apply. Blocks `complete`; the
+#     component's work_units_waiver downgrades its units' gaps to warnings.
+#     This is the lint that catches an emitter which fills only the trace
+#     fields (implements_requirements/touches_entities/…) and leaves every
+#     contract field empty — downstream atomic tasks then re-guess each
+#     signature. `kind` itself is vocabulary-checked in #21.
 # 24. Container→system edge roll-up — every external_edges[] entry implies a
 #     system-level ARCH.yaml.edges row {from: this container, to: the target
 #     container, type: same}. Missing rows BLOCK `complete`: a container-sourced

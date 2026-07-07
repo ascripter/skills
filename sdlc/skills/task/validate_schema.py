@@ -58,6 +58,20 @@ Validates:
        - Union: every PRD must-have FR is realized somewhere or deferred (hard
          only once the whole graph is stitched; advisory before).
        Surface/operation gates soften to advisory when UX/API are absent.
+    7. Embedded per-task specifics (v1.3, container files):
+       - #18 (blocking at tasks_container_version >= 1.3; advisory below):
+         every kind:implementation task embeds interface_contract
+         (source/inputs/output/raises; explicit empties count; non-callable
+         unit_kind exempt) and every kind:test task embeds test_spec
+         (tier/directives/acceptance) — so the codegen agent works from the
+         task alone, no per-task ARCH/TEST-STRATEGY lookup.
+       - #19 (blocking, any version): a file claiming status complete has every
+         task status: confirmed (the skill confirms via its drill-down flow).
+       - #20 (advisory): embedded copies drifting from the current ARCH
+         work_unit / TST entry — suggest a /sdlc:task re-run.
+       - #21 (advisory): a file-producing kind (scaffold/test/migration/config/
+         design) naming no write target (no target_files, no path-shaped
+         output).
 
 Exit codes:
     0 — schema valid; status='complete' (all checks passing) or status='draft'.
@@ -126,6 +140,30 @@ SYSTEM_KINDS = {
     "deploy-prep", "docs", "chore",
 }
 
+# WorkUnit deliverable classes (mirrors arch's _WORK_UNIT_KINDS). A non-callable
+# unit_kind delivers a FILE, so the embedded interface_contract does not apply
+# to it (schema #18 — mirrors arch #23's FILE exemption).
+UNIT_KINDS = {"callable", "module", "content", "tooling"}
+NON_CALLABLE_UNIT_KINDS = {"module", "content", "tooling"}
+CONTRACT_SOURCES = {"work_unit", "api_operation"}
+
+# Kinds whose deliverable is (usually) files — schema #21 advisory: they should
+# name their write targets (target_files, or path-shaped outputs).
+FILE_PRODUCING_KINDS = {"scaffold", "test", "migration", "config", "design"}
+
+# Embedded per-task specifics (interface_contract / test_spec) became REQUIRED
+# at this artifact version; older artifacts get warnings instead of errors.
+EMBEDDED_SPECS_MIN_VERSION = (1, 3)
+
+
+def _version_tuple(v: Optional[str]) -> Tuple[int, int]:
+    """Parse 'MAJOR.MINOR[...]' leniently; unparseable → (0, 0) (pre-1.3)."""
+    try:
+        parts = str(v).strip().split(".")
+        return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
+    except (ValueError, AttributeError, IndexError):
+        return (0, 0)
+
 
 # =============================================================================
 # Pydantic models. Almost every field is Optional: the schema's "REQUIRED"
@@ -154,6 +192,30 @@ class ContainerMetadata(BaseModel):
     upstream_provenance: Optional[List[Dict[str, Any]]] = None
 
 
+class InterfaceContract(BaseModel):
+    """Embedded copy of the ARCH work_unit's interface contract (schema #18,
+    artifact version >= 1.3) — or of the API operation's shape when the unit
+    deferred. Written by the skill at write time so the codegen agent needs no
+    per-task upstream lookup."""
+
+    source: Optional[str] = None         # work_unit | api_operation
+    inputs: Optional[List[str]] = None
+    output: Optional[Any] = None
+    raises: Optional[List[str]] = None
+    signature: Optional[str] = None
+    operation_id: Optional[str] = None   # set when source == api_operation
+
+
+class TestSpec(BaseModel):
+    """Embedded copy of the TST entry's per-task specifics (schema #18,
+    artifact version >= 1.3)."""
+
+    tier: Optional[str] = None
+    directives: Optional[List[str]] = None
+    acceptance: Optional[str] = None
+    covers: Optional[List[str]] = None
+
+
 class ContainerTask(BaseModel):
     tsk_id: Optional[str] = None
     title: Optional[str] = None
@@ -161,6 +223,10 @@ class ContainerTask(BaseModel):
     description: Optional[str] = None
     component_ref: Optional[str] = None
     target_symbol: Optional[str] = None  # the SINGLE work_units[].name on component_ref
+    unit_kind: Optional[str] = None      # callable (default) | module | content | tooling
+    unit_summary: Optional[str] = None   # the work_unit's one-liner, copied
+    interface_contract: Optional[InterfaceContract] = None
+    test_spec: Optional[TestSpec] = None
     implements: Optional[List[str]] = None
     implements_tests: Optional[List[str]] = None
     implements_surfaces: Optional[List[str]] = None
@@ -440,6 +506,9 @@ class ArchContainerInfo:
         # union of every component's traces_data_entities (the container's
         # architecture-declared entity footprint = the entity-coverage expected set)
         self.all_entities: Set[str] = set()
+        # component -> unit name -> the unit's declared contract fields
+        # (kind/inputs/output/raises/signature) — for the #20 drift advisory
+        self.comp_unit_contracts: Dict[str, Dict[str, dict]] = {}
 
 
 def _strset(node: dict, key: str) -> Set[str]:
@@ -472,10 +541,20 @@ def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
         info.implements |= info.comp_reqs[coid]
         info.all_entities |= info.comp_entities[coid]
         units: Set[str] = set()
+        contracts: Dict[str, dict] = {}
         for wu in comp.get("work_units") or []:
             if isinstance(wu, dict) and wu.get("name"):
-                units.add(str(wu["name"]).strip())
+                name = str(wu["name"]).strip()
+                units.add(name)
+                contracts[name] = {
+                    "kind": wu.get("kind"),
+                    "inputs": wu.get("inputs"),
+                    "output": wu.get("output"),
+                    "raises": wu.get("raises"),
+                    "signature": wu.get("signature"),
+                }
         info.comp_units[coid] = units
+        info.comp_unit_contracts[coid] = contracts
     return info
 
 
@@ -488,6 +567,24 @@ def load_test_tst_ids(path: Path) -> Set[str]:
     for t in raw.get("tests") or []:
         if isinstance(t, dict) and t.get("tst_id"):
             out.add(str(t["tst_id"]).upper())
+    return out
+
+
+def load_test_specs(path: Path) -> Dict[str, dict]:
+    """tst_id -> {tier, directives, acceptance, covers} from a
+    TEST-STRATEGY(.__container).yaml — for the #20 test_spec drift advisory."""
+    out: Dict[str, dict] = {}
+    raw = _safe_yaml(path)
+    if raw is None:
+        return out
+    for t in raw.get("tests") or []:
+        if isinstance(t, dict) and t.get("tst_id"):
+            out[str(t["tst_id"]).upper()] = {
+                "tier": t.get("tier"),
+                "directives": t.get("directives"),
+                "acceptance": t.get("acceptance"),
+                "covers": t.get("covers"),
+            }
     return out
 
 
@@ -689,6 +786,177 @@ def check_required_container(m: TasksContainer) -> List[str]:
                     f"tasks[{i}].target_files (kind:implementation needs exactly one entry)"
                 )
     return missing
+
+
+def check_all_confirmed(tasks: List[Any], label: str) -> List[str]:
+    """Cross-check #19 — a file claiming complete must have every task
+    status: confirmed. The skill confirms tasks through its drill-down/sweep
+    flow (no manual step); a leftover draft means the interview didn't finish.
+    Only called for files whose metadata.status == complete."""
+    errs: List[str] = []
+    for i, t in enumerate(tasks or []):
+        if getattr(t, "status", None) == TaskStatus.draft:
+            errs.append(
+                f"tasks[{i}] ({getattr(t, 'tsk_id', '?')}) has status 'draft' in a "
+                f"'complete' artifact — finish or re-run the interview so the skill "
+                f"confirms it (check 19)"
+            )
+    return errs
+
+
+def check_embedded_specs(cm: TasksContainer, label: str) -> Tuple[List[str], List[str]]:
+    """Cross-check #18 — embedded per-task specifics.
+
+    interface_contract on every kind:implementation task (non-callable
+    unit_kind exempt — the FILE is the contract) and test_spec on every
+    kind:test task. VERSION-GATED: blocking at tasks_container_version >= 1.3,
+    warnings below (older artifacts predate the fields). Vocabulary and
+    wrong-kind placement are errors at ANY version.
+    """
+    errs: List[str] = []
+    warns: List[str] = []
+    gated = _version_tuple(cm.metadata.tasks_container_version) >= EMBEDDED_SPECS_MIN_VERSION
+
+    def report(msg: str) -> None:
+        (errs if gated else warns).append(
+            msg if gated else msg + " (advisory: artifact predates v1.3)"
+        )
+
+    for i, t in enumerate(cm.tasks or []):
+        where = f"tasks[{i}] ({t.tsk_id or '?'})"
+        if t.unit_kind is not None and t.unit_kind not in UNIT_KINDS:
+            errs.append(f"{where}.unit_kind '{t.unit_kind}' is not one of {sorted(UNIT_KINDS)}")
+        if t.interface_contract is not None and t.kind != "implementation":
+            errs.append(f"{where}: interface_contract on a kind:{t.kind} task (implementation only)")
+        if t.test_spec is not None and t.kind != "test":
+            errs.append(f"{where}: test_spec on a kind:{t.kind} task (test only)")
+
+        if t.kind == "implementation":
+            if t.unit_kind in NON_CALLABLE_UNIT_KINDS:
+                continue  # FILE case — the deliverable is the file itself
+            ic = t.interface_contract
+            if ic is None:
+                report(
+                    f"{where}: kind:implementation without interface_contract — embed the "
+                    f"work_unit's inputs/output/raises (or the resolved API operation shape) "
+                    f"so the codegen agent needs no upstream lookup (check 18)"
+                )
+                continue
+            if ic.source is not None and ic.source not in CONTRACT_SOURCES:
+                errs.append(f"{where}.interface_contract.source '{ic.source}' is not one of {sorted(CONTRACT_SOURCES)}")
+            missing = [
+                f for f, v in (("inputs", ic.inputs), ("output", ic.output), ("raises", ic.raises))
+                if v is None
+            ]
+            if missing:
+                report(
+                    f"{where}.interface_contract leaves {missing} undeclared — explicit "
+                    f"empties are fine (inputs: [], raises: [], output: \"None\") (check 18)"
+                )
+            if ic.source == "api_operation" and not (ic.operation_id or "").strip():
+                report(f"{where}.interface_contract.source is api_operation but operation_id is empty (check 18)")
+
+        if t.kind == "test":
+            ts = t.test_spec
+            if ts is None:
+                report(
+                    f"{where}: kind:test without test_spec — embed the TST's "
+                    f"tier/directives/acceptance so the test-authoring agent works from "
+                    f"the task alone (check 18)"
+                )
+                continue
+            missing = [
+                f for f, v in (("tier", ts.tier), ("directives", ts.directives), ("acceptance", ts.acceptance))
+                if v in (None, "", [])
+            ]
+            if missing:
+                report(f"{where}.test_spec leaves {missing} empty (check 18)")
+    return errs, warns
+
+
+_PATHY_OUTPUT_RE = re.compile(r"^[^\s]*(/[^\s]+|\.[A-Za-z0-9]{1,8})$")
+
+
+def check_file_producing_targets(tasks: List[Any], label: str) -> List[str]:
+    """Cross-check #21 (advisory) — a file-producing kind should name its write
+    targets: target_files, or at least a path-shaped outputs entry."""
+    warns: List[str] = []
+    for i, t in enumerate(tasks or []):
+        if getattr(t, "kind", None) not in FILE_PRODUCING_KINDS:
+            continue
+        if getattr(t, "target_files", None):
+            continue
+        outputs = getattr(t, "outputs", None) or []
+        if any(_PATHY_OUTPUT_RE.match(str(o).strip()) for o in outputs):
+            continue
+        warns.append(
+            f"tasks[{i}] ({getattr(t, 'tsk_id', '?')}, kind:{getattr(t, 'kind', '?')}) names no "
+            f"write target (no target_files, no path-shaped output) — the codegen agent will "
+            f"have to derive paths from code_location + stack conventions (check 21)"
+        )
+    return warns
+
+
+def check_embedded_drift(
+    cm: TasksContainer,
+    cid: str,
+    docs_dir: Path,
+) -> List[str]:
+    """Cross-check #20 (advisory) — embedded copies drifting from their source.
+
+    Compares each interface_contract (source: work_unit) against the current
+    ARCH work_unit, and each test_spec against the current TST entry. A
+    difference means the upstream moved after the task graph was written —
+    suggest re-running /sdlc:task (the §7 delta-review reconciles the copies).
+    """
+    warns: List[str] = []
+    arch_info = load_arch_container(docs_dir, cid)
+    tst_specs = load_test_specs(docs_dir / f"TEST-STRATEGY__{cid}.yaml")
+
+    def norm(v: Any) -> Any:
+        if isinstance(v, list):
+            return [str(x).strip() for x in v]
+        return str(v).strip() if v is not None else None
+
+    for i, t in enumerate(cm.tasks or []):
+        where = f"tasks[{i}] ({t.tsk_id or '?'})"
+        ic = t.interface_contract
+        if (
+            t.kind == "implementation" and ic is not None
+            and (ic.source or "work_unit") == "work_unit"
+            and t.component_ref and t.target_symbol
+        ):
+            unit = (arch_info.comp_unit_contracts.get(t.component_ref) or {}).get(t.target_symbol.strip())
+            if unit is not None:
+                diffs = [
+                    f for f in ("inputs", "output", "raises", "signature")
+                    if norm(unit.get(f)) is not None and norm(unit.get(f)) != norm(getattr(ic, f))
+                ]
+                if diffs:
+                    warns.append(
+                        f"{where}.interface_contract differs from the current ARCH work_unit "
+                        f"on {diffs} — upstream moved; re-run /sdlc:task {cid} to reconcile (check 20)"
+                    )
+                unit_kind = (unit.get("kind") or "callable").strip()
+                if (t.unit_kind or "callable") != unit_kind:
+                    warns.append(
+                        f"{where}.unit_kind '{t.unit_kind or 'callable'}' differs from the ARCH "
+                        f"work_unit's kind '{unit_kind}' (check 20)"
+                    )
+        ts = t.test_spec
+        if t.kind == "test" and ts is not None and len(t.implements_tests or []) == 1:
+            tst = tst_specs.get(str(t.implements_tests[0]).upper())
+            if tst is not None:
+                diffs = [
+                    f for f in ("tier", "directives", "acceptance")
+                    if norm(tst.get(f)) is not None and norm(tst.get(f)) != norm(getattr(ts, f))
+                ]
+                if diffs:
+                    warns.append(
+                        f"{where}.test_spec differs from the current TST entry on {diffs} — "
+                        f"upstream moved; re-run /sdlc:task {cid} to reconcile (check 20)"
+                    )
+    return warns
 
 
 # =============================================================================
@@ -1261,6 +1529,9 @@ def validate_all(path: Path) -> int:
             blocking += [f"{system_path.name}: {e}" for e in check_tsk_ids(sysm.tasks or [], system_path.stem)]
             blocking += [f"{system_path.name}: {e}" for e in check_kinds(sysm.tasks or [], SYSTEM_KINDS, system_path.stem)]
             blocking += [f"{system_path.name}: {e}" for e in check_warning_ids(sysm.task_warnings, system_path.stem)]
+            if sysm.metadata.status == Status.complete:
+                blocking += [f"{system_path.name}: {e}" for e in check_all_confirmed(sysm.tasks or [], system_path.stem)]
+            warnings += [f"{system_path.name}: {w}" for w in check_file_producing_targets(sysm.tasks or [], system_path.stem)]
             s_errs, s_warns = check_system(sysm, fams, arch, docs_dir)
             blocking += [f"{system_path.name}: {e}" for e in s_errs]
             warnings += [f"{system_path.name}: {w}" for w in s_warns]
@@ -1286,6 +1557,13 @@ def validate_all(path: Path) -> int:
         blocking += [f"{cp.name}: {e}" for e in check_tsk_ids(cm.tasks or [], cp.stem)]
         blocking += [f"{cp.name}: {e}" for e in check_kinds(cm.tasks or [], CONTAINER_KINDS, cp.stem)]
         blocking += [f"{cp.name}: {e}" for e in check_warning_ids(cm.task_warnings, cp.stem)]
+        e18, w18 = check_embedded_specs(cm, cp.stem)
+        blocking += [f"{cp.name}: {e}" for e in e18]
+        warnings += [f"{cp.name}: {w}" for w in w18]
+        if cm.metadata.status == Status.complete:
+            blocking += [f"{cp.name}: {e}" for e in check_all_confirmed(cm.tasks or [], cp.stem)]
+        warnings += [f"{cp.name}: {w}" for w in check_file_producing_targets(cm.tasks or [], cp.stem)]
+        warnings += [f"{cp.name}: {w}" for w in check_embedded_drift(cm, cid, docs_dir)]
         c_errs, c_warns = check_container(
             cm, fams, arch, docs_dir, ux, api, data_ents, data_present, design
         )

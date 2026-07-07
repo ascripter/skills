@@ -132,3 +132,29 @@ metadata.upstream_provenance → {file, session_id, last_updated, sha256} per up
    `traces_api_operation` may omit `inputs`/`output`/`raises` (the API schema IS
    the contract). `code` must fall back to the API operation's request/response
    schemas in that case.
+
+## Addendum (2026-07-07) — schema v1.3: tasks are self-contained
+
+Superseding the "inherits the contract live from ARCH" model described above:
+as of `tasks_container_version` 1.3 the `task` skill **embeds the per-task
+specifics on each task at write time**, so a codegen agent acts on the task
+alone:
+
+- `interface_contract` on every `implementation` task — `{source: work_unit |
+  api_operation, inputs, output, raises, signature, operation_id}`; API-deferred
+  units get their operation's shape resolved and embedded.
+- `test_spec` on every `test` task — `{tier, directives, acceptance, covers}`
+  from the TST entry.
+- `unit_kind` (`callable` default | `module` | `content` | `tooling`, copied
+  from the ARCH work_unit's `kind` — now a first-class arch schema field) —
+  the rendering-mode switch; every work_unit-derived task stays
+  `kind: implementation`.
+- `unit_summary` — the unit's one-liner.
+
+Only container-general facts stay upstream: the tech stack (one
+`ARCH__<cid>.yaml` header slice per container) and TEST-STRATEGY's
+coverage_target. Flagged items 5 (WorkUnit.kind) and 7 (deferred contracts) are
+resolved by this change; items 1–3's defaults remain, softened by the task
+validator's new checks 18–21 (embedded-specs presence, all-confirmed gate,
+drift advisory, file-producing target_files advisory). Pre-1.3 artifacts keep
+the lookup-fallback behavior.

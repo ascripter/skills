@@ -60,42 +60,56 @@ markers annotate symbols (methods), not scaffolding.
 
 ## Rendering an `implementation` task
 
-The callable's shape comes from the ARCH work_unit, never from imagination:
+The deliverable's shape comes from the task's **embedded contract** (schema
+v1.3), never from imagination:
 
-1. Look up `work_units[name == target_symbol]` on the `component_ref`
-   component in `ARCH__<cid>.yaml`.
-2. **Declared contract** (`inputs` / `output` / `raises` present, possibly as
-   explicit empties): render the signature from them in the container's stack;
-   `raises` entries like `"ValidationError -> 400"` become the error path.
-   If `signature` is set, it IS the contract — use it verbatim.
-3. **Deferred contract** (unit has `traces_api_operation`, fields absent): the
-   API operation's request/response/exception schemas in `API__*.yaml` are the
-   contract — render from those.
-4. Body: implement the task's `description` against the component's
-   `responsibilities` and the task's `acceptance`. `touches_entities` names
-   the DATA-MODEL entities whose field definitions you must respect;
-   `implements` names the FR/NFRs — read their PRD lines (via INDEX) when the
+1. Read the task's `interface_contract` — `inputs`/`output`/`raises` are the
+   frozen shape (`source: work_unit` = declared in ARCH; `source:
+   api_operation` = resolved from the operation named in `operation_id`).
+   Render the signature from them in the container's stack; `raises` entries
+   like `"ValidationError -> 400"` become the error path. If `signature` is
+   set, it IS the contract — use it verbatim.
+2. **Pre-1.3 fallback** (no `interface_contract` on the task): look up
+   `work_units[name == target_symbol]` on the `component_ref` component in
+   `ARCH__<cid>.yaml`; when that unit defers via `traces_api_operation`, the
+   API operation's request/response/exception schemas are the contract.
+3. **`unit_kind` selects the rendering mode** (default `callable`):
+   - `callable` — render the method/function per the contract, marker above
+     the symbol.
+   - `module` — the file's **definition set is the interface** (e.g. a
+     schemas module): emit the whole module named by `target_symbol`;
+     marker + producing task go in the file header.
+   - `content` — a shipped content file (prompt pack, template, inventory):
+     author the content the `description`/`unit_summary` specifies.
+   - `tooling` — a standalone tool/validator script; `acceptance` usually
+     names its exit-code contract.
+   All four keep the same invariants — one deliverable, one `target_files[0]`
+   entry — only the rendering differs.
+4. Body: implement the task's `description` (+ `unit_summary`) against the
+   task's `acceptance`. `touches_entities` names the DATA-MODEL entities whose
+   field definitions you must respect — read their INDEX slices;
+   `implements` names the FR/NFRs — read their PRD lines only when the
    description is not self-sufficient.
 5. Real implementations only — no `TODO` stubs, no `NotImplementedError`
    placeholders. If the contract is too thin to implement honestly, that's a
    gate ("this work_unit's contract doesn't determine behaviour X"), not a
    stub.
 6. Language/stack: the container's declared stack in `ARCH.yaml` /
-   `ARCH__<cid>.yaml`. Match the conventions the scaffold task established
-   (formatting, import style, error idioms) — the file should read as one
-   hand.
+   `ARCH__<cid>.yaml` (the one container-general upstream fact). Match the
+   conventions the scaffold task established (formatting, import style, error
+   idioms) — the file should read as one hand.
 
 ## Rendering the other kinds
 
 - **`scaffold`** — the file set from the ladder: package manifest, workspace
   config, entrypoint, test-harness config. `acceptance` defines "works"
   (`pnpm install resolves`, `app boots`); run it as the static ring.
-- **`test`** — for each TST in `implements_tests`, read its entry in
-  `TEST-STRATEGY__<cid>.yaml` (`tier`, `component_ref`, `targets_operation`,
-  `directives`, `covers`, fixtures/mock policy) and author runnable tests that exercise the
-  *contract* of the implementation(s) this task `depends_on`. Name each test
-  so the TST id is visible (test name or marker comment) — Stage-15
-  verification keys results to TST ids.
+- **`test`** — the task's embedded `test_spec` (`tier`, `directives`,
+  `acceptance`, `covers`) is the spec; author runnable tests that exercise the
+  *contract* of the implementation(s) this task `depends_on`. Pre-1.3
+  fallback: the TST entry in `TEST-STRATEGY__<cid>.yaml`. Name each test so
+  the TST id is visible (test name or marker comment) — Stage-15 verification
+  keys results to TST ids.
 - **`integration`** — the wiring the edge describes: register routes into the
   app, bind DI, or build the consumer-side client against the provider's
   contract (`touches_operations` → API schemas). Cross-container `integration`

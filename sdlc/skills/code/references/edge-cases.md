@@ -78,13 +78,13 @@ degrades gracefully (warn + continue), destruction never happens implicitly
 
 ## WorkUnit / contract edge cases
 
-- **`WorkUnit.kind` present in ARCH** (demo-style `module` / `content` /
-  `tooling` — a field newer ARCH docs may carry even though the arch schema
-  in this repo doesn't define it yet): the deliverable is the **file**, not a
-  callable. `module` → emit the module whose definition set is the interface
-  (e.g. a schemas file); `content` → the shipped content file the unit names;
-  `tooling` → the tool/script. `target_symbol` then names the deliverable,
-  and the marker goes in the file header.
+- **Pre-1.3 task artifacts** (no embedded `interface_contract`/`test_spec`/
+  `unit_kind`): fall back to the upstream lookups — the ARCH work_unit for the
+  contract (its `kind` field for the rendering mode; the API operation when it
+  defers), the TST entry for the test spec. Say so once at the plan gate
+  ("task artifact predates v1.3 — codegen will read ARCH/TEST-STRATEGY per
+  task; re-running /sdlc:task embeds the contracts"). The rendering modes for
+  non-callable kinds are first-class in `emit-rules.md`, not an edge case.
 - **Work_unit contract genuinely underdetermines behaviour** → gate with the
   specific question; write nothing until answered (no stubs — see
   emit-rules).

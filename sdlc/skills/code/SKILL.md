@@ -25,8 +25,9 @@ allowed-tools: Read Write Edit Bash Bash(ls *) Glob Grep Agent AskUserQuestion
 
 Executes the task graph. Where every upstream skill produces a *spec*, this
 skill produces **code**: for each `TSK-NNN` it writes the file(s) the task's
-provenance names, renders the callable the task's `target_symbol` pins from the
-frozen ARCH work_unit contract, authors the tests each `test` task realizes,
+provenance names, renders the deliverable the task's `target_symbol` pins from
+the task's embedded `interface_contract` (frozen at task-graph write time),
+authors the tests each `test` task realizes from its embedded `test_spec`,
 and runs an incremental **test-and-heal loop** so broken units are fixed (or
 flagged) before the factory advances.
 
@@ -98,9 +99,13 @@ the demo's Stage-14 HITL gate.
   (the **downstream-rejection rule** — a draft or invalid graph must not be
   executed). In container mode the union validation still runs (the stitch
   needs all files), but only the target container's tasks execute.
-- For every container in scope: `docs/ARCH__<cid>.yaml` and
-  `docs/TEST-STRATEGY__<cid>.yaml` are readable (the work_unit interface
-  contracts and TST specs live there, not on the tasks).
+- For every container in scope: `docs/ARCH__<cid>.yaml` is readable — one
+  header slice per container for the **tech stack** (the only
+  container-general fact codegen needs from ARCH). Task artifacts at
+  version >= 1.3 embed all per-task specifics (`interface_contract`,
+  `test_spec`, `unit_kind`); for **older artifacts** the ARCH work_unit and
+  the TST entry in `docs/TEST-STRATEGY__<cid>.yaml` are the fallback source,
+  so TEST-STRATEGY is required only pre-1.3.
 - Nothing else. Git cleanliness, changelog counts, upstream `status` fields
   beyond the task files' own — none of these are preconditions. Mention
   observations as non-blocking FYI *after* deciding to proceed, never as
@@ -134,13 +139,15 @@ It prints the schedule (ready → blocked → done/failed/stale/skipped), the ri
 boundaries, and the `--next` resolution. Quote its output in the plan-approval
 gate; never hand-compute topological order.
 
-**Slice upstream docs, don't slurp.** Per-task context is deliberately tiny:
-the task object + its ARCH work_unit + `code_location` + whatever its trace
-fields name (`touches_operations` → the API operation schema,
-`touches_entities` → the DATA entity slice, `implements_tests` → the TST
-entry). Use `docs/INDEX.yaml` line ranges (`.claude/rules/sdlc-docs-access.md`)
-for the big YAMLs; read whole files only when INDEX is absent or the doc is
-small.
+**The task is the context.** On a v1.3 artifact the task object is
+self-contained: `interface_contract` (the frozen callable shape), `test_spec`
+(the TST's tier/directives/acceptance), `unit_kind`, `unit_summary`,
+`description`, `acceptance`. Read upstream only for what the task can't carry:
+the container's tech stack (one `ARCH__<cid>.yaml` header slice per
+container), a `touches_entities` DATA entity's field definitions, and — on
+pre-1.3 artifacts — the ARCH work_unit / TST entry the task didn't embed. Use
+`docs/INDEX.yaml` line ranges (`.claude/rules/sdlc-docs-access.md`) for the
+big YAMLs; read whole files only when INDEX is absent or the doc is small.
 
 ### Phase 3 — Plan & approval
 
@@ -220,8 +227,8 @@ Full rules with examples: `references/emit-rules.md`.
 | Kind | Emit |
 |---|---|
 | `scaffold` | Package/repo skeleton: the files in `target_files` (or path-shaped `outputs`) — manifest, entrypoint, workspace config. |
-| `implementation` | **One callable** (`target_symbol`) in **one file** (`target_files[0]`), rendered from the ARCH work_unit contract (`inputs`/`output`/`raises`/`signature`; falls back to the API operation schema when the unit defers via `traces_api_operation`). First task on a file creates it; later tasks Edit-insert. |
-| `test` | The runnable test(s) realizing each `implements_tests` TST — tier, directives, fixtures and covered requirements from `TEST-STRATEGY__<cid>.yaml`. |
+| `implementation` | **One deliverable** (`target_symbol`) in **one file** (`target_files[0]`). `unit_kind: callable` (default) renders the callable from the task's embedded `interface_contract`; `module`/`content`/`tooling` emit the file itself. Pre-1.3 fallback: the ARCH work_unit (or the API operation it defers to). First task on a file creates it; later tasks Edit-insert. |
+| `test` | The runnable test(s) realizing each `implements_tests` TST — tier, directives and acceptance from the task's embedded `test_spec` (pre-1.3 fallback: the TST entry in `TEST-STRATEGY__<cid>.yaml`). |
 | `integration` | Wiring: route registration, DI, the consumer-side client against the provider's contract. |
 | `migration` | Schema/DDL/persistence setup for `touches_entities`, per the DATA-MODEL slice. |
 | `config` | Env/settings wiring (the `config_loader` seam); secrets *backends* belong to deploy. |

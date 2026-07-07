@@ -263,6 +263,20 @@ Each work_unit carries:
   no id family. This name is the stable handle `task` references as a
   `target_symbol`; it IS the callable, so renaming the callable renames it.
 - `summary` (one line) — required.
+- `kind` (optional; default `callable`) — the **deliverable class**, for
+  components whose units aren't runtime callables (demo FR-013 v1.30):
+  - `callable` — the normal case; omit the field.
+  - `module` — a source module whose **definition set is the interface** (e.g. a
+    Pydantic schemas file the rest of the code imports). `name` names the module
+    deliverable; one unit per shipped module.
+  - `content` — a shipped content file (prompt pack, question inventory,
+    template). Typical for `content_asset` components.
+  - `tooling` — a repo tool/validator/migration script. Typical for `dev_tool`
+    components.
+  The same 1:1 unit→task rule applies to every kind (downstream `task` copies it
+  onto the task's `unit_kind`; codegen switches its rendering mode on it).
+  Non-callable kinds deliver a **file**, so the #23 interface-contract check
+  below does not apply to them — their contract is the deliverable itself.
 - Optional traces: `traces_api_operation` (⊆ API operation_ids),
   `implements_requirements` (FR/NFR ⊆ the owning component's),
   `touches_entities` (⊆ the component's `traces_data_entities`),

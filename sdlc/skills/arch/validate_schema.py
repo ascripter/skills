@@ -51,7 +51,9 @@ Validates:
          at least one of its work_units[].implements_requirements (waivable per
          component). Rolls up to a per-container report of FRs unreachable
          through any work_unit.
-       - #23 DEFER-OR-DECLARE interface contract: a work_unit that traces NO
+       - #23 DEFER-OR-DECLARE interface contract: a non-callable work_unit
+         (kind: module | content | tooling — the deliverable is a file) is
+         exempt; otherwise a work_unit that traces NO
          schema-bearing upstream contract (no traces_api_operation) must
          DECLARE its interface contract — `inputs`, `output`, and `raises` all
          present (explicit empties `inputs: []` / `raises: []` / `output:
@@ -509,6 +511,11 @@ class WorkUnit(_Base):
 
     name: Optional[str] = None
     summary: Optional[str] = None
+    kind: Optional[str] = None                          # callable (default) | module |
+                                                        # content | tooling — the deliverable
+                                                        # class (demo FR-013 v1.30). Checked
+                                                        # against _WORK_UNIT_KINDS in #21 so a
+                                                        # draft with a typo stays loadable.
     traces_api_operation: Optional[str] = None          # operation_id in API__*.yaml
     implements_requirements: Optional[List[str]] = None  # FR-NNN/NFR-NNN ⊆ component
     touches_entities: Optional[List[str]] = None         # ⊆ component traces_data_entities
@@ -1405,6 +1412,15 @@ _PLUMBING_COMPONENT_ARCHETYPES = {
     "error_handler",
 }
 
+# WorkUnit deliverable classes (demo FR-013 v1.30 / DATA-MODEL v2.21
+# WorkUnitKind). `callable` is the default when `kind` is omitted; the
+# non-callable kinds deliver a FILE (module = a source module whose definition
+# set is the interface; content = a shipped content file; tooling = a repo
+# tool/validator script) and are exempt from the #23 DEFER-OR-DECLARE
+# interface-contract check.
+_WORK_UNIT_KINDS = {"callable", "module", "content", "tooling"}
+_NON_CALLABLE_WORK_UNIT_KINDS = {"module", "content", "tooling"}
+
 
 def check_component_code_location(
     container: ArchContainer,
@@ -1501,6 +1517,11 @@ def check_component_work_units(
                     )
         for j, op in enumerate(units):
             where = f"{file_label}: components[{i}]='{cid}'.work_units[{j}]"
+            if op.kind is not None and op.kind not in _WORK_UNIT_KINDS:
+                errs.append(
+                    f"{where}: kind '{op.kind}' is not one of "
+                    f"{sorted(_WORK_UNIT_KINDS)} (omit for the default 'callable')"
+                )
             name = (op.name or "").strip()
             if not name:
                 errs.append(f"{where}: missing name")
@@ -1632,6 +1653,10 @@ def check_work_unit_contracts(
                 for "raises nothing beyond language defaults", `output:
                 "None"` for no return) — what fails is the field being ABSENT,
                 i.e. nobody decided.
+      FILE    — the unit's `kind` is non-callable (module / content / tooling,
+                demo FR-013 v1.30): the deliverable IS a file whose definition
+                set / content is the interface, so inputs/output/raises are
+                not applicable and the check does not apply.
 
     Returns (errs, warns). Errs block complete. A component-level
     `work_units_waiver` downgrades that component's contract gaps to warnings
@@ -1643,6 +1668,8 @@ def check_work_unit_contracts(
         cid = comp.component_id
         waived = bool((comp.work_units_waiver or "").strip())
         for j, op in enumerate(comp.work_units or []):
+            if op.kind in _NON_CALLABLE_WORK_UNIT_KINDS:
+                continue  # FILE case — the deliverable is the file itself
             if op.traces_api_operation:
                 continue  # DEFER case — contract lives in API__*.yaml
             missing = [

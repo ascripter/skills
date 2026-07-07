@@ -69,11 +69,11 @@ their boundary, not after every member task.
 On a red ring:
 
 - **Attempt 1 (inline, sonnet).** Read the failure output. Diagnose against
-  the *contract*, not the test: the ARCH work_unit's
-  `inputs`/`output`/`raises` (or the API schema it defers to) plus the task's
+  the *contract*, not the test: the task's embedded `interface_contract`
+  (pre-1.3: the ARCH work_unit / deferred API schema) plus the task's
   `acceptance` are the truth. Fix the implementation when it violates the
   contract; fix the **test** only when the test contradicts the contract or
-  the TST spec. Re-run the ring.
+  the embedded `test_spec`. Re-run the ring.
 - **Attempt 2 (inline, sonnet).** Same, with the previous diff in mind. If
   attempt 1's fix didn't move the failure at all, revert it first — don't
   stack speculative patches.
@@ -104,9 +104,10 @@ re-derive project context:
 ```
 You are healing one atomic codegen unit that failed its tests twice.
 
-TASK (verbatim JSON): <the task object, qualified id included>
-INTERFACE CONTRACT: <the ARCH work_unit slice: inputs/output/raises/signature;
-  or the API operation schema when the unit defers to it>
+TASK (verbatim JSON): <the task object, qualified id included — carries the
+  embedded interface_contract / test_spec on v1.3 artifacts>
+INTERFACE CONTRACT: <the task's interface_contract; pre-1.3: the ARCH
+  work_unit slice or the API operation schema the unit defers to>
 ACCEPTANCE: <the task's acceptance list>
 CURRENT FILES: <path + full content of target_files and the test file(s)>
 FAILURE OUTPUT: <the current failing run, verbatim>
