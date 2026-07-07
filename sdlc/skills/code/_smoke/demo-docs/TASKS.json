@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "tasks_version": "1.0",
+    "last_updated": "2026-07-07T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "smoke000-code-code-code-tasksystem00",
+    "status": "complete"
+  },
+  "overview": "System graph for the sdlc-code scheduler smoke: repo scaffold, one cross-container integration task, one e2e test task.",
+  "build_order": ["demo-api"],
+  "tasks": [
+    {
+      "tsk_id": "TSK-001",
+      "title": "Scaffold the repo workspace",
+      "kind": "scaffold",
+      "description": "Workspace config + root tooling.",
+      "target_files": ["package.json"],
+      "outputs": ["workspace resolves"],
+      "acceptance": ["npm install resolves the workspace"],
+      "priority": "must",
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-002",
+      "title": "Wire the CLI against demo-api",
+      "kind": "integration",
+      "description": "Consumer-side client against demo-api's listItems contract.",
+      "involves_containers": ["demo-api"],
+      "depends_on": ["TSK-001", "demo-api/TSK-004"],
+      "outputs": ["client resolves listItems"],
+      "acceptance": ["the client calls listItems and parses the response"],
+      "priority": "must",
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-003",
+      "title": "Author the e2e smoke test",
+      "kind": "test",
+      "description": "Realize the system e2e test.",
+      "implements_tests": ["TST-900"],
+      "depends_on": ["TSK-002"],
+      "outputs": ["TST-900 green"],
+      "acceptance": ["the e2e suite passes"],
+      "priority": "must",
+      "status": "confirmed"
+    }
+  ],
+  "container_task_graphs": [
+    {"container_id": "demo-api", "file_path": "docs/TASKS__demo-api.json"}
+  ],
+  "task_warnings": []
+}

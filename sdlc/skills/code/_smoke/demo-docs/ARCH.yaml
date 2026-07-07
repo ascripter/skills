@@ -1,0 +1,30 @@
+# Minimal system ARCH for the sdlc-code scheduler smoke fixtures. Gives the
+# task validator a testable container to resolve demo-api against.
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-07-07T09:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "smoke000-code-code-code-archsystem00"
+  status: "complete"
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "One API service plus a thin CLI consumer."
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+containers:
+  - container_id: demo-api
+    archetype: backend-api
+    purpose: "Item CRUD service."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: ARCH__demo-api.yaml
+edges: []
+arch_warnings: []

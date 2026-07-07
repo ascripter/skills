@@ -1,0 +1,29 @@
+{
+  "metadata": {
+    "code_manifest_version": "1.0",
+    "last_updated": "2026-07-07T12:00:00Z",
+    "generated_by": "sdlc-code",
+    "session_id": "33333333-3333-3333-3333-333333333333",
+    "status": "complete"
+  },
+  "files": [
+    {
+      "path": "services/demo-api/src/controllers/items.ts",
+      "sha256": "not-a-hash",
+      "producing_tasks": ["TSK-003", "demo api/TSK-4", ""],
+      "heal_attempts": -1,
+      "created": true
+    },
+    {
+      "path": "services/demo-api/src/controllers/items.ts",
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "producing_tasks": [],
+      "heal_attempts": 0,
+      "created": true
+    }
+  ],
+  "code_warnings": [
+    "missing prefix entirely",
+    "WRN-1: number too short"
+  ]
+}

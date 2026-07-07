@@ -1,0 +1,22 @@
+# Minimal system test strategy for the sdlc-code smoke fixtures. TST-900 is
+# realized by TASKS.json TSK-003.
+metadata:
+  test_strategy_version: "1.0"
+  last_updated: "2026-07-07T09:30:00Z"
+  generated_by: sdlc-test
+  session_id: "smoke000-code-code-code-testsystem00"
+  status: complete
+overview: "One e2e smoke across the CLI -> demo-api path."
+tests:
+  - tst_id: TST-900
+    name: "e2e: create then list an item"
+    tier: e2e
+    description: "Create an item through the client, list it back."
+    directives:
+      - "Arrange a running demo-api."
+      - "Act: create then list via the client."
+      - "Assert: the created item appears in the listing."
+    priority: must
+    acceptance: "The created item round-trips through the API."
+    status: confirmed
+test_warnings: []

@@ -1,0 +1,41 @@
+# Minimal container test strategy for the sdlc-code smoke fixtures. TST-001 /
+# TST-002 are realized by TASKS__demo-api.json TSK-005 / TSK-006.
+metadata:
+  test_strategy_container_version: "1.0"
+  last_updated: "2026-07-07T09:30:00Z"
+  generated_by: sdlc-test
+  session_id: "smoke000-code-code-code-testdemoapi0"
+  status: complete
+container_id: demo-api
+overview: "Unit suite for the items controller."
+inherits_from: docs/TEST-STRATEGY.yaml
+coverage_target:
+  line_pct: 80.0
+  branch_pct: 70.0
+  rationale: "Smoke-fixture floor."
+tests:
+  - tst_id: TST-001
+    name: "items-controller creates an item"
+    tier: unit
+    description: "Happy-path create."
+    component_ref: items-controller
+    directives:
+      - "Arrange a valid create payload."
+      - "Act: call createItem()."
+      - "Assert: 201 with a persisted id."
+    priority: must
+    acceptance: "Creating an item returns 201 with a persisted id."
+    status: confirmed
+  - tst_id: TST-002
+    name: "items-controller lists items"
+    tier: unit
+    description: "Happy-path list."
+    component_ref: items-controller
+    directives:
+      - "Arrange two persisted items."
+      - "Act: call listItems()."
+      - "Assert: both items are returned."
+    priority: must
+    acceptance: "GET /items returns the persisted items."
+    status: confirmed
+test_warnings: []

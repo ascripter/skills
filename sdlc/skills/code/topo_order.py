@@ -1,0 +1,321 @@
+"""Deterministic scheduler for sdlc-code: loads the task graph (docs/TASKS.json
++ every docs/TASKS__*.json), overlays the execution ledger, and prints the
+execution schedule — topologically sorted with the test-first ready-queue
+policy — plus ring boundaries, blocked/stale/failed tasks, and the --next
+resolution. The skill quotes this tool's output instead of hand-computing
+order, the same way sdlc-task quotes count_work_units.py.
+
+Run from the project root:
+
+    python sdlc/skills/code/topo_order.py
+    python sdlc/skills/code/topo_order.py --scope backend-api --state .claude/skills-state/sdlc-code.state.yaml
+    python sdlc/skills/code/topo_order.py --next
+    python sdlc/skills/code/topo_order.py --fingerprints
+
+Scheduling policy (see references/execution-loop.md):
+    Among READY tasks (all depends_on satisfied), a ready `test` task always
+    wins — so tests run the moment the implementation they exercise lands.
+    Non-test ties break by (same component as previous task, build_order
+    position of the owning file, numeric tsk id).
+
+Task states (ledger overlay):
+    done     — ledger says done and the task's fingerprint still matches.
+    stale    — ledger says done but the task JSON changed since (re-confirm).
+    failed / skipped — from the ledger; their dependents are BLOCKED.
+    pending  — everything else (scheduled).
+
+Exit codes:
+    0 — schedule printed (there may be blocked/stale items; read the output).
+    1 — graph error: dangling depends_on ref or a dependency cycle (a validated
+        'complete' artifact cannot legally contain either — re-run the task
+        validator).
+    2 — no task files found / unreadable JSON or YAML.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+try:
+    import yaml
+except ImportError:
+    print("ERROR: pyyaml is required.\nInstall with:  pip install pyyaml", file=sys.stderr)
+    sys.exit(2)
+
+TSK_RE = re.compile(r"^TSK-\d{3,}$")
+
+
+def fingerprint(task: Dict[str, Any]) -> str:
+    blob = json.dumps(task, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def tsk_num(tsk_id: str) -> int:
+    m = re.search(r"(\d+)$", tsk_id)
+    return int(m.group(1)) if m else 0
+
+
+class Graph:
+    def __init__(self) -> None:
+        self.tasks: Dict[str, Dict[str, Any]] = {}       # qualified id -> task object
+        self.deps: Dict[str, List[str]] = {}             # qualified id -> qualified deps
+        self.file_of: Dict[str, str] = {}                # qualified id -> file key
+        self.build_order: List[str] = []
+        self.errors: List[str] = []
+
+    def qualify(self, ref: str, home: str) -> str:
+        return ref if "/" in ref else f"{home}/{ref}"
+
+
+def load_graph(docs: Path) -> Graph:
+    g = Graph()
+    files: Dict[str, Path] = {}
+    system = docs / "TASKS.json"
+    if system.is_file():
+        files["TASKS"] = system
+    for p in sorted(docs.glob("TASKS__*.json")):
+        files[p.stem.replace("TASKS__", "", 1)] = p
+    if not files:
+        print(f"[FAIL] no TASKS.json / TASKS__*.json found under {docs}", file=sys.stderr)
+        sys.exit(2)
+
+    for key, path in files.items():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"[FAIL] cannot read {path}: {e}", file=sys.stderr)
+            sys.exit(2)
+        if key == "TASKS":
+            g.build_order = list(data.get("build_order") or [])
+        for t in data.get("tasks", []):
+            tid = t.get("tsk_id", "")
+            if not TSK_RE.match(tid):
+                g.errors.append(f"{path.name}: malformed tsk_id {tid!r}")
+                continue
+            q = f"{key}/{tid}"
+            g.tasks[q] = t
+            g.file_of[q] = key
+            g.deps[q] = [g.qualify(d, key) for d in (t.get("depends_on") or [])]
+
+    for q, deps in g.deps.items():
+        for d in deps:
+            if d not in g.tasks:
+                g.errors.append(f"{q}: depends_on {d!r} does not resolve to any loaded task")
+    return g
+
+
+def load_ledger(state_path: Optional[Path]) -> Dict[str, Dict[str, Any]]:
+    if not state_path:
+        return {}
+    if not state_path.is_file():
+        return {}
+    try:
+        data = yaml.safe_load(state_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as e:
+        print(f"[FAIL] cannot read state file {state_path}: {e}", file=sys.stderr)
+        sys.exit(2)
+    return data.get("tasks") or {}
+
+
+def classify(g: Graph, ledger: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
+    """Map every qualified id to done|stale|failed|skipped|pending."""
+    state: Dict[str, str] = {}
+    for q, task in g.tasks.items():
+        entry = ledger.get(q)
+        if not entry:
+            state[q] = "pending"
+            continue
+        st = entry.get("status")
+        if st == "done":
+            recorded = entry.get("task_fingerprint")
+            state[q] = "done" if recorded == fingerprint(task) else "stale"
+        elif st in ("failed", "skipped"):
+            state[q] = st
+        else:  # in_progress or unknown -> Phase-1 reconcile decides; schedule it
+            state[q] = "pending"
+    return state
+
+
+def schedule(g: Graph, state: Dict[str, str], scope: Optional[str]) -> Tuple[List[str], Dict[str, List[str]], List[str]]:
+    """Return (ordered pending tasks in scope, blocked -> blocking causes, cycle members)."""
+    satisfied = {q for q, s in state.items() if s in ("done", "stale")}
+    dead = {q for q, s in state.items() if s in ("failed", "skipped")}
+
+    # transitive blocking through pending tasks whose ancestry is dead
+    blocked: Dict[str, List[str]] = {}
+    changed = True
+    while changed:
+        changed = False
+        for q, s in state.items():
+            if s != "pending" or q in blocked:
+                continue
+            causes = [d for d in g.deps[q] if d in dead or d in blocked]
+            if causes:
+                blocked[q] = causes
+                changed = True
+
+    in_scope = lambda q: scope is None or g.file_of[q] == scope  # noqa: E731
+
+    file_rank = {cid: i for i, cid in enumerate(g.build_order)}
+    file_rank.setdefault("TASKS", -1)  # system scaffold work sorts first by default
+
+    pend = [q for q, s in state.items() if s == "pending" and q not in blocked]
+    remaining: Set[str] = set(pend)
+    ordered: List[str] = []
+    prev_component: Optional[str] = None
+
+    def ready(q: str) -> bool:
+        return all(d in satisfied for d in g.deps[q])
+
+    while remaining:
+        candidates = [q for q in remaining if ready(q)]
+        if not candidates:
+            # cycle among pending tasks, or waiting on out-of-ledger blocked deps
+            stuck = sorted(remaining)
+            return [x for x in ordered if in_scope(x)], blocked, stuck
+
+        def sort_key(q: str) -> Tuple:
+            t = g.tasks[q]
+            comp = t.get("component_ref")
+            return (
+                t.get("kind") != "test",                       # test tasks first
+                comp != prev_component if comp else True,      # component locality
+                file_rank.get(g.file_of[q], len(file_rank)),   # build_order position
+                tsk_num(t.get("tsk_id", "")),
+            )
+
+        nxt = min(candidates, key=sort_key)
+        remaining.discard(nxt)
+        satisfied.add(nxt)
+        ordered.append(nxt)
+        prev_component = g.tasks[nxt].get("component_ref") or prev_component
+
+    return [q for q in ordered if in_scope(q)], blocked, []
+
+
+def resolve_next(g: Graph, state: Dict[str, str]) -> str:
+    """--next: the next incomplete unit in build_order semantics."""
+    def has_pending(key: str) -> bool:
+        return any(g.file_of[q] == key and state[q] == "pending" for q in g.tasks)
+
+    # (a) system tasks that are READY right now and touch no container tasks
+    #     (the repo-scaffold head that everything else hangs off)
+    sys_head = [
+        q for q in g.tasks
+        if g.file_of[q] == "TASKS" and state[q] == "pending"
+        and all(g.file_of[d] == "TASKS" for d in g.deps[q])
+        and all(state.get(d) in ("done", "stale") for d in g.deps[q])
+    ]
+    if sys_head:
+        return "unit: system head (repo scaffold / system tasks with no container deps)"
+    for cid in g.build_order:
+        if has_pending(cid):
+            return f"unit: container {cid!r}"
+    for key in sorted({k for k in g.file_of.values() if k != "TASKS"}):
+        if key not in g.build_order and has_pending(key):
+            return f"unit: container {key!r} (not in build_order — check TASKS.json)"
+    if has_pending("TASKS"):
+        return "unit: system tail (integration / e2e test tasks)"
+    return "nothing pending — the graph is fully executed"
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Print the sdlc-code execution schedule.")
+    ap.add_argument("--docs", default="docs", help="Directory holding TASKS*.json (default: docs).")
+    ap.add_argument("--state", default=".claude/skills-state/sdlc-code.state.yaml", help="Execution ledger (optional).")
+    ap.add_argument("--scope", default=None, help="all (default), TASKS, or a container_id.")
+    ap.add_argument("--next", action="store_true", dest="next_", help="Print the --next unit resolution only.")
+    ap.add_argument("--fingerprints", action="store_true", help="Print qualified id -> fingerprint and exit.")
+    args = ap.parse_args()
+
+    scope = None if args.scope in (None, "all") else args.scope
+    g = load_graph(Path(args.docs))
+
+    if args.fingerprints:
+        for q in sorted(g.tasks):
+            print(f"{q}  {fingerprint(g.tasks[q])}")
+        return 0
+
+    if g.errors:
+        for e in g.errors:
+            print(f"  [ERR] {e}")
+        print("[FAIL] graph errors — re-run: python sdlc/skills/task/validate_schema.py")
+        return 1
+
+    if scope and scope not in set(g.file_of.values()):
+        print(f"[FAIL] scope {scope!r} matches no loaded task file. Loaded: {sorted(set(g.file_of.values()))}", file=sys.stderr)
+        return 2
+
+    ledger = load_ledger(Path(args.state) if args.state else None)
+    state = classify(g, ledger)
+
+    if args.next_:
+        print(resolve_next(g, state))
+        return 0
+
+    ordered, blocked, stuck = schedule(g, state, scope)
+
+    counts: Dict[str, int] = {}
+    for q, s in state.items():
+        if scope is None or g.file_of[q] == scope:
+            counts[s] = counts.get(s, 0) + 1
+    print(f"build_order: {g.build_order}")
+    print("state: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "empty")
+
+    # ring boundaries: the last scheduled task of each component / file. A hint —
+    # the skill confirms rings against the ledger (blocked/failed tasks may keep
+    # a container from truly completing this run).
+    last_of_component: Dict[str, str] = {}
+    last_of_file: Dict[str, str] = {}
+    for q in ordered:
+        comp = g.tasks[q].get("component_ref")
+        if comp:
+            last_of_component[f"{g.file_of[q]}/{comp}"] = q
+        last_of_file[g.file_of[q]] = q
+    comp_ring_at = {v: k for k, v in last_of_component.items()}
+    file_ring_at = {v: k for k, v in last_of_file.items()}
+
+    print(f"\nschedule ({len(ordered)} pending, test-first policy):")
+    for q in ordered:
+        t = g.tasks[q]
+        line = f"  {q}  [{t.get('kind')}]"
+        if t.get("target_symbol"):
+            line += f"  {t['target_symbol']}"
+        if t.get("implements_tests"):
+            line += f"  realizes {','.join(t['implements_tests'])}"
+        print(line)
+        if q in comp_ring_at:
+            print(f"    >> component ring: {comp_ring_at[q]}")
+        if q in file_ring_at:
+            print(f"    >> container ring: {file_ring_at[q]}")
+
+    stale = sorted(q for q, s in state.items() if s == "stale" and (scope is None or g.file_of[q] == scope))
+    if stale:
+        print("\nstale (task JSON changed since execution — re-confirm at the plan gate):")
+        for q in stale:
+            print(f"  {q}")
+
+    if blocked:
+        print("\nblocked (a dependency failed or was skipped):")
+        for q, causes in sorted(blocked.items()):
+            if scope is None or g.file_of[q] == scope:
+                print(f"  {q}  <- {', '.join(causes)}")
+
+    if stuck:
+        print("\n[FAIL] unschedulable pending tasks (dependency cycle, or deps outside the ledger):")
+        for q in stuck:
+            print(f"  {q}  deps: {', '.join(g.deps[q]) or '(none)'}")
+        return 1
+
+    print(f"\n--next would run -> {resolve_next(g, state)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

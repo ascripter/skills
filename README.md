@@ -7,7 +7,7 @@ Execute both commands from the command line:
 - Install the plugin: `claude plugin install sdlc@ascripter-skills`
 
 ## Skills
-All skills need to be explicitly invoked and will provide an interview mechanic that lets you define your software project step by step.
+All skills need to be explicitly invoked and (except `/sdlc:code`, which executes the task graph instead of interviewing) provide an interview mechanic that lets you define your software project step by step.
 
 In general, if a skill is invoked, three things are checked:
 - Is it first time invocation? → generate initial output
@@ -87,9 +87,24 @@ Execute the following skills in order within your project repo. All skills put t
 
      Explicitly address per-container task graph
 
-9. **`/sdlc:deploy`** → `DEPLOY.yaml`
+9. **`/sdlc:code --next`** → source code files (context sensitive)
 
-   Deployment strategy document.
+   The execution stage: writes the actual source files the task graph defines. Each invocation of `--next` executes the next incomplete unit in `build_order` (repo scaffold first, then one container at a time, then the cross-container integration/e2e tail). Implementation tasks are interleaved with their unit-test tasks and verified with a test-and-heal loop (up to 3 attempts; the 3rd attempt escalates to a stronger model in a fresh subagent). Re-running is always safe — an execution ledger tracks every finished task, so nothing is regenerated or overwritten without asking.
+
+   The skill has more signatures shown below:
+   - **`/sdlc:code`** → all remaining source files
+
+     Execute everything still pending across the whole stitched task graph.
+
+   - **`/sdlc:code <container>`** → that container's source files
+
+     Execute only one container's task subgraph.
+
+   Besides the code itself the skill maintains `docs/CODE-MANIFEST.json` — a machine-readable manifest of every generated file (path, hash, producing task ids, heal telemetry).
+
+10. **`/sdlc:deploy`** → `DEPLOY.yaml`
+
+    Deployment strategy document.
 
 
-*NOTE: Step 9 is not yet implemented*
+*NOTE: Step 10 is not yet implemented*

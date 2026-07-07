@@ -1,0 +1,32 @@
+{
+  "metadata": {
+    "code_manifest_version": "1.0",
+    "last_updated": "2026-07-07T12:00:00Z",
+    "generated_by": "sdlc-code",
+    "session_id": "22222222-2222-2222-2222-222222222222",
+    "status": "complete"
+  },
+  "files": [
+    {
+      "path": "/etc/passwd",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "producing_tasks": ["demo-api/TSK-003"],
+      "heal_attempts": 0,
+      "created": true
+    },
+    {
+      "path": "services/../../escape.ts",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "producing_tasks": ["demo-api/TSK-004"],
+      "heal_attempts": 0,
+      "created": true
+    },
+    {
+      "path": "C:\\Windows\\system32\\drivers\\etc\\hosts",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "producing_tasks": ["demo-api/TSK-005"],
+      "heal_attempts": 0,
+      "created": false
+    }
+  ]
+}

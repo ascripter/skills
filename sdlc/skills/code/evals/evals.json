@@ -1,0 +1,24 @@
+{
+  "skill_name": "code",
+  "notes": "Fixtures: point the eval project's docs/ at a copy of ../_smoke/demo-docs (a complete, task-validator-green graph: 1 system + 1 container file, 2 work_units, 2 unit TSTs, 1 e2e TST). demo-state.yaml stages the resume/idempotency case.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/sdlc:code demo-api",
+      "expected_output": "Plan-approval gate quoting topo_order.py output (6 container tasks pending, test-first order: scaffold, migration, createItem, its TST-001 tests, listItems, its TST-002 tests). After approval: files created at the exact target_files paths (services/demo-api/...), every generated symbol carrying an 'sdlc-code: demo-api/TSK-NNN' marker, ledger entries written after every task, docs/CODE-MANIFEST.json emitted and validator-green. Cross-file dep on TASKS/TSK-001 surfaced up front with the execute-blocking-tasks-first option.",
+      "files": ["_smoke/demo-docs"]
+    },
+    {
+      "id": 2,
+      "prompt": "/sdlc:code",
+      "expected_output": "With demo-state.yaml pre-staged as .claude/skills-state/sdlc-code.state.yaml: TASKS/TSK-001 skipped silently (done, fingerprint matches), demo-api/TSK-001 surfaced as stale (fingerprint mismatch) with a regenerate/keep gate, demo-api/TSK-002 surfaced as failed with retry/leave options, TSK-003/TSK-005 reported blocked, TSK-004/TSK-006 scheduled. No file already recorded in the ledger is overwritten without a gate.",
+      "files": ["_smoke/demo-docs", "_smoke/demo-state.yaml"]
+    },
+    {
+      "id": 3,
+      "prompt": "/sdlc:code --next",
+      "expected_output": "Fresh project (no ledger): resolves to the system head unit (TASKS/TSK-001 repo scaffold), confirms the target with one question before executing anything, executes only that unit, then reports that --next would continue with container demo-api.",
+      "files": ["_smoke/demo-docs"]
+    }
+  ]
+}

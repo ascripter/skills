@@ -1,0 +1,42 @@
+# Smoke fixture for the ledger overlay: one clean done, one stale (fingerprint
+# mismatch — the task JSON changed after execution), one failed (its dependents
+# must show as blocked, transitively).
+session_file_version: "1"
+skill_version: "0.1"
+last_updated: "2026-07-07T12:00:00Z"
+build_order: [demo-api]
+session:
+  session_id: "55555555-5555-5555-5555-555555555555"
+  started_at: "2026-07-07T11:00:00Z"
+  scope: all
+  status: aborted
+containers: {}
+components_done: {}
+tasks:
+  "TASKS/TSK-001":
+    status: done
+    completed_at: "2026-07-07T11:05:00Z"
+    task_fingerprint: "c21a8b4dd39109e3"
+    path_source: target_files
+    files_written:
+      - {path: "package.json", sha256: "1111111111111111111111111111111111111111111111111111111111111111"}
+    heal_attempts: 0
+    escalated: false
+    verified: static_only
+  "demo-api/TSK-001":
+    status: done
+    completed_at: "2026-07-07T11:10:00Z"
+    task_fingerprint: "0000deadbeef0000"
+    path_source: target_files
+    files_written:
+      - {path: "services/demo-api/package.json", sha256: "2222222222222222222222222222222222222222222222222222222222222222"}
+    heal_attempts: 0
+    escalated: false
+    verified: static_only
+  "demo-api/TSK-002":
+    status: failed
+    failure: "migrate exited 1 after 3 attempts: relation Item already exists"
+    task_fingerprint: "f27a94dd3f6e5ce6"
+    heal_attempts: 3
+    escalated: true
+    verified: none

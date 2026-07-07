@@ -1,0 +1,101 @@
+# =============================================================================
+# CODE-MANIFEST.schema.yaml — canonical schema for docs/CODE-MANIFEST.json
+# =============================================================================
+# NOTE ON FORMAT: the on-disk artifact is JSON (docs/CODE-MANIFEST.json), not
+# YAML — same rationale as the task graph it mirrors (machine-generated,
+# machine-consumed; see sdlc/skills/task/references/merge-validate.md → "Why
+# the task graph is JSON"). This file documents that JSON object as commented
+# YAML so it reads like every other sdlc-* schema. validate_schema.py loads the
+# artifact with json.load.
+#
+# Produced by /sdlc:code (any form). The CodeBundle-analogue from the demo
+# PRD's FR-014: a MANIFEST of every source file the codegen stage emitted —
+# the actual code lives in the repo tree at each entry's `path`. One entry per
+# generated file; regenerated from the execution ledger + fresh disk hashes on
+# every Phase-5 write (the ledger in .claude/skills-state/ is private; this is
+# the publishable projection downstream verify/deploy stages consume).
+#
+# ID families this artifact OWNS: none. It references qualified task ids
+# ("TASKS/TSK-NNN", "<container_id>/TSK-NNN" — the same syntax the task
+# graph's depends_on uses) and never invents TSK ids.
+#
+# Downstream-rejection rule: a consumer MUST reject this artifact if
+# metadata.status != "complete" OR validate_schema.py exits non-zero — except
+# that status "draft" is the NORMAL state of a partially-executed factory
+# (containers still pending); consumers that only need the already-generated
+# slice (e.g. verify on one container) may proceed on draft when every file
+# entry they touch verifies. status "complete" asserts the WHOLE stitched
+# graph is done or explicitly skipped.
+# =============================================================================
+
+metadata:                                  # REQUIRED
+  code_manifest_version: "1.0"             # REQUIRED
+  last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
+  generated_by: sdlc-code                  # REQUIRED
+  session_id: <uuid4>                      # REQUIRED — session id from the ledger
+  status: draft | complete                 # REQUIRED — complete ⇔ every task in the
+                                           #   stitched graph is done or skipped-with-
+                                           #   reason AND all checks pass
+  changelog:                               # OPTIONAL — append-only, most-recent first
+    - "1.0 (2026-07-07): backend-api container generated (14 tasks, 2 heals)."
+  upstream_provenance:                     # OPTIONAL — one entry per task file consumed,
+    # {file, session_id, last_updated, sha256} — sha256 from
+    # docs/INDEX.yaml.generated_from or sha256(bytes)[:16]. Replace-on-write.
+    # Lets a re-run detect that the task graph moved. See CLAUDE.md §7.
+    - {file: docs/TASKS__backend-api.json, session_id: <uuid4>, last_updated: <iso8601>, sha256: <16-hex>}
+
+# ---------------------------------------------------------------------------
+# files — one entry per generated file (the GeneratedFile analogue). A file
+# touched by several tasks appears ONCE, listing every producing task.
+# ---------------------------------------------------------------------------
+files:                                      # REQUIRED — list, may be empty only on draft
+  - path: "services/backend-api/src/controllers/tasks.ts"   # REQUIRED — repo-relative,
+                                            #   forward slashes, no ".." / absolute paths
+    sha256: <64-hex>                        # REQUIRED — hash of the file content at the
+                                            #   last write this skill performed
+    producing_tasks:                        # REQUIRED — non-empty; qualified task ids,
+      - "backend-api/TSK-004"               #   "<cid>/TSK-NNN" or "TASKS/TSK-NNN"
+      - "backend-api/TSK-005"
+    heal_attempts: 0                        # REQUIRED — max heal attempts any producing
+                                            #   task spent on this file (0 = first try)
+    generated_by_model: sonnet | opus       # OPTIONAL — model that produced the final
+                                            #   content (opus ⇒ an escalation touched it)
+    created: true | false                   # REQUIRED — true when this skill created the
+                                            #   file; false when it edited a pre-existing one
+
+# ---------------------------------------------------------------------------
+# code_warnings — non-fatal issues, WRN-NNN family (writer-managed counter in
+# the ledger). Placement drift, verified:none rings, orphaned provenance,
+# degraded escalation, per-task deferrals — anything the close report flags.
+# ---------------------------------------------------------------------------
+code_warnings:                              # OPTIONAL — list of "WRN-NNN: ..." strings
+  - "WRN-001: no test command derivable for web-frontend; unit rings ran verified:none."
+
+# =============================================================================
+# Cross-checks (run by validate_schema.py on every write)
+# =============================================================================
+# Blocking (schema-invalid or force status:draft):
+# 1. Required-field completeness; files[] entries each carry path, sha256,
+#    non-empty producing_tasks, heal_attempts >= 0, created.
+# 2. Path safety — every path is repo-relative (no absolute, no "..",
+#    backslashes normalized).
+# 3. Qualified-id format — every producing_tasks entry matches
+#    ^(TASKS|[a-z0-9-]+)/TSK-\d{3,}$.
+# 4. WRN-NNN format on every code_warnings entry (^WRN-\d{3,}:\s+.+).
+# 5. No duplicate `path` across files[].
+#
+# Advisory (warn, never block — the disk moves independently of the manifest):
+# 6. Each files[].path exists on disk; its current hash equals sha256
+#    (mismatch = hand-edit after generation — legitimate, but consumers
+#    should know).
+# 7. When the task files are readable: every producing_tasks id resolves to a
+#    real task, and every implementation task's target_files[0] appears as
+#    some files[].path (the demo's "every GeneratedFile matches a producing
+#    task's target_files" self-check, inverted).
+#
+# Exit codes (module docstring repeats these verbatim):
+#   0 — schema valid; status complete with all checks passing, or status draft.
+#   1 — schema invalid, or status complete with blocking check failures.
+#   2 — could not read/parse the file.
+#   3 — required dependency missing (pydantic v2 / pyyaml).
+# =============================================================================

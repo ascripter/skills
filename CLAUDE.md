@@ -21,10 +21,28 @@ project from a structured chain of artifacts. Skills are invoked as
 | `arch`       | `sdlc/skills/arch`  | `docs/PRD.yaml` + `docs/UX.yaml` (+ `UX__*`) + `docs/DATA-MODEL.yaml` (+ `docs/API.yaml` (+ `API__*`)) + interview                              | `docs/ARCH.yaml`, `docs/ARCH__<container>.yaml`      |
 | `test`       | `sdlc/skills/test`  | `docs/PRD.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH.yaml` (+ `docs/ARCH__<container>.yaml` in container mode) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) + interview | `docs/TEST-STRATEGY.yaml` (system mode), `docs/TEST-STRATEGY__<container>.yaml` (container mode) |
 | `task`       | `sdlc/skills/task`  | **system:** `docs/ARCH.yaml` + `docs/TEST-STRATEGY.yaml` + interview; **container:** `docs/ARCH__<container>.yaml` + `docs/TEST-STRATEGY__<container>.yaml` (+ `docs/DATA-MODEL.yaml`) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) (+ `docs/DESIGN.yaml` (+ `DESIGN__*`)) + interview; both read `docs/PRD.yaml` for FR/NFR id resolution. UX/API/DATA/DESIGN drive the surface/operation/entity/design coverage gates | `docs/TASKS.json` (system mode), `docs/TASKS__<container>.json` (container mode) |
+| `code`       | `sdlc/skills/code`  | `docs/TASKS.json` + `docs/TASKS__<container>.json` (must be `complete` + task-validator-green) + `docs/ARCH__<container>.yaml` + `docs/TEST-STRATEGY__<container>.yaml` (contract resolution) (+ `docs/API.yaml`/`API__*`) (+ `docs/DATA-MODEL.yaml`) (+ `docs/UX.yaml`) (+ `docs/DESIGN*`) — **no interview** | generated source files at each task's `target_files`, `docs/CODE-MANIFEST.json`, execution ledger in `.claude/skills-state/sdlc-code.state.yaml` |
 | `deploy`     | `sdlc/skills/deploy` | `docs/ARCH.yaml` + interview                                                                | `docs/DEPLOY.yaml`                                   |
 
 **Downstream consumers of every output are AI agents, not humans.** Optimize artifacts for unambiguous machine consumption (typed enums, no prose blobs, explicit `null` for unanswered fields).
 Inputs in round brackets `()` are optional to each skill and taken if present.
+
+`code` is an **execution skill**, not an interview skill — the Stage-14 half of
+the factory. It consumes the task graph and *writes the actual source files*
+each task's provenance pins (`target_files` / `target_symbol`), interleaving
+implementation tasks with their test tasks (test-first ready-queue policy) and
+running a test-and-heal loop (≤3 attempts; attempt 3 escalates to a fresh opus
+subagent). Three forms: `/sdlc:code` (whole remaining stitched graph),
+`/sdlc:code <container>` (one subgraph), `/sdlc:code --next` (next incomplete
+unit in `build_order`). Its per-task execution ledger
+(`.claude/skills-state/sdlc-code.state.yaml`) makes every invocation resumable
+and idempotent; generated symbols carry greppable `sdlc-code: <cid>/TSK-NNN`
+markers; `docs/CODE-MANIFEST.json` is the machine-readable ledger downstream
+verify/deploy stages consume. Like `setup`, it is exempt from the interview
+contract below (no themes, no questions file) — HITL is a plan-approval gate,
+conflict/failure gates, and a close report. It honours the downstream-rejection
+rule (refuses draft/invalid task graphs) and never edits `docs/*.yaml` or the
+TASKS files.
 
 `setup` is infrastructure, not an artifact producer. It runs once before `prd`
 and wires a **generated `docs/INDEX.yaml`** — a pure line-range location map over
