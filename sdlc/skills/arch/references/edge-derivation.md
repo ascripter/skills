@@ -76,7 +76,8 @@ when the evidence is unambiguous.**
 | Edge type        | Required `via_*` pre-fills (when evidence exists)                |
 |------------------|------------------------------------------------------------------|
 | `calls` (internal) | `via_unit` (the callee `work_units[].name` on the `to` component) + `via_resource_id` when the callee traces a resource |
-| `calls` (external) | `via_resource_id` (the API resource being called) + `via_operation_id` (the specific API endpoint on the called container) |
+| `calls` (external, callee exposes an API) | `via_resource_id` (the API resource being called) + `via_operation_id` (the specific API endpoint on the called container). Mirror the resource into this container's `api_consumers[]` (cross-check #26). |
+| `calls` (external, callee is an internal SIBLING with no API between them) | `via_unit` (the callee `work_units[].name` on the `<container_id>/<component_id>` target — requires that `to` form). The cross-container analogue of the internal via_unit. |
 | `reads`/`writes` | `via_entity` (the DATA entity primarily accessed)                |
 | `publishes`      | `via_channel_id` (the API.events channel)                        |
 | `subscribes_to`  | `via_channel_id` (the API.events channel)                        |
@@ -88,6 +89,16 @@ If derivation produces an edge but no upstream evidence exists for the
 ambiguity. The validator does NOT require `via_*` to be set, but it
 DOES validate any value that is set — typos in `via_*` are blocking
 errors.
+
+**Backfill passes sweep ALL `calls` edges — internal AND external.** When a
+later pass backfills `via_unit` (e.g. after work_units were added to a
+container), the sweep scope is *every* `calls` edge whose callee now declares
+work_units: the intra-container `internal_edges`, **and the `external_edges`
+whose target is a sibling container** (`<container>/<component>` form). The
+historical failure mode is exactly a backfill that covered all N internal
+edges and skipped the one cross-container call to an internal sibling —
+enumerate the edge list from the files, don't enumerate from memory of "the
+edges I was just editing".
 
 ## System-level derivation rules
 
@@ -166,6 +177,24 @@ backend; consumer is anyone with a `worker` archetype mentioning
 - `architecture_pattern.pattern == microservices` AND no gateway →
   every consumer→producer edge is `calls`. Add no implicit gateway
   unless the user confirmed one in container_inventory.
+
+### Rule S6 — Container-file roll-up (`all types`)
+
+For every drilled `docs/ARCH__<A>.yaml` and every entry in its
+`external_edges` targeting container `B` (or `B/<component>`): ensure a
+system edge `{ from: A, to: B, type: <same> }` exists in
+`ARCH.yaml.edges`. Derive the system edge's `via_*` from the container
+edge's (via_resource_id / via_channel_id / via_entity carry over;
+via_operation_id and via_unit stay container-level detail).
+
+This is the rule the validator's cross-check #24 enforces: the system
+edge table is the *roll-up* of the per-container tables. Container mode
+discovers edges the system interview never saw (a sandbox writing an
+artifact filesystem, a test agent calling a sibling's callable) — without
+S6 they stay buried in one container file and `test`/`deploy`, which read
+`ARCH.yaml.edges`, under-see the topology. S6 runs in system `-d` mode
+AND at container-mode Phase 7 (see "Roll-up at container-mode write"
+below).
 
 ## Container-level derivation rules
 
@@ -257,11 +286,26 @@ The user sees the derived edges as a numbered diff (see
 - `add: <type> <to>` — add a row not derived.
 - `EXIT` — save state and stop.
 
+## Roll-up at container-mode write (Phase 7)
+
+When container mode writes `docs/ARCH__<A>.yaml` with external_edges that
+have no corresponding `ARCH.yaml.edges` row (Rule S6), it must not leave
+them un-rolled-up — the validator blocks `complete` on that (#24). Present
+the missing system edges as one confirmation diff ("These container edges
+imply system edges ARCH.yaml doesn't have yet: …") and, on confirm, append
+them to `ARCH.yaml.edges` and bump `ARCH.yaml.metadata.last_updated`. This
+is one of the only mutations container mode may make to `ARCH.yaml`
+(alongside `containers[<id>].file_path`) — appending derived system edges,
+never editing or removing existing ones. If the user declines, drop or
+retarget the container edge instead; do not write a file that fails #24.
+
 ## `-d` (re-derivation) mode
 
 In `-d` mode the agent **skips the interview entirely** and runs only
 edge derivation. The diff is built against the *currently stored*
-edges in the target file.
+edges in the target file. System-scope `-d` includes Rule S6: read every
+drilled container file's `external_edges` and propose the missing system
+rows as ADDs.
 
 Three differences vs. interview-mode derivation:
 

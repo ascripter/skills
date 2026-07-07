@@ -1,0 +1,57 @@
+# 18 — the drilled sibling container; its purge-service declares the
+# work_unit 'purge_stale' (so via_unit 'wrong_name' on the app side is a
+# resolvable-but-wrong reference, not an un-drilled skip).
+metadata:
+  arch_container_version: "1.2"
+  last_updated: "2026-05-26T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "18181818-cccc-1818-1818-181818181818"
+  status: "complete"
+
+container_id: cleanup-job
+archetype: scheduler
+overview: "Nightly purge of stale tasks."
+
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+
+deployment:
+  shape: scheduled_job
+  shape_confidence: confirmed
+
+observability:
+  logs: "stdout structured json"
+
+failure_modes:
+  - id: purge-overrun
+    description: "Purge runs past its window on large backlogs."
+    likelihood: low
+    impact: medium
+    mitigation: "Batch with a hard time budget."
+
+components:
+  - component_id: purge-service
+    archetype: service
+    purpose: "Deletes stale tasks."
+    responsibilities:
+      - "Select and delete tasks past retention."
+    code_location:
+      - "src/cleanup/"
+    implements_requirements:
+      - "FR-002"
+    work_units:
+      - name: purge_stale
+        summary: "Delete all tasks past the retention window."
+        implements_requirements:
+          - "FR-002"
+        inputs: []
+        output: "None"
+        raises: []
+        status: confirmed
+    status: confirmed
+
+internal_edges: []
+external_edges: []
+
+arch_warnings: []

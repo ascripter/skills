@@ -213,6 +213,15 @@ Reflect, in order, on:
 3. **Project-type heuristics** — CLI tool, SaaS web app, library, data
    pipeline, browser extension: each implies a characteristic container
    set (e.g. a pipeline implies ingest + transform + sink stages).
+4. **Build-time deliverables** — scan the must-have FR texts for concrete
+   repo paths and shipped-artifact nouns (a schema/model layer, repo-root
+   `tools/` validators, `templates/`, prompt/question/archetype packs,
+   generated docs). Every such path must fall inside the scope of SOME
+   container in the list — usually as components of an existing container
+   (see `component-discovery.md` → Pass 6), occasionally as a dedicated
+   tooling/content container. Runtime-driven seeding (Passes 1–5) never
+   proposes these, and a deliverable with no owning container means the
+   downstream `task` stage can never schedule building it.
 
 Surface the concrete missed **candidate containers** — not category
 labels — via **one multi-select `AskUserQuestion`** ("I may have missed

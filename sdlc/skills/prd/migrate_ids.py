@@ -35,6 +35,11 @@ Family map (prefix -> sibling list fields, in order)::
     JTB - use_cases.primary_jobs_to_be_done, .secondary_jobs
     EDG - use_cases.edge_cases
     ENT - data_model.key_entities
+    ACR - success_metrics.acceptance_criteria
+    QUE - open_questions.undecided_decisions, .parking_lot — migrated to
+          TYPED mappings {id: QUE-NNN, question, status}, not prefixed
+          strings; plain bullets get the next shared QUE id with
+          status: open (undecided) / deferred (parking_lot).
 
 In monorepo mode, each `products.<slug>` carries an independent ID space
 per family (counters reset per product). `WRN` always lives at the root
@@ -66,6 +71,7 @@ from typing import Any, List, Optional, Tuple
 
 try:
     from ruamel.yaml import YAML
+    from ruamel.yaml.comments import CommentedMap
     from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 except ImportError:
     print(
@@ -107,6 +113,16 @@ FAMILIES: List[Tuple[str, List[str], str]] = [
         "product",
     ),
     ("ENT", ["data_model.key_entities"], "product"),
+    ("ACR", ["success_metrics.acceptance_criteria"], "product"),
+]
+
+# QUE is migrated separately (see _migrate_open_questions): its items become
+# typed mappings {id, question, status}, not "QUE-NNN: <text>" strings. The
+# two open_questions lists share one QUE counter per scope.
+_QUE_PATHS: List[Tuple[str, str]] = [
+    # (dotted path, retrofit status for legacy plain-string bullets)
+    ("open_questions.undecided_decisions", "open"),
+    ("open_questions.parking_lot", "deferred"),
 ]
 
 
@@ -236,11 +252,69 @@ def _migrate_family(
                 counter = _migrate_list(parent, key, prefix, counter, changes, path)
 
 
+_QUE_ID_RE = re.compile(r"^QUE-(\d{3,})$")
+
+
+def _migrate_open_questions_scope(root: Any, scope_label: str, changes: List[str]) -> None:
+    """Convert legacy plain-string open_questions bullets into typed
+    {id, question, status} mappings, sharing one QUE counter across both
+    lists in this scope. Existing typed entries keep their ids (and feed
+    the counter). Idempotent."""
+    # First pass: existing typed ids feed the counter.
+    counter = 0
+    lists: List[Tuple[Any, str, str, str]] = []  # (parent, key, path, retrofit_status)
+    for path, retrofit_status in _QUE_PATHS:
+        parent, key = _get_parent_and_key(root, path)
+        if parent is None or key is None:
+            continue
+        items = parent.get(key)
+        if not isinstance(items, list):
+            continue
+        lists.append((items, key, f"{scope_label}{path}", retrofit_status))
+        for item in items:
+            if hasattr(item, "get"):
+                m = _QUE_ID_RE.match(str(item.get("id") or "").strip())
+                if m:
+                    counter = max(counter, int(m.group(1)))
+
+    # Second pass: retrofit plain strings.
+    for items, _key, path_label, retrofit_status in lists:
+        for idx in range(len(items)):
+            item = items[idx]
+            if not isinstance(item, str):
+                continue
+            counter += 1
+            entry = CommentedMap()
+            entry["id"] = DoubleQuotedScalarString(f"QUE-{counter:03d}")
+            entry["question"] = DoubleQuotedScalarString(item)
+            entry["status"] = retrofit_status
+            items[idx] = entry
+            truncated = item if len(item) <= 60 else item[:57] + "..."
+            changes.append(
+                f"  {path_label}[{idx}]: typed  'QUE-{counter:03d}' "
+                f"(status: {retrofit_status})  ({truncated!r})"
+            )
+
+
+def _migrate_open_questions(data: Any, changes: List[str]) -> None:
+    metadata = data.get("metadata") if hasattr(data, "get") else None
+    is_monorepo = bool(metadata.get("monorepo", False)) if metadata is not None else False
+    if is_monorepo:
+        products = data.get("products")
+        if products is not None and hasattr(products, "items"):
+            for slug, product_data in products.items():
+                if product_data is not None and hasattr(product_data, "get"):
+                    _migrate_open_questions_scope(product_data, f"products.{slug}.", changes)
+    else:
+        _migrate_open_questions_scope(data, "", changes)
+
+
 def migrate(data: Any) -> Tuple[Any, List[str]]:
     """Run all family migrations on `data` in place. Returns (data, change-log)."""
     changes: List[str] = []
     for prefix, paths, scope in FAMILIES:
         _migrate_family(data, prefix, paths, scope, changes)
+    _migrate_open_questions(data, changes)
     return data, changes
 
 

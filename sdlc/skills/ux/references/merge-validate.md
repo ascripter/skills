@@ -56,6 +56,14 @@ Always preserve **unrelated keys** in the existing YAML files even if
 you don't recognise them. The validator's `extra="allow"` config means
 custom keys are tolerated.
 
+**Surface-status maturity.** Before merging, run the downstream-claim
+reconciliation from SKILL.md Phase 2: any surface claimed by
+`ARCH.yaml.containers[].owns_ux_surfaces` whose inventory `status` is not
+`confirmed` gets a consolidated confirm / keep-with-`WRN` prompt. A surface
+that ARCH builds and TEST tests must not linger as `proposed` in the UX
+inventory — the validator prints a standing warning for exactly this
+mismatch, and this merge step is where it gets resolved.
+
 ## Writing the files
 
 For `UX.yaml`:

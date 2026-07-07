@@ -1,14 +1,15 @@
-# Per-container deep-dive for `app`, exercising component PRD traces.
-# component implements_requirements (FR-001) is a subset of the parent
-# container's implements_requirements; traces_prd_workflows resolves to PRD.
+# 17 — DEFER-OR-DECLARE violation (cross-check #23).
+# `create_task` traces no schema-bearing contract (no traces_api_operation)
+# yet declares none of inputs/output/raises. The component records no
+# work_units_waiver, so this must BLOCK status: complete.
+# Expectation: validator exits 1 naming cross-check 23.
 metadata:
   arch_container_version: "1.2"
   last_updated: "2026-05-26T12:00:00Z"
   generated_by: sdlc-arch
-  session_id: "16161616-bbbb-1616-1616-161616161616"
+  session_id: "17171717-bbbb-1717-1717-171717171717"
   status: "complete"
   changelog:
-    - "1.1 (2026-06-26): Add component work_units (name-addressed callables)."
     - "1.0 (2026-05-26): Initial container deep-dive."
 
 container_id: app
@@ -32,7 +33,7 @@ failure_modes:
     description: "Primary store connection times out."
     likelihood: low
     impact: high
-    mitigation: "Connection pool with ret/backoff."
+    mitigation: "Connection pool with retry/backoff."
 
 components:
   - component_id: tasks-service
@@ -42,7 +43,6 @@ components:
       - "Validate and persist new tasks."
     code_location:
       - "src/tasks/"
-      - "src/tasks/service.py"
     implements_requirements:
       - "FR-001"
     traces_prd_workflows:
@@ -52,13 +52,6 @@ components:
         summary: "Validate the payload and persist a new task."
         implements_requirements:
           - "FR-001"
-        # DECLARE case (#23): no traces_api_operation, so the interface
-        # contract is declared here.
-        inputs:
-          - "payload: TaskCreate"
-        output: Task
-        raises:
-          - "ValidationError -> rejected payload"
         status: confirmed
     status: confirmed
 

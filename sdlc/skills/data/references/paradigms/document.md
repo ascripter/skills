@@ -46,7 +46,11 @@ PLUS:
 
 2. **cross_references** — normalized id links between collections:
    `{from_entity, field, to_entity, comment}`. These are the references you
-   chose NOT to embed.
+   chose NOT to embed. Before closing the theme, run the **gate-clause
+   sweep** (canonical spec: `references/paradigms/file-native.md` →
+   "Gate-clause sweep"): every field an upstream-named referential/coverage
+   gate queries gets a cross_references row or an explicit `WRN-NNN`
+   carve-out — never silent omission.
 
 Skip-instead: `relationships` (use composition + cross_references),
 `integrity_and_constraints` (enforced in app code / Pydantic),

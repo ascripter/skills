@@ -26,8 +26,37 @@ Container mode is forbidden from touching `docs/ARCH.yaml` *except*:
 - May set `containers[<id>].file_path` to point at the new
   `docs/ARCH__<container>.yaml` if the file was just created.
 - May update top-level `metadata.last_updated`.
+- May **append** system edges that this container's `external_edges` imply
+  and `ARCH.yaml.edges` lacks (roll-up rule S6 — presented as a
+  confirmation diff first; required, because cross-check #24 blocks
+  `complete` while a container-sourced edge has no system row). Append
+  only — never edit or remove existing edges.
 
 No other field in `ARCH.yaml` may be modified by container mode.
+
+### Derived-count refresh (every write, every mode)
+
+Structured data is the source of truth; prose that *restates* it goes
+stale silently. The historical failure: propagation passes updated
+`containers[]`/`edges`/`work_units` across several version bumps while
+header comments and `overview`/`notes` sentences kept saying "12
+containers", "43 edges", "15 commands" from three versions ago —
+self-describing text that now lies to every downstream reader.
+
+Two rules, applied on **every** write (interview merge, `-d` edge write,
+backfill/propagation passes):
+
+1. **Don't write derived counts into prose.** New `overview` / `purpose` /
+   `notes` text and YAML header comments must not restate counts of
+   structured collections ("N containers", "N edges", "N tests"). Say
+   *what*, not *how many* — the reader can count, and the validator's
+   summary line already reports totals.
+2. **Refresh what you touch.** When updating a file that already carries
+   such counts, re-derive each one from the structured data in the same
+   write — or delete the sentence. Sweep the file's prose fields and
+   comment headers for numerals adjacent to collection nouns; a
+   propagation pass that changes a collection but not the prose
+   describing it is an incomplete pass.
 
 ### Container mode → `docs/ARCH__<container>.yaml`
 
@@ -163,6 +192,35 @@ This validates:
     it does not count toward "all containers specified" (SKILL.md → Invocation
     dispatch).
 
+15. Work_unit DEFER-OR-DECLARE contract (#23 — block `complete`):
+
+    - A work_unit with **no** `traces_api_operation` (no schema-bearing traced
+      contract) must declare ALL of `inputs`, `output`, `raises` — explicit
+      empties count (`inputs: []`, `raises: []`, `output: "None"`); absence
+      fails. A unit WITH `traces_api_operation` may defer to the API schema.
+    - Waiver-aware: the component's `work_units_waiver` downgrades its units'
+      contract gaps to warnings.
+    - This closes the emitter divergence where units carried only trace
+      fields (`implements_requirements`/`touches_entities`/
+      `satisfies_acceptance`) and every downstream atomic task had to
+      re-guess the interface.
+
+16. Container→system edge roll-up (#24 — block `complete`):
+
+    - Every container file's `external_edges[]` entry must have a
+      corresponding `ARCH.yaml.edges` row ({from: that container, to: the
+      target container, same type}). The system edge table is the roll-up of
+      the per-container tables. Fix by confirming the appended rows at
+      container-mode Phase 7 or running `/sdlc:arch -d`.
+    - Also part of #15's via_* suite: an external edge's `via_unit` resolves
+      to a `work_units[].name` on its `<container>/<component>` target
+      (sibling-container calls with no API between them).
+
+17. Advisory (never block): **#25** — a concrete repo path named in a claimed
+    FR's text outside every component's `code_location` (a build-time
+    deliverable `task` could never schedule); **#26** — an external `calls`
+    edge with `via_resource_id` not mirrored in `api_consumers[]`.
+
 ### Exit-code recovery
 
 | Exit | Meaning                                  | Action                                                     |
@@ -187,10 +245,13 @@ This validates:
   - (container mode) component `work_units` integrity + FR coverage
     (#21/#22) pass — every non-trivial component has work_units or a
     `work_units_waiver`, and every component FR is realized by a work_unit
-    or waived.
+    or waived;
+  - (container mode) every DECLARE-case work_unit carries its interface
+    contract (#23), and every external edge has its system roll-up row
+    (#24).
 - `draft` — set on early EXIT, on any missing required field, or on
   any failing check. A container that is on-disk `complete` but fails
-  #21/#22 is "drilled but incomplete" — resume its deep-dive.
+  #21/#22/#23 is "drilled but incomplete" — resume its deep-dive.
 
 If the user is about to set `complete` but the validator flags
 problems, surface them via AskUserQuestion and let the user choose:

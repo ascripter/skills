@@ -391,6 +391,29 @@ Before this convention, only `data` tracked anything (a shallow
 bodies); `arch` had no upstream-change handling at all. §7 generalizes and
 hardens what `data` started.
 
+#### 8. Derived counts don't live in prose
+
+Structured data is the source of truth; prose that *restates* it goes
+stale silently. An adversarial review of a skill-authored corpus found
+header/footer comments and `overview`/`notes` sentences still claiming
+"15 commands", "43 edges", "181 tests" several version bumps after the
+structured collections had moved — because propagation passes update
+structured fields, not the sentences describing them.
+
+Two rules, every artifact skill, every write:
+
+- **Don't emit derived counts into prose.** New prose fields
+  (`overview`, `purpose`, `notes`, rationale strings) and YAML comment
+  headers must not restate counts of structured collections. Say *what*,
+  not *how many* — downstream agents count the collection; the
+  validator's summary line reports totals.
+- **Refresh what you touch.** Any pass that updates a file which already
+  carries such counts (merge, backfill, propagation, edge-only `-d`
+  writes) re-derives each count it invalidated from the structured data
+  in the same write — or deletes the sentence. A propagation pass that
+  changes a collection but not the prose describing it is an incomplete
+  pass.
+
 #### Implications for downstream skills
 
 Any new skill that consumes the PRD (directly or indirectly via UX,

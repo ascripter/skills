@@ -1,0 +1,37 @@
+# 12 — downstream-claim maturity mismatch. This sibling ARCH.yaml claims the
+# `task-add` surface (owns_ux_surfaces) while the UX inventory still marks it
+# `proposed`. Expectation: exit 0 (valid) WITH the non-blocking warning
+# "claimed downstream but not 'confirmed'".
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-05-26T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "12121212-aaaa-1212-1212-121212121212"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Single CLI binary."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: cli-app
+    archetype: cli
+    purpose: "The acme CLI."
+    owns_api_resources: []
+    owns_ux_surfaces:
+      - task-add
+    persistence: []
+    deployment_unit: container
+    external: false
+    status: confirmed
+
+edges: []
+
+arch_warnings: []

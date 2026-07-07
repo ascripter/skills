@@ -183,9 +183,14 @@ Otherwise, classify a non-`--next` invocation:
    the four valid invocations and abort.
 
 The skill **never** modifies a different mode's output. Container mode
-will not touch `docs/ARCH.yaml`; system mode will not touch any
-`docs/ARCH__*.yaml`. Cross-references go through the state file plus the
-already-on-disk artifacts read at Phase 2.
+will not touch `docs/ARCH.yaml` — except two narrow, mechanical writes:
+setting `containers[<id>].file_path` on first completion, and **appending
+system edges its external_edges imply** (the roll-up rule S6 — the
+validator's cross-check #24 blocks `complete` while a container-sourced
+edge has no system row; see `references/edge-derivation.md` → "Roll-up at
+container-mode write"). System mode will not touch any `docs/ARCH__*.yaml`.
+Cross-references go through the state file plus the already-on-disk
+artifacts read at Phase 2.
 
 ## Pre-flight API check (runs before everything else)
 
@@ -373,6 +378,12 @@ Source candidates, in priority order:
 4. **DATA persistence bindings** — if this container binds to redis or
    blob store, propose `cache-client` / `blob-client` components. Tag
    `⚠ inferred`.
+5. **Build-time deliverables named in claimed FRs** — schema/model layers,
+   repo `tools/` validators, `templates/`, shipped content packs → propose
+   `schema_model` / `dev_tool` / `content_asset` components whose
+   `code_location` covers the FR-named paths (see
+   `references/component-discovery.md` → Pass 6). Runtime-only seeding
+   misses this class entirely. Tag `⚠ inferred`.
 
 Present the draft as in system mode. Persist to
 `state.sessions[container|<id>].defined_components`. `component_inventory`
@@ -537,8 +548,13 @@ Write or merge the active mode's output yaml:
 - Container mode → `docs/ARCH__<container>.yaml`. Also, on first
   completion of a container interview, update
   `docs/ARCH.yaml.containers[id].file_path` to point to the new file,
-  and bump `ARCH.yaml.metadata.last_updated`. This is the **only** field
-  in `ARCH.yaml` that container mode is allowed to mutate.
+  and bump `ARCH.yaml.metadata.last_updated`. Additionally, when this
+  container's `external_edges` imply system edges that `ARCH.yaml.edges`
+  lacks, present the missing rows as a confirmation diff and **append**
+  them (roll-up rule S6; cross-check #24 blocks `complete` otherwise —
+  see `references/edge-derivation.md`). These are the only mutations
+  container mode may make to `ARCH.yaml`; it never edits or removes
+  existing entries.
 
 When writing, (re)write the active output's `metadata.upstream_provenance`:
 one entry per upstream artifact consumed this run (`docs/PRD.yaml`,
@@ -619,6 +635,17 @@ checks emit warnings only.
     component's `work_units[].implements_requirements` (waivable via
     `work_units_waiver`). work_units are read by a real YAML parse (block- or
     flow-style entries both count), never a line-grep.
+9b. **Work_unit DEFER-OR-DECLARE contract (#23 — block `complete`)** — a
+    work_unit with no `traces_api_operation` must declare ALL of `inputs`,
+    `output`, `raises` (explicit empties count: `inputs: []`, `raises: []`,
+    `output: "None"`); a unit that traces an API operation may defer to that
+    schema. Waiver-aware like #21/#22. This is what stops the emitter from
+    filling only trace fields and leaving every interface contract empty.
+9c. **Container→system edge roll-up (#24 — block `complete`)** — every
+    container file's `external_edges[]` entry must have a corresponding
+    `ARCH.yaml.edges` row ({from: that container, to: target container,
+    same type}). Container mode appends missing rows at Phase 7 (with
+    confirmation); system `-d` proposes them as ADDs (rule S6).
 
 **Non-blocking warnings**:
 
@@ -642,7 +669,17 @@ checks emit warnings only.
     context. The blocking half of #21/#22 lives in item 9a above. A `calls`
     internal edge's `via_unit` resolves against a `work_units[].name` on the
     edge's `to` component; an external edge's `via_operation_id` resolves against
-    an API operation.
+    an API operation; an external edge's `via_unit` resolves against the
+    `<container>/<component>` target's work_units (sibling-container calls with
+    no API between them).
+14. **FR-named deliverable path coverage (#25, advisory)** — a concrete repo
+    path named in a claimed FR's text that no component's `code_location`
+    covers is warned about: a build-time deliverable (schema layer, `tools/`,
+    `templates/`, shipped content) with no owning component can never be
+    scheduled by `task`.
+15. **api_consumers mirror (#26, advisory)** — an external `calls` edge with
+    `via_resource_id` not mirrored in the container's `api_consumers[]` is
+    warned about.
 
 For merge logic, the recovery flow on `[FAIL]`, and the CLAUDE.md pointer
 rules → see `references/merge-validate.md`.
@@ -651,11 +688,12 @@ Set `metadata.status`:
 
 - `"complete"` — only when all required fields are filled, the validator
   passes with `[OK]`, AND every cross-check passes (coverage, edge/trace
-  integrity, container/system consistency, ID-prefix formats, and — in
-  container mode — component `work_units` integrity + FR coverage #21/#22).
+  integrity, container/system consistency, ID-prefix formats, edge roll-up
+  #24, and — in container mode — component `work_units` integrity + FR
+  coverage #21/#22 + interface contracts #23).
   A container file that is on-disk `complete` but that the validator flags with
-  a #21/#22 error is **not** done: it is "drilled but incomplete" and `--next`
-  will route back to resume its deep-dive.
+  a #21/#22/#23 error is **not** done: it is "drilled but incomplete" and
+  `--next` will route back to resume its deep-dive.
 - `"draft"` — on early EXIT, when any required field is null, or when
   any cross-check fails.
 
@@ -673,6 +711,11 @@ This phase replaces Phases 3–6 when invocation starts with `-d`.
 2. Run candidate-edge collection per `references/edge-derivation.md`:
    parse API.yaml resources, DATA store bindings, UX surface usage, and
    any free-text `overview`/`purpose` fields for canonical name matches.
+   In system scope, also run roll-up rule S6: read every drilled
+   container file's `external_edges` and propose missing system rows as
+   ADDs. In container scope, sweep `via_unit` backfill over ALL `calls`
+   edges — internal AND external-to-sibling — not just the
+   intra-container ones.
 3. Diff the derived edge set against the currently-stored edges in the
    affected nodes.
 4. Present the diff for each node as a numbered list (add / remove /
@@ -689,6 +732,10 @@ This phase replaces Phases 3–6 when invocation starts with `-d`.
 
 5. Apply confirmed changes; write only the affected file(s). Edge-only
    writes never change `metadata.status` — only edges and `last_updated`.
+   If prose in the touched file (`overview`, notes, header comments)
+   restates a count the edit just changed ("12 edges", "5 containers"),
+   refresh or delete it in the same write — see
+   `references/merge-validate.md` → "Derived-count refresh".
 6. Write a derivation report to
    `.claude/skills-state/sdlc-arch.derivation-report-<ISO8601>.yaml`
    listing additions / removals / retypes per node.

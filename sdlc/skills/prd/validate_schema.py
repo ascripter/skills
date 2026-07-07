@@ -21,7 +21,7 @@ import re
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 try:
     import yaml
@@ -333,9 +333,34 @@ class RisksAssumptions(_ThemeBase):
     dependencies: Optional[List[str]] = None
 
 
+class OpenQuestionItem(_ThemeBase):
+    """One typed open question — the QUE-NNN family.
+
+    Downstream stages gate on open questions (a QUE blocking an FR must be
+    resolved before that FR is built), so items are typed mappings with a
+    lifecycle status, not prose bullets. `undecided_decisions` and
+    `parking_lot` share ONE continuous QUE counter (like FR across
+    must/nice). Legacy plain-string entries still parse (Union below) but
+    are flagged by check_open_questions — warnings in draft, errors in
+    complete — mirroring the missing-prefix rule for every other family.
+    """
+
+    id: Optional[str] = None            # "QUE-NNN"
+    question: Optional[str] = None      # the decision still open
+    status: Optional[Literal["open", "resolved", "deferred"]] = "open"
+    resolution: Optional[str] = None    # required once status == resolved
+    blocks: Optional[List[str]] = None  # optional upstream ids gated by this
+                                        # question (FR-NNN, NFR-NNN, WKF-NNN, …)
+
+
+# Legacy plain-string entries accepted for parseability; flagged by
+# check_open_questions. Mappings parse into OpenQuestionItem (typed status).
+OpenQuestionEntry = Union[OpenQuestionItem, str]
+
+
 class OpenQuestions(_ThemeBase):
-    undecided_decisions: Optional[List[str]] = None
-    parking_lot: Optional[List[str]] = None
+    undecided_decisions: Optional[List[OpenQuestionEntry]] = None
+    parking_lot: Optional[List[OpenQuestionEntry]] = None
 
 
 # Free-form, project-defined cross-cutting convention map. The validator only
@@ -490,7 +515,17 @@ ID_FAMILIES: List[Tuple[str, str, str]] = [
     ("NFR", "non_functional_requirements.performance_targets", "product"),
     ("NFR", "non_functional_requirements.other", "product"),
     ("ENT", "data_model.key_entities", "product"),
+    # ACR — typed acceptance criteria. Emitting ACR-NNN here is what makes
+    # downstream ACR→TST coverage gates instance-bearing instead of
+    # mechanism-only (test's `covers` accepts ACR-NNN and resolves it by PRD
+    # token scan).
+    ("ACR", "success_metrics.acceptance_criteria", "product"),
 ]
+
+# QUE — open_questions.undecided_decisions + .parking_lot share one QUE-NNN
+# counter, but their items are typed MAPPINGS ({id, question, status, …}),
+# not "QUE-NNN: <text>" strings — so they are checked by
+# check_open_questions() below, not by the string-prefix machinery above.
 
 _ID_PREFIX_RE_CACHE: Dict[str, re.Pattern] = {}
 
@@ -536,6 +571,65 @@ def check_ids(prd: "PRD") -> List[str]:
         for prefix, dotted_path, scope in ID_FAMILIES:
             if scope == "product":
                 _check_list(_get_dotted(prd, dotted_path), dotted_path, prefix)
+
+    return violations
+
+
+_QUE_ID_RE = re.compile(r"^QUE-\d{3,}$")
+
+
+def check_open_questions(prd: "PRD") -> List[str]:
+    """Violations for the typed QUE family (open_questions).
+
+    Items are typed mappings {id: QUE-NNN, question, status} — the two lists
+    (undecided_decisions + parking_lot) share one continuous QUE counter per
+    scope. Legacy plain-string bullets are flagged exactly like a missing
+    prefix in any other family (warning in draft, error in complete); the
+    update flow retrofits them with the next QUE id and status: open.
+    """
+    violations: List[str] = []
+
+    def _check_scope(root: object, scope_label: str) -> None:
+        oq = getattr(root, "open_questions", None)
+        if oq is None:
+            return
+        seen: Dict[str, str] = {}
+        for field in ("undecided_decisions", "parking_lot"):
+            items = getattr(oq, field, None)
+            if not isinstance(items, list):
+                continue
+            for i, item in enumerate(items):
+                where = f"{scope_label}open_questions.{field}[{i}]"
+                if isinstance(item, str):
+                    violations.append(
+                        f"{where}: expected typed mapping "
+                        f"{{id: QUE-NNN, question, status}}, got plain string "
+                        f"{item!r} — retrofit with the next QUE id and "
+                        f"status: open"
+                    )
+                    continue
+                qid = (item.id or "").strip()
+                if not _QUE_ID_RE.match(qid):
+                    violations.append(f"{where}.id: expected 'QUE-NNN', got {item.id!r}")
+                elif qid in seen:
+                    violations.append(
+                        f"{where}.id '{qid}' duplicates {seen[qid]} — the two "
+                        f"open_questions lists share one QUE counter"
+                    )
+                else:
+                    seen[qid] = where
+                if not (item.question or "").strip():
+                    violations.append(f"{where}.question: missing")
+                if item.status == "resolved" and not (item.resolution or "").strip():
+                    violations.append(
+                        f"{where}: status is 'resolved' but resolution is empty"
+                    )
+
+    if prd.metadata.monorepo and prd.products:
+        for slug, product in prd.products.items():
+            _check_scope(product, f"products.{slug}.")
+    else:
+        _check_scope(prd, "")
 
     return violations
 
@@ -642,7 +736,7 @@ def validate_file(path: Path) -> int:
         return 1
 
     missing = check_required(prd)
-    id_violations = check_ids(prd)
+    id_violations = check_ids(prd) + check_open_questions(prd)
     status = prd.metadata.status
 
     if status == "complete":

@@ -441,6 +441,14 @@ composition:                       # optional list[CompositionItem]
 # input contract for referential-integrity gates). Each entry needs EITHER a
 # `to_entity` (intra-model link) OR a `references_family` (points at an upstream
 # ID family like FR/ENT). Validator checks from_entity/to_entity resolve.
+#
+# COMPLETENESS CONTRACT (writer-enforced — the gate-clause sweep,
+# references/paradigms/file-native.md): every Entity.field that an
+# upstream-named referential/coverage gate queries must have a row here (with
+# `gate:` naming the clause) OR an explicit WRN-NNN carve-out in
+# data_warnings naming the field and its read-model home. Non-id-family
+# relations (composite tuples like (component, name), paths, hashes) declare
+# their resolution rule in a row `comment` or the carve-out — never silence.
 # -----------------------------------------------------------------------------
 cross_references:                  # optional list[CrossReference]
   null

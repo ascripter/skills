@@ -1,0 +1,57 @@
+# 18 — Container→system edge roll-up gap (cross-check #24) + external
+# via_unit resolution (cross-check #15 extension).
+#   * ARCH__app.yaml carries an external calls edge app→cleanup-job, but
+#     `edges:` below is empty — the container-sourced edge never propagated
+#     to the system edge table (#24, blocks complete).
+#   * The same edge's via_unit ('wrong_name') does not resolve to a
+#     work_units[].name on cleanup-job/purge-service (#15, blocks complete).
+# Expectation: validator exits 1 naming cross-check 24 and a via_unit error.
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-05-26T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "18181818-aaaa-1818-1818-181818181818"
+  status: "complete"
+
+architecture_pattern:
+  pattern: modular_monolith
+  pattern_confidence: confirmed
+  rationale: "Small team; one deployable plus a scheduled cleanup job."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "Serves task CRUD."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "FR-001"
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: "docs/ARCH__app.yaml"
+  - container_id: cleanup-job
+    archetype: scheduler
+    purpose: "Nightly purge of stale tasks."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "FR-002"
+    deployment_unit: scheduled_job
+    external: false
+    status: confirmed
+    file_path: "docs/ARCH__cleanup-job.yaml"
+
+edges: []
+
+non_container_features: []
+
+arch_warnings: []

@@ -308,6 +308,29 @@ mode reconciles against `TEST-STRATEGY.yaml`'s provenance; container mode
 against the specific container file's. If every upstream is unchanged, proceed
 to the merge flow without a delta-review. Fresh outputs skip this step.
 
+**ARCH `implements_requirements` staleness check (every re-entry, even when
+provenance is absent or "unchanged" classification would skip it).** The
+highest-impact drift for this skill is an FR promoted into a container's /
+component's `implements_requirements` *after* its tests were authored — the
+shipped behaviour then has zero tests while every file still says `complete`.
+Provenance hashing catches it only when the artifact carries provenance
+(legacy or hand-authored files may not), so ALSO run the direct diff on every
+invocation, including `--next`:
+
+1. For each existing `TEST-STRATEGY__<cid>.yaml`, collect the current
+   `ARCH__<cid>.yaml` requirement set (container + component
+   `implements_requirements`) and diff it against the ids the test file
+   `covers` or defers.
+2. Any requirement in ARCH but neither covered nor deferred is **stale
+   coverage** — name it to the user ("`ARCH__backend-api` now claims FR-031,
+   FR-044; no test covers them") and offer: author tests now (enter that
+   container's flow) / defer with a `WRN-NNN` / skip (leaves the file
+   failing validation).
+3. The validator's requirement-coverage gate enforces the same set, so a
+   skipped stale file will fail `complete` on the next run — the check here
+   exists to surface it as a *prompt* at re-entry instead of a late
+   validation surprise.
+
 For *what* to seed from which upstream field, see `references/test-discovery.md`.
 
 ### Phase 3 — Suite seeding (mode-specific)
@@ -509,6 +532,14 @@ one entry per upstream artifact consumed this run, each
 `docs/INDEX.yaml.generated_from`, else `sha256(bytes)[:16]`). Replace-on-write.
 See CLAUDE.md §7.
 
+**Derived-count refresh (CLAUDE.md §8).** Don't write test counts ("181
+tests", "14 unit / 5 integration") into prose fields (`overview`, notes) or
+YAML header comments — the `tests` list is the source of truth and prose
+counts go stale on the next merge. When updating a file that already carries
+such counts, re-derive or delete them in the same write; a merge/propagation
+pass that changes the `tests` list but not the prose describing it is
+incomplete.
+
 Then run:
 
 ```bash
@@ -542,8 +573,11 @@ tested only on its happy path.
 
 **ID-prefix formats** (block complete):
 
-- `TST-NNN` on every test's `tst_id` (unique within the artifact).
-- `WRN-NNN` on every `test_strategy_warnings` entry.
+- `TST-NNN` on every test's `tst_id` — unique within the artifact AND
+  **globally unique across the system file + every container file** (one
+  continuous counter, `state.last_ids_global.TST`; downstream
+  `Task.test_refs` assumes a single TST namespace).
+- `WRN-NNN` on every `test_strategy_warnings` entry (per-artifact space).
 - `FR-NNN`/`NFR-NNN`/`ACR-NNN`/`WKF-NNN` on `covers` entries, each resolving
   to an upstream PRD id (FR→functional_requirements, NFR→non_functional_requirements,
   ACR/WKF→PRD token scan).
@@ -613,9 +647,15 @@ Like `arch`, `test` keeps **per-mode sub-sessions** in one file:
 
 ```yaml
 session_file_version: "1"
-skill_version: "1.0"
+skill_version: "1.1"
 last_updated: <iso8601>
 spec_order: []                  # container_ids in --next order (providers first)
+last_ids_global: {}             # ONE continuous TST space across ALL artifacts,
+                                # e.g. {TST: 181}. Whichever sub-session mints the
+                                # next test increments THIS counter. Reconcile to
+                                # max(all on-disk TEST-STRATEGY*.yaml, state) on
+                                # every invocation. TST-001 must exist at most
+                                # once across system + all container files.
 
 sessions:
   system:                       # /sdlc:test
@@ -625,7 +665,8 @@ sessions:
     status: in_progress         # in_progress | complete | aborted
     mode: system
     pre_fill_confirmed: false
-    last_ids: {}                # writer-managed counters, e.g. {TST: 12, WRN: 2}.
+    last_ids: {}                # writer-managed PER-ARTIFACT counters — {WRN: 2}.
+                                # TST is NOT here: it lives in last_ids_global.
                                 # Increment, format <PREFIX>-{:03d}, persist.
     completed_themes: []
     skipped_themes: []
@@ -644,7 +685,8 @@ sessions:
     mode: container
     container_id: backend-api
     pre_fill_confirmed: false
-    last_ids: {}                # this container file's TST + WRN spaces
+    last_ids: {}                # this container file's WRN space only;
+                                # TST comes from top-level last_ids_global
     completed_themes: []
     skipped_themes: []
     todo_themes: []
@@ -666,15 +708,23 @@ Rules:
   `partial_answers`, confirm, stop. Other sub-sessions untouched.
 - On Phase 8 completion: set the active sub-session `status: complete`; keep
   the file.
-- **`TST-NNN` and `WRN-NNN` counters** are writer-managed in the active
-  sub-session's `last_ids`. Each artifact (system file and each container
-  file) owns an **independent** `TST` space — `TST-001` in
-  `TEST-STRATEGY__backend-api.yaml` is unrelated to `TST-001` in the system
-  file. There is no interview question for warnings; append them at write time
-  and bump the counter. **Reconcile on resume:** if an on-disk file already
-  has a higher `TST-NNN`/`WRN-NNN` than `last_ids`, sync the counter to
-  `max(on_disk, state)` before appending, so EXIT/resume never produces gaps
-  or duplicates.
+- **`TST-NNN` is ONE GLOBAL id space** across the system file and every
+  container file — downstream `Task.test_refs` (and every other TST
+  consumer) assumes a single namespace, so per-file restarts at `TST-001`
+  produce colliding ids that only surface when a task references the wrong
+  test. The counter is writer-managed at the **top level** of the state file
+  (`last_ids_global.TST`), shared by all sub-sessions: whichever sub-session
+  mints the next test increments the same counter. **Reconcile on every
+  invocation:** scan ALL on-disk `TEST-STRATEGY*.yaml` files and sync
+  `last_ids_global.TST` to `max(all on-disk, state)` before minting — a file
+  may have been hand-edited or authored by an older skill version. The
+  validator enforces global uniqueness (blocking).
+- **`WRN-NNN` stays per-artifact** (the universal warnings convention),
+  writer-managed in the active sub-session's `last_ids.WRN`. There is no
+  interview question for warnings; append them at write time and bump the
+  counter. Reconcile on resume: if the on-disk file has a higher `WRN-NNN`
+  than `last_ids.WRN`, sync to `max(on_disk, state)` before appending, so
+  EXIT/resume never produces gaps or duplicates.
 - **`metadata.changelog`** is append-only, most-recent first; one line per
   write. The validator only type-checks it.
 - The validator ignores this file — it validates only the output yamls.

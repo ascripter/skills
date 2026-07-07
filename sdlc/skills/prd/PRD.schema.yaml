@@ -49,6 +49,13 @@
 #     JTB — use_cases.primary_jobs_to_be_done, .secondary_jobs
 #     EDG — use_cases.edge_cases
 #     ENT — data_model.key_entities
+#     ACR — success_metrics.acceptance_criteria (typed acceptance criteria —
+#           the instances downstream ACR→TST coverage gates resolve against;
+#           without them those gates are mechanism-only)
+#     QUE — open_questions.undecided_decisions + .parking_lot (one shared
+#           counter). UNLIKE the other families, QUE items are typed MAPPINGS
+#           ({id, question, status, …}), not "QUE-NNN: <text>" strings — see
+#           the open_questions block below.
 #
 #   In multi-product mode, each product under `products.<slug>` carries its
 #   own independent ID space — counters reset per product. Two products may
@@ -281,7 +288,14 @@ milestones:
 # -----------------------------------------------------------------------------
 success_metrics:
   primary_kpis: null          # 2–5 measurable KPIs (list[string])
-  acceptance_criteria: null   # what makes a feature "done" (list[string])
+  acceptance_criteria: null   # what makes a feature "done" (list[string]);
+                              # each item: "ACR-NNN: <criterion>". The ACR-NNN
+                              # instances are what downstream `test` resolves
+                              # its ACR→TST coverage gate against — a PRD that
+                              # emits none leaves that gate mechanism-only.
+                              # Phrase each criterion as an observable,
+                              # verifiable outcome; name the FR it accepts
+                              # when it accepts one specific feature.
   definition_of_done: null    # team-level DoD (list[string])
   user_satisfaction_target: null  # e.g. "NPS > 30", "CSAT 4.2/5" (string|null)
 
@@ -295,11 +309,26 @@ risks_assumptions:
   dependencies: null          # critical external dependencies (list[string])
 
 # -----------------------------------------------------------------------------
-# open_questions — things still being figured out
+# open_questions — things still being figured out. TYPED: each item is a
+# mapping carrying a stable QUE-NNN id and a lifecycle status, because
+# downstream stages gate on open questions (a QUE blocking an FR must be
+# resolved before that FR is built) and plain bullets give them nothing to
+# reference or close. `undecided_decisions` and `parking_lot` share ONE
+# continuous QUE counter (writer-managed, state.last_ids.QUE), like FR
+# across must/nice. Legacy plain-string bullets are violations (warning in
+# draft, error in complete) — the update flow retrofits them with the next
+# QUE id and `status: open`. A `todo`-gated theme also lands here as a
+# typed entry, not a bare bullet.
 # -----------------------------------------------------------------------------
 open_questions:
-  undecided_decisions: null   # decisions explicitly punted (list[string])
-  parking_lot: null           # ideas to revisit later (list[string])
+  undecided_decisions: null   # list[OpenQuestionItem] — decisions explicitly punted
+  #  - id: "QUE-001"          # REQUIRED — stable, never renumbered
+  #    question: "Offline mode in MVP or post-MVP?"   # REQUIRED
+  #    status: open           # REQUIRED — open | resolved | deferred
+  #    resolution: null       # REQUIRED once status == resolved
+  #    blocks: ["FR-001"]     # OPTIONAL — upstream ids this question gates
+  parking_lot: null           # list[OpenQuestionItem] — ideas to revisit later;
+                              # same shape, same shared QUE counter
 
 # -----------------------------------------------------------------------------
 # conventions — binding cross-cutting project conventions

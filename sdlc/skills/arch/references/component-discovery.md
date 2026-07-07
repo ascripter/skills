@@ -81,6 +81,42 @@ Always-on candidates regardless of archetype:
 
 These are `⚠ inferred` — user confirms.
 
+### Pass 6 — Build-time & shipped deliverables
+
+Passes 1–5 only see **runtime callables** — API resources, UX surfaces,
+store bindings, edges. A whole deliverable class is invisible to them:
+things the project *ships or builds* but never *executes as a service* —
+and an FR that names one still needs a component, or downstream `task`
+can never schedule building it. Sweep for them explicitly:
+
+1. **Scan the FR texts** of every requirement in this container's
+   `implements_requirements` (plus `PRD.conventions` and
+   `technical_constraints`) for concrete repo paths and deliverable nouns:
+   `tools/…`, `templates/…`, schema/model layers, shipped validators,
+   prompt packs, question inventories, migration scripts, generated docs.
+2. **Propose one component per deliverable class**, using the build-time
+   archetypes:
+
+   | Deliverable class                                  | Archetype       | work_units are …                          |
+   |----------------------------------------------------|-----------------|--------------------------------------------|
+   | typed schema / domain-model layer shipped as code  | `schema_model`  | the model classes / load-dump callables    |
+   | repo tools: validators, generators, migrations     | `dev_tool`      | each tool's entry point (a real callable)  |
+   | shipped content: templates, prompts, question packs, archetype packs | `content_asset` | AUTHORING units — name = the authoring action or pack, `output` = the shipped path(s) |
+
+3. **Give each a `code_location` that covers every FR-named path** — the
+   validator's advisory cross-check #25 flags any path named in a claimed
+   FR that no component's `code_location` covers.
+4. **Content assets need authoring units.** A `content_asset` component's
+   work_units are not code callables; they are the authoring deliverables
+   (`author_review_prompt_pack`, `write_cli_question_inventory`), each with
+   `output:` naming the shipped path(s). If the container instead derives
+   its content mechanically, declare that rule in `work_units_waiver`
+   (e.g. "one authoring task per template file under templates/ — derived
+   by task, not enumerated here") so the derivation rule is explicit
+   rather than absent.
+
+These are `⚠ inferred` — user confirms. Tag `source: deliverable-sweep`.
+
 ## Inferred vs found
 
 - `✓ found` — direct evidence (API resource, UX surface, persistence
@@ -215,6 +251,9 @@ the user trim:**
 | `api_client` | called remote operation | `traces_api_operation` |
 | `validator` / `serializer` | the one transform it performs (often a single unit, or skip) | — |
 | `middleware` / `scheduler` / `event_handler` | the wrap / tick / handle entry point | — |
+| `schema_model` | model class / load-dump callable per shipped schema | `touches_entities` = the entities it types |
+| `dev_tool` | tool entry point (each shipped validator/generator/migration) | `implements_requirements` from the FR that names it |
+| `content_asset` | authoring unit per shipped pack/asset (`output:` = the shipped path) | `implements_requirements`; or a task-derivation rule in `work_units_waiver` |
 | `config_loader` / `observability_bootstrap` / `error_handler` | usually **none** (plumbing) | — |
 
 Each work_unit carries:
@@ -229,14 +268,24 @@ Each work_unit carries:
   `touches_entities` (⊆ the component's `traces_data_entities`),
   `satisfies_acceptance` (the component criterion it fulfils).
 - The **interface contract**, DEFER-OR-DECLARE (`inputs`, `output`, `raises`, and
-  an optional concrete `signature`): a work_unit that realizes a schema-bearing
-  traced contract (e.g. an API operation whose request/response schema lives in
-  `API__*.yaml`) may leave these **empty and defer** to that contract; a domain
-  callable with no schema-bearing upstream contract (a `service`/`use_case`
-  method) **declares** them, so the independently-generated atomic tasks compose
-  against a frozen interface instead of each re-guessing the signature. Fill
-  `signature` only when the signature itself is the contract (a public library
-  API); otherwise codegen renders it from `inputs`/`output` + the tech stack.
+  an optional concrete `signature`) — **enforced by cross-check #23**:
+  - **DEFER** is allowed only when the unit sets `traces_api_operation` — the
+    API operation's request/response schema in `API__*.yaml` *is* the frozen
+    interface, so `inputs`/`output`/`raises` may be omitted.
+  - **DECLARE** applies to every other unit (service/use_case methods,
+    repository CRUD, authoring units): draft **all three** of `inputs`,
+    `output`, `raises` **at drafting time**, in the same pass that fills the
+    trace fields. Do not emit trace-only units (`implements_requirements` /
+    `touches_entities` / `satisfies_acceptance` filled, contract empty) — that
+    is exactly the divergence that leaves every downstream atomic task
+    re-guessing the signature. Explicit empties are legitimate declarations:
+    `inputs: []` (no args), `raises: []` (nothing beyond language defaults),
+    `output: "None"` (no return). Draft `inputs`/`output` from the entity
+    types the unit touches and the responsibility text; draft `raises` from
+    the component's failure_modes and validation rules.
+  - Fill `signature` only when the signature itself is the contract (a public
+    library API); otherwise codegen renders it from `inputs`/`output` + the
+    tech stack.
 
 **Work_unit-completeness check (before closing the component).** Reflect on the
 drafted units against the component's own signals: does every owned API
@@ -248,6 +297,13 @@ implements_requirements`, or `task` gets no atomic task that actually builds the
 feature. Add the missing ones. Honour the anti-padding rule — a `validator` with
 one transform has one work_unit, not five, and a private helper is not a
 work_unit.
+
+**Contract lint (also before closing the component).** Walk the drafted units
+once more, contract-only: every unit without `traces_api_operation` must have
+`inputs`, `output`, AND `raises` present (explicit empties fine). A DECLARE-case
+unit with an empty contract is a blocker (#23), not a style choice — fix it in
+the deep-dive while the component's context is loaded, not later from the
+validator's error list.
 
 **Emit block-style; normalize flow-style on update.** Write each work_unit
 block-style — one field per line under a `- name:` entry — NOT as a flow-style
@@ -298,6 +354,13 @@ spec: `sdlc/skills/prd/references/importance-flows.md`). Reflect on:
      `ARCH.yaml`) — each needs an event-handler / publisher component.
 3. **Archetype heuristics** — cross-cutting plumbing (config-loader,
    error-handler, observability-bootstrap) that's easy to forget.
+4. **Build-time deliverables (Pass 6 signals)** — re-scan the claimed FR
+   texts for concrete paths and shipped-artifact nouns (schema layer,
+   `tools/`, `templates/`, prompt/question/archetype packs): does every
+   FR-named path fall inside some component's `code_location`? Does every
+   content deliverable have authoring work_units or an explicit
+   task-derivation rule? Runtime-only sweeps miss this class entirely —
+   it is the reason cross-check #25 exists.
 
 Surface concrete missed **candidate components** via **one multi-select
 `AskUserQuestion`**. Caps: at most **2 sweep passes**; defer leftovers

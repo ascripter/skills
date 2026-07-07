@@ -791,6 +791,54 @@ def check_coverage(prd_ids: List[str], traced_ids: List[str]) -> List[str]:
 # =============================================================================
 
 
+def check_downstream_claims(ux: UX, docs_dir: Path) -> List[str]:
+    """Advisory (never blocks) — surface-status maturity vs downstream claims.
+
+    When a sibling docs/ARCH.yaml claims a surface (some container's
+    owns_ux_surfaces lists it), the architecture treats that surface as real:
+    it gets components, edges, and eventually tests. An inventory entry still
+    marked `proposed` (specced but deferred) — or never advanced past
+    `defined`/`draft` — is then stale lifecycle metadata that misleads every
+    downstream reader about what is actually being built. The skill's
+    re-invocation flow reconciles these (SKILL.md Phase 2 → downstream-claim
+    reconciliation); this warning is the standing detector.
+    """
+    warns: List[str] = []
+    arch_path = docs_dir / "ARCH.yaml"
+    if not arch_path.exists():
+        return warns
+    try:
+        arch_raw = yaml.safe_load(arch_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return warns
+    if not isinstance(arch_raw, dict):
+        return warns
+    claimed: Dict[str, str] = {}  # surface_id -> claiming container_id
+    for c in arch_raw.get("containers") or []:
+        if isinstance(c, dict):
+            for sid in c.get("owns_ux_surfaces") or []:
+                claimed.setdefault(str(sid), str(c.get("container_id")))
+    if not claimed:
+        return warns
+
+    def _sweep(items: Optional[List[SurfaceInventoryItem]], scope: str) -> None:
+        for item in items or []:
+            sid = (item.surface_id or "").strip()
+            status = item.status.value if item.status else None
+            if sid in claimed and status != "confirmed":
+                warns.append(
+                    f"{scope}surface '{sid}' ({item.id}) has status "
+                    f"'{status}' but ARCH container '{claimed[sid]}' claims it "
+                    f"(owns_ux_surfaces) — reconcile the lifecycle: re-run "
+                    f"/sdlc:ux to confirm the surface or correct the ARCH claim"
+                )
+
+    _sweep(ux.surface_inventory, "")
+    for slug, product in (ux.products or {}).items():
+        _sweep(product.surface_inventory, f"products.{slug}.")
+    return warns
+
+
 def _load_yaml(path: Path) -> tuple[Any, Optional[str]]:
     if not path.exists():
         return None, f"file not found: {path}"
@@ -875,6 +923,15 @@ def validate_all(ux_path: Path) -> int:
     traced_ids = collect_traced_workflow_ids(surfaces)
     uncovered = check_coverage(prd_ids, traced_ids) if prd_ids else []
 
+    # 6) Downstream-claim maturity check (advisory, never blocks)
+    downstream_warnings = check_downstream_claims(ux, ux_path.parent)
+
+    def _print_downstream_warnings() -> None:
+        if downstream_warnings:
+            print(f"\nWARNINGS ({len(downstream_warnings)} surface(s) claimed downstream but not 'confirmed'):")
+            for w in downstream_warnings:
+                print(f"  - {w}")
+
     status = ux.metadata.status
     n_surfaces = len(surfaces)
 
@@ -901,12 +958,14 @@ def validate_all(ux_path: Path) -> int:
                 print(f"{len(uncovered)} PRD WKF-NNN(s) with no surface trace:")
                 for f in uncovered:
                     print(f"  - {f}")
+            _print_downstream_warnings()
             return 1
         print(
             f"[OK] UX.yaml is valid and complete ({ux_path}); "
             f"{n_surfaces} surface file(s); "
             f"{len(prd_ids)} PRD WKF-NNN(s) all covered."
         )
+        _print_downstream_warnings()
         return 0
 
     # status == "draft"
@@ -934,6 +993,7 @@ def validate_all(ux_path: Path) -> int:
     if not (missing_ux or missing_surface or id_errors or uncovered):
         print("\nAll required fields filled and coverage complete. "
               "Set metadata.status: complete when done.")
+    _print_downstream_warnings()
     return 0
 
 

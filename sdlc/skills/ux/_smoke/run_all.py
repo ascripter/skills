@@ -37,6 +37,9 @@ EXPECTATIONS = [
     ("09_monorepo_mode_mismatch",  "UX.yaml",          1),
     ("10_valid_nonflow_traces",    "UX.yaml",          0),
     ("11_warnings_bad_prefix",     "UX.yaml",          1),
+    # Valid file, but the sibling ARCH.yaml claims a surface the inventory
+    # still marks `proposed` → exit 0 with the downstream-claim warning.
+    ("12_downstream_claim_stale",  "UX.yaml",          0),
 ]
 
 

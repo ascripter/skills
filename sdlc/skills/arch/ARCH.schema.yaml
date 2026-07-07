@@ -254,9 +254,16 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 # 12. Upstream metadata.status warning — if any of PRD/UX/DATA/API has
 #     metadata.status != "complete", emit a warning (not a fail); a downstream
 #     agent reading ARCH should know it was built on a partial chain.
+# 13. Container→system edge roll-up (cross-check #24, blocks complete) — every
+#     external_edges[] entry in any drilled ARCH__<container>.yaml must have a
+#     corresponding row in `edges:` above ({from: that container, to: its
+#     target container, type: same}). The system edge table is the roll-up of
+#     the per-container edge tables — a container-sourced edge that never
+#     propagated up under-reports the topology to test/deploy.
 #
 # Container-vs-system consistency (see ARCH__CONTAINER.schema.yaml for the
 # remaining checks — owns/api/ux/persistence containment, component traces,
 # component implements_requirements ⊆ parent container's, deployment
-# compatibility, and the external-container file warning).
+# compatibility, work_unit contract lint #23, deliverable-path coverage #25,
+# api_consumers mirror #26, and the external-container file warning).
 # =============================================================================

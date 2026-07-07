@@ -17,8 +17,11 @@ Validates:
        cross-container e2e/contract suite).
     2. Every docs/TEST-STRATEGY__*.yaml sibling — one per container.
     3. Required-field checks (status: complete gate).
-    4. ID-prefix formats: TST-NNN (unique per file) on every tst_id; WRN-NNN
-       on every test_strategy_warnings entry.
+    4. ID-prefix formats: TST-NNN on every tst_id — unique per file AND
+       GLOBALLY unique across the system file + every container file (the
+       TST counter is one continuous space; downstream Task.test_refs assumes
+       a single namespace, so per-file restarts at TST-001 collide). WRN-NNN
+       on every test_strategy_warnings entry (WRN stays per-artifact).
     5. Reference integrity (block status: complete):
        - covers entries are FR/NFR/ACR/WKF and resolve to PRD ids.
        - involves_containers / container_strategies resolve to ARCH.yaml.
@@ -707,6 +710,15 @@ def validate_all(path: Path) -> int:
     blocking: List[str] = []           # errors that block a 'complete' claim
     warnings: List[str] = []           # always non-blocking
     statuses: List[Tuple[str, Optional[Status]]] = []
+    tst_registry: Dict[str, List[str]] = {}   # tst_id -> files declaring it
+
+    def _register_tsts(tests: List[Any], file_name: str) -> None:
+        seen_here: Set[str] = set()
+        for t in tests or []:
+            tid = getattr(t, "tst_id", None)
+            if tid and tid not in seen_here:   # in-file dupes are check_tst_ids' job
+                seen_here.add(tid)
+                tst_registry.setdefault(str(tid), []).append(file_name)
 
     # ---- system file ----
     if system_path.exists():
@@ -724,6 +736,7 @@ def validate_all(path: Path) -> int:
             sysm = None
         if sysm is not None:
             statuses.append((system_path.name, sysm.metadata.status))
+            _register_tsts(sysm.tests or [], system_path.name)
             blocking += [f"{system_path.name}: {e}" for e in check_required_system(sysm)]
             blocking += [f"{system_path.name}: {e}" for e in check_tst_ids(sysm.tests or [], system_path.stem)]
             blocking += [f"{system_path.name}: {e}" for e in check_warning_ids(sysm.test_strategy_warnings, system_path.stem)]
@@ -746,6 +759,7 @@ def validate_all(path: Path) -> int:
             parse_failed = True
             continue
         statuses.append((cp.name, cm.metadata.status))
+        _register_tsts(cm.tests or [], cp.name)
         blocking += [f"{cp.name}: {e}" for e in check_required_container(cm)]
         blocking += [f"{cp.name}: {e}" for e in check_tst_ids(cm.tests or [], cp.stem)]
         blocking += [f"{cp.name}: {e}" for e in check_warning_ids(cm.test_strategy_warnings, cp.stem)]
@@ -755,6 +769,19 @@ def validate_all(path: Path) -> int:
 
     if parse_failed:
         return 1
+
+    # Global TST uniqueness across the system file + every container file.
+    # TST-NNN is ONE continuous id space: downstream Task.test_refs assumes a
+    # single namespace, so a per-file restart at TST-001 silently collides.
+    for tid in sorted(tst_registry):
+        files = tst_registry[tid]
+        if len(files) > 1:
+            blocking.append(
+                f"tst_id '{tid}' is declared in {len(files)} files "
+                f"({', '.join(files)}) — TST ids are globally unique across the "
+                f"system file and all container files (one continuous counter); "
+                f"renumber the later file(s)"
+            )
 
     # Upstream-status awareness (non-blocking).
     for up in ("PRD.yaml", "DATA-MODEL.yaml", "ARCH.yaml"):

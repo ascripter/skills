@@ -210,6 +210,14 @@ surface_inventory:                # list[SurfaceInventoryItem]
                                   #   proposed = fully specced but deferred — targets a
                                   #              nice-to-have / post-MVP FR; kept in the
                                   #              inventory so the contract isn't lost
+                                  # LIFECYCLE: status must track downstream reality.
+                                  # A surface claimed by ARCH (owns_ux_surfaces) — and
+                                  # possibly already tested — must not linger as
+                                  # proposed/defined/draft: the validator warns
+                                  # ("claimed downstream but not 'confirmed'") and the
+                                  # re-run flow reconciles it (SKILL.md Phase 2 →
+                                  # downstream-claim reconciliation). Never bump
+                                  # silently — the mismatch may mean ARCH is wrong.
     file_path: null               # always docs/UX__<surface_id>.yaml (string)
     traces_workflows: null        # list[string] of "WKF-NNN" ids (no verbatim text).
                                   # Drives the coverage check at validation.

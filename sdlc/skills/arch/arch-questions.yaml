@@ -835,6 +835,9 @@ questions:
       - config_loader
       - observability_bootstrap
       - error_handler
+      - schema_model
+      - dev_tool
+      - content_asset
       - other
     free_text_allowed: false
     required: true
@@ -1041,9 +1044,12 @@ questions:
       component; no id family), summary (one line), optional traces
       (traces_api_operation, implements_requirements ⊆ the component's,
       touches_entities), and a DEFER-OR-DECLARE interface contract
-      (inputs/output/raises/signature): defer to a schema-bearing traced contract
-      when one exists, else declare it so atomic tasks compose against a frozen
-      interface. Before closing, cross-check the drafted units against the
+      (inputs/output/raises/signature), ENFORCED by cross-check #23: defer is
+      allowed ONLY when traces_api_operation is set (the API schema is the
+      contract); every other unit must DECLARE all three of inputs/output/raises
+      AT DRAFT TIME — explicit empties count (inputs: [], raises: [],
+      output: "None"); trace-only units with empty contracts block complete.
+      Before closing, cross-check the drafted units against the
       component's API operations / acceptance_criteria / traced entities / every
       FR in implements_requirements — each should map to a work_unit (#22 blocks
       complete if an FR maps to none). EMIT BLOCK-STYLE — one field per line under
@@ -1093,12 +1099,19 @@ questions:
     hint: >
       Derivation:
        * api_client → backend container that owns the called resource
-         (pre-fill via_resource_id and via_operation_id when known).
+         (pre-fill via_resource_id and via_operation_id when known; mirror
+         the resource into api_consumers — cross-check #26).
+       * calls into a SIBLING container with no API between them → target
+         "<container>/<component>" and pre-fill via_unit (the callee's
+         work_units[].name). Backfill passes sweep these too, not just
+         internal edges.
        * event_handler subscribing to a channel → the bus container
          (pre-fill via_channel_id).
        * repository → primary-database (pre-fill via_entity).
       Pre-fill via_* from API + DATA bindings whenever evidence is
-      unambiguous.
+      unambiguous. Every external edge must also exist as a system
+      ARCH.yaml.edges row — Phase 7 appends missing rows after a
+      confirmation diff (cross-check #24 blocks complete otherwise).
     suggested_answers:
       - "confirm all"
       - "remove specific edges"

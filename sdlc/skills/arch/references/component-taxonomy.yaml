@@ -158,6 +158,39 @@ archetypes:
     description: Translates internal errors to user-facing responses.
     typical_edges: []
 
+  # --- Build-time deliverable classes -------------------------------------
+  # Components whose output SHIPS with the build/authoring process rather
+  # than running as a service. Runtime-driven derivation (API resources, UX
+  # surfaces, store bindings) never proposes these — the deliverable sweep
+  # (component-discovery.md → Pass 6) does. They are NON-plumbing: they need
+  # code_location and work_units like any traced component, or downstream
+  # `task` can never schedule building them.
+
+  - canonical: schema_model
+    aliases: [domain-model, schema-layer, pydantic-models, typed-models]
+    description: Typed schema / domain-model layer shipped as code (Pydantic models, TS types, JSON-schemas).
+    typical_responsibilities:
+      - define the typed shapes other components exchange
+      - own (de)serialization boundaries for those shapes
+    typical_edges: []       # others `depends_on` it; it imports nothing upward
+
+  - canonical: dev_tool
+    aliases: [tooling, repo-tool, validator-script, generator, migration-script]
+    description: Repo-shipped tool (validator, generator, migration) run at build/authoring time, not in the service process.
+    typical_responsibilities:
+      - implement one repo tool's entry point
+      - exit non-zero on violation (for validators/lints)
+    typical_edges:
+      - { to_archetype: schema_model, type: depends_on }
+
+  - canonical: content_asset
+    aliases: [templates, prompt-pack, question-inventory, archetype-pack, static-content]
+    description: Shipped content (templates/, prompts, question inventories, packs). work_units are AUTHORING units, not code callables.
+    typical_responsibilities:
+      - author and maintain the shipped asset set
+      - keep assets in sync with the schema/contract they instantiate
+    typical_edges: []
+
   - canonical: other
     aliases: []
     description: Escape hatch for unusual component shapes.

@@ -1106,7 +1106,12 @@ questions:
     id: acceptance_criteria
     schema_path: success_metrics.acceptance_criteria
     question: "What makes a feature 'done' for this product? (Pick all that apply.)"
-    hint: "Becomes the implicit checklist for every PR an agent opens."
+    hint: >
+      Becomes the implicit checklist for every PR an agent opens. WRITE EACH
+      ITEM AS "ACR-NNN: <criterion>" (writer-managed counter,
+      state.last_ids.ACR) — the ACR ids are what downstream test's ACR→TST
+      coverage gate resolves against; unprefixed bullets leave that gate
+      mechanism-only. Phrase criteria as observable, verifiable outcomes.
     suggested_answers:
       - "Has tests"
       - "Has docs"
@@ -1221,7 +1226,15 @@ questions:
     id: undecided_decisions
     schema_path: open_questions.undecided_decisions
     question: "Any decisions you are explicitly punting for now? (List, or 'none'.)"
-    hint: "Agents should treat these as decisions-still-to-make, not silence."
+    hint: >
+      Agents should treat these as decisions-still-to-make, not silence.
+      EMIT TYPED ENTRIES, not bullets: each is a mapping
+      {id: QUE-NNN, question, status: open, blocks: [...]} — the QUE counter
+      (state.last_ids.QUE) is SHARED with parking_lot. Downstream stages gate
+      on QUE ids (a question blocking an FR must be resolved before the FR is
+      built); a plain bullet gives them nothing to reference or close. On an
+      update flow, retrofit legacy bullets with the next QUE id +
+      status: open.
     suggested_answers: []
     free_text_allowed: true
     required: false
@@ -1233,7 +1246,10 @@ questions:
     id: parking_lot
     schema_path: open_questions.parking_lot
     question: "Anything in the parking lot to revisit later? (Ideas, half-baked thoughts, optional.)"
-    hint: "A safe place to capture ideas without committing to them."
+    hint: >
+      A safe place to capture ideas without committing to them. Same typed
+      shape as undecided_decisions ({id: QUE-NNN, question, status} —
+      usually status: deferred), continuing the SAME QUE counter.
     suggested_answers: []
     free_text_allowed: true
     required: false

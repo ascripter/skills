@@ -351,6 +351,15 @@ The selected `state.storage_paradigm` decides which themes run:
    | vector       | `vector_config` (embedding model, dims, distance, ANN index)       |
    | file_native  | `identity_conventions`, `composition`, `cross_references`, `serialization_conventions` |
 
+   Wherever `cross_references` runs (document / file_native), close the theme
+   with the **gate-clause sweep** (`references/paradigms/file-native.md` →
+   "Gate-clause sweep"): every `Entity.field` that an upstream-named
+   referential/coverage gate queries must have a cross_references row or an
+   explicit `WRN-NNN` carve-out, and non-id-family relations (composite
+   tuples, paths) get their resolution rule declared. An edge table that
+   self-describes as exclusive but lacks rows for fields the gates read makes
+   those gates mechanism-only.
+
 3. **Entity field shape** — when drilling each entity in the `entities` theme,
    use the field-attribute shape the paradigm reference specifies (relational:
    `type/nullable/unique/primary_key/references/on_delete`; file_native:

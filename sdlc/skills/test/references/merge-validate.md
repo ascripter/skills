@@ -24,9 +24,20 @@ refine/extend — not a reconcile. Merge rather than overwrite:
   `partial_answers` — ask the user which wins; never auto-resolve.
 - **Preserve `tst_id`s.** Renaming a test's `name` or re-tiering it keeps its
   id. The id is the stable contract downstream consumes.
+- **Mint new `tst_id`s from the GLOBAL counter** (`state.last_ids_global.TST`,
+  reconciled to `max(all on-disk TEST-STRATEGY*.yaml, state)` first) — never
+  from the highest id in the file being merged. Per-file restarts are how
+  three colliding TST-001s happen.
+- **Refresh derived counts in prose (CLAUDE.md §8).** If the file's
+  `overview`/notes or header comments restate test counts ("181 tests",
+  "14 unit / 5 integration") that this merge changed, re-derive or delete
+  them in the same write.
 
 If Phase-2 detected an upstream change, run the delta-review first
-(`sdlc/skills/ux/references/upstream-reconciliation.md`), then merge.
+(`sdlc/skills/ux/references/upstream-reconciliation.md`), then merge. Run the
+**ARCH `implements_requirements` staleness check** (SKILL.md Phase 2) even
+when provenance is absent — a promoted FR with no test is the drift this
+skill exists to catch.
 
 ## The cross-check suite
 
@@ -38,7 +49,9 @@ ARCH__*.yaml for the checks). The authoritative list lives in the two
 **Blocking (force `status: draft` if violated while claiming complete):**
 
 1. Required-field completeness.
-2. `TST-NNN` format + uniqueness per file; `WRN-NNN` format.
+2. `TST-NNN` format + uniqueness per file + **global uniqueness across the
+   system file and every container file** (one continuous namespace —
+   downstream `Task.test_refs` assumes it); `WRN-NNN` format (per-artifact).
 3. `covers` are FR/NFR/ACR/WKF and resolve to PRD ids.
 4. `involves_containers` / `container_strategies.container_id` resolve to ARCH.
 5. `component_ref` resolves to the matching `ARCH__<container>.yaml`; unit

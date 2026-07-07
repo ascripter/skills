@@ -13,7 +13,7 @@ overview: "Unit + integration tests for the backend (intentionally missing the N
 coverage_target:
   line_pct: 85.0
 tests:
-  - tst_id: TST-001
+  - tst_id: TST-002
     name: "users-service creates a user"
     tier: unit
     description: "Happy-path create."
@@ -23,7 +23,7 @@ tests:
     priority: must
     acceptance: "create() returns the new user id."
     status: confirmed
-  - tst_id: TST-002
+  - tst_id: TST-003
     name: "db timeout is retried"
     tier: integration
     description: "Negative case for db-timeout."
@@ -33,7 +33,7 @@ tests:
     priority: must
     acceptance: "Transient timeout recovers after one retry."
     status: confirmed
-  - tst_id: TST-003
+  - tst_id: TST-004
     name: "no PII in logs"
     tier: security
     description: "Abuse case for pii-leak."

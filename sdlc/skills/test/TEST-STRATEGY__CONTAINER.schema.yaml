@@ -14,10 +14,16 @@
 # run this container's tests. It is NEVER authored for a non-testable container
 # (external, or a storage/infra archetype) — container mode refuses those.
 #
-# ID families this artifact OWNS (writer-managed counters in state.last_ids):
-#   * TST-NNN — one per test in `tests`. INDEPENDENT counter per container file;
-#               TST-001 here is unrelated to TST-001 in any other file.
-#   * WRN-NNN — one per `test_strategy_warnings` entry.
+# ID families this artifact OWNS:
+#   * TST-NNN — one per test in `tests`. ONE GLOBAL counter across the system
+#               file + every container file (state.last_ids_global.TST):
+#               TST-001 exists at most ONCE in the whole strategy set.
+#               Downstream Task.test_refs assumes a single TST namespace, so
+#               per-file restarts at TST-001 collide. The validator enforces
+#               global uniqueness (blocking).
+#   * WRN-NNN — one per `test_strategy_warnings` entry (per-artifact counter
+#               in state.sessions[<key>].last_ids.WRN — the universal
+#               warnings convention).
 # Upstream ids it REFERENCES: FR/NFR/ACR (PRD); component_id, operations[].op_id
 #   (OPN-NNN), failure_modes[].id, security_concerns[].id (the matching
 #   ARCH__<container>.yaml).
@@ -68,7 +74,9 @@ test_environment: <string>                  # OPTIONAL — e.g. "testcontainers 
 # security_concerns, then confirms each.
 # ---------------------------------------------------------------------------
 tests:                                      # REQUIRED — list[ContainerTest], non-empty
-  - tst_id: TST-001                         # REQUIRED — unique within THIS file
+  - tst_id: TST-001                         # REQUIRED — GLOBALLY unique across the
+                                            #   system + all container files (one
+                                            #   continuous counter)
     name: <string>                          # REQUIRED — the behaviour proved
     tier:                                   # REQUIRED — one of:
       # unit | integration | e2e | contract | property | load | security | accessibility
@@ -125,7 +133,9 @@ test_strategy_warnings:                     # OPTIONAL — list of "WRN-NNN: ...
 #
 # 1.  Required-field completeness — status:complete requires every REQUIRED
 #     field non-null, and `tests` non-empty.
-# 2.  TST-NNN format + uniqueness within this file; WRN-NNN format.
+# 2.  TST-NNN format + uniqueness within this file + GLOBAL uniqueness across
+#     the system file and every container file (blocking — one continuous TST
+#     namespace); WRN-NNN format (per-artifact).
 # 3.  Identity — container_id resolves to a testable ARCH.yaml container, and a
 #     sibling docs/ARCH__<container_id>.yaml exists on disk.
 # 4.  component_ref integrity — every component_ref resolves to a

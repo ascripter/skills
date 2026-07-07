@@ -1,8 +1,15 @@
+# 08 — Untyped QUE / ACR violations while claiming complete.
+#   * open_questions entries are legacy plain-string bullets (no QUE-NNN id,
+#     no status) — the exact emitter defect the typed family replaces.
+#   * One typed entry duplicates a QUE id across the two lists (they share
+#     one counter) and one is 'resolved' without a resolution.
+#   * success_metrics.acceptance_criteria lacks the ACR-NNN prefix.
+# Expectation: exit 1; violations name each item.
 metadata:
   prd_version: "1.0"
   last_updated: "2026-05-05T18:00:00Z"
   generated_by: sdlc-prd
-  session_id: "11111111-1111-1111-1111-111111111111"
+  session_id: "88888888-8888-8888-8888-888888888888"
   monorepo: false
   status: "complete"
 
@@ -21,46 +28,33 @@ problem_opportunity:
 users_personas:
   primary_users:
     - "PER-001: Engineering team leads"
-    - "PER-002: Indie developers"
   primary_users_confidence: confirmed
 
 use_cases:
   core_workflows:
     - "WKF-001: Add a task in under 3 seconds"
-    - "WKF-002: Mark tasks done from the keyboard"
 
 functional_requirements:
   must_have_features:
     - "FR-001: Quick add — add a task in under 3 seconds via a global shortcut."
-    - "FR-002: Keyboard navigation — every primary action reachable without a mouse."
 
 technical_constraints:
   primary_language: typescript
-  primary_language_rationale: "Team is fluent and our other tools use it."
   primary_language_confidence: confirmed
   runtime_platform: web
-  runtime_platform_rationale: "Reach is the priority."
   runtime_platform_confidence: confirmed
 
-# ACR-NNN family — typed acceptance criteria (downstream test's ACR→TST gate).
 success_metrics:
   acceptance_criteria:
-    - "ACR-001: A task can be added end-to-end in under 3 seconds."
-    - "ACR-002: All primary actions pass a keyboard-only walkthrough."
+    - "A task can be added end-to-end in under 3 seconds."
 
-# QUE-NNN family — typed open questions; both lists share one counter.
 open_questions:
   undecided_decisions:
+    - "Offline mode in MVP or post-MVP?"
     - id: QUE-001
-      question: "Offline mode in MVP or post-MVP?"
-      status: open
-      blocks:
-        - "FR-001"
-    - id: QUE-002
       question: "Which auth provider?"
       status: resolved
-      resolution: "Deferred to hosted magic-link auth; revisit if teams demand SSO."
   parking_lot:
-    - id: QUE-003
+    - id: QUE-001
       question: "Native mobile app?"
       status: deferred

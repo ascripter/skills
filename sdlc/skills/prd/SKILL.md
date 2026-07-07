@@ -232,8 +232,11 @@ Walk the themes in the order defined by `prd-questions.yaml`. Use
 
   - **now** → run the theme's questions as above.
   - **skip** → record under `skipped_themes` in state, move on.
-  - **todo** → append `"TODO: address theme <name>"` to
-    `open_questions.undecided_decisions`, move on.
+  - **todo** → append a **typed** entry to
+    `open_questions.undecided_decisions` — `{id: QUE-NNN, question:
+    "Address theme <name>", status: open}`, minting the id from
+    `state.last_ids.QUE` — then move on. Never a bare "TODO: …" bullet;
+    open questions are a typed family (see PRD.schema.yaml → QUE).
 
 Required questions can never be `todo`'d. They must be answered, set to
 `null` (writing a note to `prd_warnings`), or the user must `EXIT`.
@@ -369,8 +372,10 @@ current_theme: null
 # Per-family ID counters (single-product mode). Each entry is the last-assigned
 # integer for that family — increment, format as <PREFIX>-{:03d}, then persist.
 # See references/importance-flows.md → "ID conventions across families" for the
-# family map (FR, OOS, INT, AIF, NFR, WRN, PER, GOL, PAN, WKF, JTB, EDG, ENT).
-last_ids: {}        # e.g. {FR: 5, PER: 2, WKF: 4, ...}
+# family map (FR, OOS, INT, AIF, NFR, WRN, PER, GOL, PAN, WKF, JTB, EDG, ENT,
+# ACR — success_metrics.acceptance_criteria, QUE — open_questions typed
+# entries; both lists share the one QUE counter).
+last_ids: {}        # e.g. {FR: 5, PER: 2, WKF: 4, ACR: 2, QUE: 3, ...}
 
 # Per-product ID counters (monorepo mode only). Same shape as last_ids, keyed
 # by product slug. Each product carries an independent ID space per family.

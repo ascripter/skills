@@ -51,6 +51,31 @@ Validates:
          at least one of its work_units[].implements_requirements (waivable per
          component). Rolls up to a per-container report of FRs unreachable
          through any work_unit.
+       - #23 DEFER-OR-DECLARE interface contract: a work_unit that traces NO
+         schema-bearing upstream contract (no traces_api_operation) must
+         DECLARE its interface contract — `inputs`, `output`, and `raises` all
+         present (explicit empties `inputs: []` / `raises: []` / `output:
+         "None"` count as declared). A unit with traces_api_operation may
+         defer to the API schema. Blocking; a component-level
+         `work_units_waiver` downgrades it to a warning.
+    8. Edge-table consistency (block status: complete):
+       - #24 container→system edge roll-up: every external_edges[] entry in a
+         container file implies a system-level ARCH.yaml.edges row
+         (from=this container, to=the target container, same type). A
+         container-sourced edge that never propagated to the system edge
+         table is an error.
+       - external_edges[].via_unit (when set) resolves to a work_units[].name
+         on the target `<container>/<component>` (the internal-call analogue
+         of via_operation_id for sibling containers with no API between them).
+    9. Advisory warnings (never block):
+       - #25 FR-named deliverable paths: a concrete repo path named in the
+         text of an FR that some container/component claims must fall inside
+         some component's code_location — otherwise downstream `task` can
+         never schedule work that builds it (build-time deliverables: schema
+         layers, repo tools/, templates/, shipped content).
+       - #26 api_consumers mirror: an external `calls` edge with
+         via_resource_id should be mirrored in the container's
+         api_consumers[].
 
 Exit codes:
     0 — schema valid; status='complete' (with all checks passing) or
@@ -218,6 +243,14 @@ class ComponentArchetype(str, Enum):
     config_loader = "config_loader"
     observability_bootstrap = "observability_bootstrap"
     error_handler = "error_handler"
+    # Build-time deliverable classes — components whose output is shipped by
+    # the build/authoring process rather than executed as a runtime callable.
+    # They exist so FR-named deliverables (a schema layer, repo tools/,
+    # templates/, prompt packs) get a component + code_location + work_units
+    # and downstream `task` can actually schedule building them.
+    schema_model = "schema_model"          # typed domain-model / schema layer shipped as code
+    dev_tool = "dev_tool"                  # repo tools/ validators, generators, migration scripts
+    content_asset = "content_asset"        # shipped content: templates, prompts, question packs
     other = "other"
 
 
@@ -528,6 +561,9 @@ class ExternalEdge(_Base):
     type: Optional[EdgeType] = None
     via_resource_id: Optional[str] = None
     via_operation_id: Optional[str] = None
+    via_unit: Optional[str] = None       # for `calls` into a sibling container with no
+                                         # API between them: the work_units[].name on the
+                                         # target "<container_id>/<component_id>" component
     via_channel_id: Optional[str] = None
     via_entity: Optional[str] = None
     note: Optional[str] = None
@@ -1577,6 +1613,285 @@ def check_component_fr_work_unit_coverage(
     return errs, rollup
 
 
+def check_work_unit_contracts(
+    container: ArchContainer,
+    file_label: str,
+) -> Tuple[List[str], List[str]]:
+    """Cross-check #23 — DEFER-OR-DECLARE interface contract lint.
+
+    Downstream `task` slices one independently-generated atomic task per
+    work_unit; those tasks can only compose if each unit's interface is frozen
+    somewhere. Two legal states per unit:
+
+      DEFER   — the unit traces a schema-bearing upstream contract
+                (`traces_api_operation` is set): inputs/output/raises may stay
+                empty; the API request/response schema IS the contract.
+      DECLARE — no schema-bearing traced contract: the unit must declare all
+                three of `inputs`, `output`, `raises`. Explicit empties count
+                as declared (`inputs: []` for a no-arg callable, `raises: []`
+                for "raises nothing beyond language defaults", `output:
+                "None"` for no return) — what fails is the field being ABSENT,
+                i.e. nobody decided.
+
+    Returns (errs, warns). Errs block complete. A component-level
+    `work_units_waiver` downgrades that component's contract gaps to warnings
+    (consistent with #21/#22).
+    """
+    errs: List[str] = []
+    warns: List[str] = []
+    for i, comp in enumerate(container.components or []):
+        cid = comp.component_id
+        waived = bool((comp.work_units_waiver or "").strip())
+        for j, op in enumerate(comp.work_units or []):
+            if op.traces_api_operation:
+                continue  # DEFER case — contract lives in API__*.yaml
+            missing = [
+                f
+                for f, v in (
+                    ("inputs", op.inputs),
+                    ("output", op.output),
+                    ("raises", op.raises),
+                )
+                if v is None
+            ]
+            if not missing:
+                continue
+            msg = (
+                f"{file_label}: components[{i}]='{cid}'.work_units[{j}]"
+                f"='{op.name}' traces no schema-bearing contract "
+                f"(no traces_api_operation) but leaves {missing} undeclared — "
+                f"DECLARE the interface contract (explicit empties are fine: "
+                f"inputs: [], raises: [], output: \"None\") so atomic tasks "
+                f"compose against a frozen interface"
+            )
+            if waived:
+                warns.append(msg + " [waived via work_units_waiver]")
+            else:
+                errs.append(msg)
+    return errs, warns
+
+
+def check_external_edge_rollup(
+    arch: Optional[Arch],
+    containers: Dict[str, ArchContainer],
+) -> List[str]:
+    """Cross-check #24 — every container-sourced external edge must be
+    reflected in the system edge table.
+
+    A container file's external_edges[] entry (component → other container)
+    implies a container-level dependency that downstream test/deploy read from
+    ARCH.yaml.edges. If it only exists in the container file, the system graph
+    silently under-reports the topology. Requires a system edge with
+    from=<this container>, to=<target container>, same type. Blocking.
+    """
+    errs: List[str] = []
+    if arch is None or arch.edges is None:
+        return errs
+    system_edges = {
+        (e.from_, e.to, e.type.value if e.type else None)
+        for e in arch.edges
+        if e.from_ and e.to
+    }
+    for name, container in containers.items():
+        cid = container.container_id
+        for i, e in enumerate(container.external_edges or []):
+            if not e.to or not e.type:
+                continue  # endpoint/type errors are cross-check #13's job
+            target_container, _, _ = e.to.partition("/")
+            if target_container == cid:
+                continue
+            if (cid, target_container, e.type.value) not in system_edges:
+                errs.append(
+                    f"{name}: external_edges[{i}] ({e.from_} -> {e.to}, "
+                    f"{e.type.value}) has no corresponding ARCH.yaml.edges row "
+                    f"(from: {cid}, to: {target_container}, type: {e.type.value}) "
+                    f"— container-sourced edges must roll up to the system edge "
+                    f"table (run `/sdlc:arch -d` or add the edge)"
+                )
+    return errs
+
+
+def check_external_via_units(
+    containers: Dict[str, ArchContainer],
+) -> List[str]:
+    """Extension of cross-check #15 — external_edges[].via_unit resolution.
+
+    `via_unit` on an external `calls` edge names the callee's work_unit when
+    the target is a sibling container's component with no API between them
+    (the intra-system analogue of via_operation_id). It requires the
+    `<container_id>/<component_id>` target form and resolves against that
+    component's work_units[].name in the target container's on-disk file.
+    Unresolvable when the target container is not drilled yet — skipped then
+    (the endpoint check still applies).
+    """
+    errs: List[str] = []
+    by_container_id: Dict[str, ArchContainer] = {
+        c.container_id: c for c in containers.values()
+    }
+    for name, container in containers.items():
+        for i, e in enumerate(container.external_edges or []):
+            unit = getattr(e, "via_unit", None)
+            if not unit or not e.to:
+                continue
+            target_cid, _, target_comp = e.to.partition("/")
+            if not target_comp:
+                errs.append(
+                    f"{name}: external_edges[{i}].via_unit='{unit}' requires a "
+                    f"'<container_id>/<component_id>' target, got to='{e.to}'"
+                )
+                continue
+            target = by_container_id.get(target_cid)
+            if target is None:
+                continue  # target container not drilled — nothing to resolve against
+            comp = next(
+                (c for c in (target.components or []) if c.component_id == target_comp),
+                None,
+            )
+            if comp is None:
+                continue  # unknown component is cross-check #13's job
+            known = {str(op.name).strip() for op in (comp.work_units or []) if op.name}
+            if known and unit not in known:
+                errs.append(
+                    f"{name}: external_edges[{i}].via_unit='{unit}' is not a "
+                    f"work_units[].name on component '{target_comp}' in "
+                    f"container '{target_cid}'"
+                )
+    return errs
+
+
+def check_api_consumer_mirror(
+    container: ArchContainer,
+    file_label: str,
+) -> List[str]:
+    """Cross-check #26 (advisory) — external `calls` edges with a
+    via_resource_id should be mirrored in this container's api_consumers[],
+    so codegen reading only the container header still learns which client
+    SDKs the container needs.
+    """
+    warns: List[str] = []
+    consumed = {c.resource_id for c in (container.api_consumers or [])}
+    for i, e in enumerate(container.external_edges or []):
+        if e.type and e.type.value == "calls" and e.via_resource_id:
+            if e.via_resource_id not in consumed:
+                warns.append(
+                    f"{file_label}: external_edges[{i}] calls resource "
+                    f"'{e.via_resource_id}' but api_consumers[] does not list it "
+                    f"— mirror the consumption so the container header is "
+                    f"self-describing"
+                )
+    return warns
+
+
+# Path-like tokens in FR text: at least one internal slash, repo-relative,
+# not a URL. Trailing punctuation is stripped after matching.
+_FR_PATH_TOKEN_RE = re.compile(r"(?<![\w:/])((?:[\w.\-]+/)+[\w.\-*]*)")
+
+
+def load_prd_feature_texts(prd_path: Path) -> Dict[str, str]:
+    """Return {FR-NNN: full item text} from PRD must_have + nice_to_have
+    features. Honors monorepo mode."""
+    out: Dict[str, str] = {}
+    if not prd_path.exists():
+        return out
+    try:
+        raw = yaml.safe_load(prd_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return out
+    if not isinstance(raw, dict):
+        return out
+    metadata = raw.get("metadata") or {}
+    monorepo = bool(metadata.get("monorepo")) if isinstance(metadata, dict) else False
+
+    def _pull(node: dict) -> None:
+        fr = node.get("functional_requirements") or {}
+        if not isinstance(fr, dict):
+            return
+        for key in ("must_have_features", "nice_to_have_features"):
+            for item in (fr.get(key) or []):
+                text = str(item).strip()
+                m = _FEATURE_ID_RE.match(text)
+                if m:
+                    out[m.group(0).upper()] = text
+
+    if monorepo:
+        for prod in (raw.get("products") or {}).values():
+            if isinstance(prod, dict):
+                _pull(prod)
+    else:
+        _pull(raw)
+    return out
+
+
+def check_fr_deliverable_paths(
+    arch: Optional[Arch],
+    containers: Dict[str, ArchContainer],
+    prd_path: Path,
+) -> List[str]:
+    """Cross-check #25 (advisory) — every concrete repo path named in the text
+    of a CLAIMED FR must fall inside some component's code_location.
+
+    Build-time deliverables (a schema layer, repo-root tools/ validators,
+    templates/, shipped content packs) are named by FRs but produce no runtime
+    callable, so runtime-driven component derivation misses them — and then no
+    component/code_location/work_unit exists for `task` to ever schedule
+    building them. Scope: FRs that appear in some container's or component's
+    implements_requirements (the architecture claims them). Only runs when at
+    least one container file declares components. Non-blocking: path prose is
+    heuristic.
+    """
+    warns: List[str] = []
+    if not containers or not any(c.components for c in containers.values()):
+        return warns
+    feature_texts = load_prd_feature_texts(prd_path)
+    if not feature_texts:
+        return warns
+
+    claimed: Set[str] = set()
+    for c in (arch.containers or []) if arch else []:
+        for r in c.implements_requirements or []:
+            m = _FEATURE_ID_RE.match(str(r).strip())
+            if m:
+                claimed.add(m.group(0).upper())
+    for container in containers.values():
+        for comp in container.components or []:
+            for r in comp.implements_requirements or []:
+                m = _FEATURE_ID_RE.match(str(r).strip())
+                if m:
+                    claimed.add(m.group(0).upper())
+
+    locations: List[str] = []
+    for container in containers.values():
+        for comp in container.components or []:
+            for loc in comp.code_location or []:
+                locations.append(str(loc).strip())
+
+    def _covered(token: str) -> bool:
+        t = token.rstrip("/")
+        for loc in locations:
+            l = loc.rstrip("/")
+            if t == l or t.startswith(l + "/") or l.startswith(t + "/"):
+                return True
+        return False
+
+    for fr in sorted(claimed):
+        text = feature_texts.get(fr)
+        if not text:
+            continue
+        for m in _FR_PATH_TOKEN_RE.finditer(text):
+            token = m.group(1).rstrip(".,;:)")
+            if "://" in token or token.startswith("/"):
+                continue
+            if not _covered(token):
+                warns.append(
+                    f"{fr} names path '{token}' but no component's code_location "
+                    f"covers it — a build-time deliverable with no owning "
+                    f"component means `task` can never schedule building it "
+                    f"(add a schema_model/dev_tool/content_asset component or "
+                    f"extend an existing code_location)"
+                )
+    return warns
+
+
 def check_edge_via_fields_arch(
     arch: Arch,
     api_resource_ids: Set[str],
@@ -1901,6 +2216,9 @@ def validate_all(arch_path: Path) -> int:
     component_op_warnings: List[str] = []
     fr_wu_errs: List[str] = []
     fr_wu_rollup: List[str] = []
+    contract_errs: List[str] = []
+    contract_warns: List[str] = []
+    api_mirror_warns: List[str] = []
     warning_id_errs: List[str] = check_warning_ids(arch.arch_warnings, "arch_warnings")
     id_format_errs: List[str] = check_arch_id_formats(arch)
     for name, c in containers.items():
@@ -1916,6 +2234,10 @@ def validate_all(arch_path: Path) -> int:
         fr_errs, fr_roll = check_component_fr_work_unit_coverage(c, name)
         fr_wu_errs.extend(fr_errs)
         fr_wu_rollup.extend(fr_roll)
+        ct_errs, ct_warns = check_work_unit_contracts(c, name)
+        contract_errs.extend(ct_errs)
+        contract_warns.extend(ct_warns)
+        api_mirror_warns.extend(check_api_consumer_mirror(c, name))
         component_trace_errs.extend(
             check_component_traces(
                 c, arch, name,
@@ -1951,6 +2273,9 @@ def validate_all(arch_path: Path) -> int:
     file_path_errs = check_file_path_integrity(arch, docs_dir)
     external_warnings = check_external_container_files(arch, containers)
     upstream_warnings = check_upstream_status_warnings(docs_dir)
+    rollup_errs = check_external_edge_rollup(arch, containers)
+    container_via_errs.extend(check_external_via_units(containers))
+    deliverable_path_warns = check_fr_deliverable_paths(arch, containers, prd_path)
 
     status = arch.metadata.status
     n_containers = len(containers)
@@ -1964,6 +2289,14 @@ def validate_all(arch_path: Path) -> int:
         ("implements_requirements / traces_prd_workflows resolution error(s)", prd_trace_errs),
         ("component work_unit integrity error(s) (cross-check 21)", component_op_errs),
         ("component FR->work_unit coverage error(s) (cross-check 22)", fr_wu_errs),
+        ("work_unit DEFER-OR-DECLARE contract error(s) (cross-check 23)", contract_errs),
+        ("container->system edge roll-up error(s) (cross-check 24)", rollup_errs),
+    ]
+
+    titled_warnings: List[Tuple[str, List[str]]] = [
+        ("undeclared work_unit contract(s) [waived]", contract_warns),
+        ("FR-named deliverable path(s) outside every code_location (cross-check 25)", deliverable_path_warns),
+        ("external calls edge(s) not mirrored in api_consumers (cross-check 26)", api_mirror_warns),
     ]
 
     # 6) Reporting — hard problems force draft / block complete.
@@ -2005,7 +2338,7 @@ def validate_all(arch_path: Path) -> int:
             store_ids,
         )
         _print_extra_problems(extra_problems)
-        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings, fr_wu_rollup)
+        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings, fr_wu_rollup, titled_warnings)
         return 1
 
     if status == "complete":
@@ -2024,7 +2357,7 @@ def validate_all(arch_path: Path) -> int:
             f"{len(ux_ids)} data-bearing UX surface(s) all owned; "
             f"{store_note}; {feat_note}; edges resolve."
         )
-        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings, fr_wu_rollup)
+        _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings, fr_wu_rollup, titled_warnings)
         return 0
 
     # status == "draft"
@@ -2062,7 +2395,7 @@ def validate_all(arch_path: Path) -> int:
             "\nAll required fields filled, coverage complete, edges resolve. "
             "Set metadata.status: complete when done."
         )
-    _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings, fr_wu_rollup)
+    _print_warnings(external_warnings, upstream_warnings, code_location_warnings, component_op_warnings, fr_wu_rollup, titled_warnings)
     return 0
 
 
@@ -2164,6 +2497,7 @@ def _print_warnings(
     code_location_warnings: Optional[List[str]] = None,
     operation_warnings: Optional[List[str]] = None,
     fr_work_unit_rollup: Optional[List[str]] = None,
+    titled: Optional[List[Tuple[str, List[str]]]] = None,
 ) -> None:
     if external_warnings:
         print()
@@ -2190,6 +2524,12 @@ def _print_warnings(
         print(f"WARNINGS ({len(fr_work_unit_rollup)} container(s) with FR(s) unreachable through any work_unit):")
         for w in fr_work_unit_rollup:
             print(f"  - {w}")
+    for title, items in titled or []:
+        if items:
+            print()
+            print(f"WARNINGS ({len(items)} {title}):")
+            for w in items:
+                print(f"  - {w}")
 
 
 def main(argv: Optional[List[str]] = None) -> int:

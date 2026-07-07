@@ -15,8 +15,11 @@
 # docs/TEST-STRATEGY__<container>.yaml files (see TEST-STRATEGY__CONTAINER.schema.yaml).
 #
 # ID families this artifact OWNS (writer-managed counters in state.last_ids):
-#   * TST-NNN — one per test in `tests`. Independent counter from each
-#               container file's TST space.
+#   * TST-NNN — one per test in `tests`. ONE GLOBAL counter shared with every
+#               container file (state.last_ids_global.TST): TST-001 exists at
+#               most once across the whole strategy set. Downstream
+#               Task.test_refs assumes a single TST namespace; the validator
+#               enforces global uniqueness (blocking).
 #   * WRN-NNN — one per `test_strategy_warnings` entry.
 # Upstream ids it REFERENCES (never invents/renumbers): FR/NFR/ACR/WKF (PRD),
 #   container_id (ARCH.yaml).
@@ -100,7 +103,9 @@ environments:                              # OPTIONAL — test environments beyo
 # ---------------------------------------------------------------------------
 tests:                                      # REQUIRED — list[SystemTest] (may be empty
                                             #   only if every workflow is deferred)
-  - tst_id: TST-001                         # REQUIRED — unique within THIS file
+  - tst_id: TST-001                         # REQUIRED — GLOBALLY unique across this
+                                            #   file + all container files (one
+                                            #   continuous counter)
     name: <string>                          # REQUIRED — the behaviour proved
     tier:                                   # REQUIRED — one of:
       # unit | integration | e2e | contract | property | load | security | accessibility
@@ -143,8 +148,10 @@ test_strategy_warnings:                     # OPTIONAL — list of "WRN-NNN: ...
 # =============================================================================
 # 1.  Required-field completeness — status:complete requires every REQUIRED
 #     field above to be non-null.
-# 2.  TST-NNN format + uniqueness — every tests[].tst_id matches `^TST-\d{3,}$`
-#     and is unique within this file.
+# 2.  TST-NNN format + uniqueness — every tests[].tst_id matches `^TST-\d{3,}$`,
+#     is unique within this file, AND is globally unique across this file plus
+#     every TEST-STRATEGY__*.yaml sibling (blocking — one continuous TST
+#     namespace shared by the whole strategy set).
 # 3.  WRN-NNN format — every test_strategy_warnings entry matches
 #     `^WRN-\d{3,}:\s+.+`.
 # 4.  covers existence — every covers entry is FR/NFR/ACR/WKF format AND

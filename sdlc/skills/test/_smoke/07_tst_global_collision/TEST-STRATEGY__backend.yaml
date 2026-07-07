@@ -1,5 +1,8 @@
-# Container file — covers every required FR/NFR, the component acceptance, and
-# both risks (db-timeout, pii-leak). Expect: [OK] complete.
+# 07 — GLOBAL TST COLLISION. Same content as fixture 05's container file,
+# but its first test reuses TST-001, which the sibling system file also
+# declares. TST-NNN is ONE continuous namespace across the whole strategy
+# set (downstream Task.test_refs assumes it). Expect: exit 1 naming the
+# cross-file duplicate.
 metadata:
   test_strategy_container_version: "1.0"
   last_updated: "2026-06-02T10:00:00Z"
@@ -12,7 +15,7 @@ inherits_from: docs/TEST-STRATEGY.yaml
 coverage_target:
   line_pct: 85.0
 tests:
-  - tst_id: TST-002
+  - tst_id: TST-001
     name: "users-service creates a user"
     tier: unit
     description: "Happy-path create on the users service."

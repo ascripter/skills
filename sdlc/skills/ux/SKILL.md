@@ -169,6 +169,29 @@ the theme interview** per
 is unchanged, this is an ordinary refine — proceed to the merge flow without a
 delta-review. Fresh runs (no prior `docs/UX.yaml`) skip this step.
 
+**Downstream-claim reconciliation (re-runs).** Upstream isn't the only thing
+that moves under a UX artifact — downstream does too, and surface `status` is
+lifecycle metadata that must track it. On every re-run over an existing
+`docs/UX.yaml`, peek at the downstream artifacts if present:
+
+1. Collect the claimed surface set: every `surface_id` in any
+   `docs/ARCH.yaml.containers[].owns_ux_surfaces` (and, where drilled, the
+   matching `ARCH__*.yaml.ux_surface` lists).
+2. For each claimed surface whose inventory `status` is not `confirmed`
+   (still `proposed` / `defined` / `draft`), run one consolidated
+   `AskUserQuestion` sweep: *"These surfaces are claimed by the architecture
+   (and may already be tested) but UX still marks them `<status>`: …"* — per
+   surface the user picks **confirm** (bump `status: confirmed`; if it was
+   `proposed`, it has evidently been promoted into scope) / **keep** (the
+   downstream claim is premature — log a `WRN-NNN` naming the mismatch so the
+   arch side gets fixed) / **drop the claim note** (user will fix ARCH).
+3. Never bump silently — the mismatch may mean ARCH is wrong, not UX.
+
+The ux validator surfaces the same mismatch as a standing non-blocking
+warning ("claimed downstream but not 'confirmed'"), so a stale lifecycle
+can't hide between re-runs. Skip the sweep when no downstream artifact
+exists yet (the normal first-chain pass).
+
 ### Phase 3 — Idea capture (lightweight)
 
 Unlike `sdlc:prd`, this skill does NOT need to capture a free-text idea

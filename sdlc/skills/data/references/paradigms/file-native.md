@@ -77,6 +77,39 @@ Replace the relational structural themes with these:
    …) when the reference points at an upstream PRD/UX ID family rather than a
    local entity.
 
+   **Gate-clause sweep (run before closing this theme).** If the catalogue
+   presents itself as the edge-table schema that referential/coverage gates
+   consume, it must actually contain a row for every field those gates query
+   — an incomplete edge table makes each missing gate clause mechanically
+   unenforceable while the artifact still *looks* authoritative. Before
+   closing:
+
+   a. **Enumerate the gate clauses.** Collect every referential / coverage /
+      lint clause named anywhere upstream: PRD FRs that describe validation
+      gates ("every X.field must resolve to…", per-clause lint requirements),
+      `PRD.conventions` buckets that mandate ID resolution, and any `gate:`
+      names already used in this table.
+   b. **Extract the queried fields.** For each clause, list the concrete
+      `Entity.field` pairs it reads (e.g. a gate that checks
+      `Component.api_refs` / `Component.implements_requirements` queries
+      those two fields).
+   c. **Demand a row or a carve-out for each.** Every queried field gets
+      EITHER a `cross_references` row (`from_entity` + `field` +
+      `to_entity`/`references_family`, with `gate:` naming the clause) OR an
+      explicit carve-out: a `data_warnings` `WRN-NNN` entry naming the field,
+      why no id-family row fits, and where its read-model home is.
+   d. **Non-id-family relations get a declared home too.** A reference that
+      travels as something other than a single ID string — a composite tuple
+      (e.g. a `(component, name)` address), a path, a content hash — cannot
+      be a normal row, but silence is not an option either: add a row with a
+      `comment` describing the tuple resolution rule, or the `WRN-NNN`
+      carve-out from (c). Downstream gate-writers must find every relation's
+      contract *somewhere*.
+
+   The sweep is cheap (one reflective pass over clauses you have already
+   read) and it is the difference between "exclusive edge-table schema" being
+   a property and being a caption.
+
 4. **serialization_conventions** — where artifacts live so the tree is
    human-readable. `{root_path, format, entries: [{entity, filename_pattern,
    scope}]}`. (Per-entity placement may also live inline on
