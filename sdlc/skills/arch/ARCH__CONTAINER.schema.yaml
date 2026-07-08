@@ -449,6 +449,27 @@ external_edges:                            # OPTIONAL
 # #24 blocks `complete` on a container-sourced edge that never propagated up.
 
 # ---------------------------------------------------------------------------
+# work_unit_family_contracts — OPTIONAL, meta-corpus dialect only.
+# Declares one shared DEFER-OR-DECLARE contract per uniform work_unit *family*,
+# so terse members inherit it instead of repeating inputs/output/raises on each
+# (a CLI factory with no API layer has no OPR to DEFER to). Declaring a
+# non-empty list opts the container into the dialect: cross-check #23 then
+# treats a family member as DECLARED even when it omits its own contract. A
+# generated app OMITS this block and keeps the strict per-unit DECLARE rule.
+# A member OVERRIDES its family by declaring its own inputs/output/raises.
+# Membership is the UNION of the selectors provided.
+# ---------------------------------------------------------------------------
+work_unit_family_contracts:                # OPTIONAL — omit for a generated app
+  - family: <family label>                 # REQUIRED — e.g. "gate-units"
+    contract: <string>                     # OPTIONAL — prose of the shared contract
+    inputs: [<string>, ...]                # OPTIONAL — shared input contract
+    output: <string>                       # OPTIONAL — shared output contract
+    raises: [<string>, ...]                # OPTIONAL — shared error contract
+    member_components: [<component_id>, ...]  # OPTIONAL — units in these components
+    member_archetypes: [<archetype>, ...]     # OPTIONAL — units in components of these archetypes
+    member_name_globs: ["handle_*", ...]      # OPTIONAL — fnmatch globs on work_unit.name
+
+# ---------------------------------------------------------------------------
 # arch_warnings — non-fatal issues for THIS container. Universal WRN-NNN
 # family: "WRN-NNN: <message>". Counter is writer-managed per sub-session
 # (state.last_ids.WRN). Validator enforces `^WRN-\d{3,}:\s+.+`.
@@ -550,8 +571,13 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     `raises: []`, `output: "None"`). A unit WITH traces_api_operation may
 #     defer to the API schema. A unit with a NON-CALLABLE kind (module /
 #     content / tooling) is EXEMPT — its deliverable is a file, not a callable,
-#     so the interface-contract fields don't apply. Blocks `complete`; the
-#     component's work_units_waiver downgrades its units' gaps to warnings.
+#     so the interface-contract fields don't apply. Meta-corpus dialect
+#     (OPT-IN): if the container declares `work_unit_family_contracts`, a unit
+#     belonging to a family INHERITS that family's shared contract and may omit
+#     its own inputs/output/raises. A generated app carries no such block, so
+#     the strict per-unit DECLARE requirement is preserved for it. Blocks
+#     `complete`; the component's work_units_waiver downgrades its units' gaps
+#     to warnings.
 #     This is the lint that catches an emitter which fills only the trace
 #     fields (implements_requirements/touches_entities/…) and leaves every
 #     contract field empty — downstream atomic tasks then re-guess each
@@ -563,12 +589,17 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     topology (test/deploy read ARCH.yaml.edges). Fix by adding the system
 #     edge or re-running `/sdlc:arch -d`.
 # 25. FR-named deliverable path coverage (advisory, non-blocking) — every
-#     concrete repo path named in the text of a CLAIMED FR (one that appears in
-#     some container's/component's implements_requirements) must fall inside
-#     some component's code_location. Catches build-time deliverables (schema
-#     layer, tools/, templates/, shipped content) that runtime-driven component
-#     derivation misses — without an owning component, `task` can never
-#     schedule building them.
+#     concrete repo path named as inline code (backticks) in the text of a
+#     CLAIMED FR (one that appears in some container's/component's
+#     implements_requirements) must fall inside some component's code_location.
+#     Catches build-time deliverables (schema layer, tools/, templates/,
+#     shipped content) that runtime-driven component derivation misses —
+#     without an owning component, `task` can never schedule building them.
+#     Only backtick-delimited tokens WITH path shape (a trailing '/' or a file
+#     extension) are scanned; bare prose slashes and backticked non-paths
+#     (and/or, PyPI/npm, ID-lists like FR-046/047, enum listings like pass/fail)
+#     are ignored, so mark a genuine deliverable path as code (e.g. `tools/gen/`
+#     or `templates/base.html`) to have its coverage verified.
 # 26. api_consumers mirror (advisory, non-blocking) — an external `calls` edge
 #     with via_resource_id should be mirrored in this container's
 #     api_consumers[], so the container header alone tells codegen which

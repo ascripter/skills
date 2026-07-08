@@ -180,6 +180,12 @@ class LicenseType(str, Enum):
     undecided = "undecided"
 
 
+class RiskDisposition(str, Enum):
+    mitigated = "mitigated"                # reified into / handled by mitigation_refs
+    accepted_residual = "accepted_residual"  # deliberately accepted standing risk
+    open = "open"                          # undecided; surface at HITL (often a QUE)
+
+
 # =============================================================================
 # Theme models — declared in the canonical interview order from
 # prd-questions.yaml (required themes first, product_identity last among
@@ -326,8 +332,30 @@ class SuccessMetrics(_ThemeBase):
     user_satisfaction_target: Optional[str] = None
 
 
+class RiskItem(_ThemeBase):
+    """One structured top risk — the richer (optional) form of a top_risks entry.
+
+    A `top_risks` entry may be a plain string (legacy/simple form, no
+    regression) OR this mapping. Only `statement` + `disposition` are
+    required. `mitigation_refs` point at EXISTING cross-stage ids
+    (FR-/NFR-/TST-/SIG-/QUE-…) — they are references, not a new id family, so
+    the validator treats them as free strings (no dangling check). By
+    convention `mitigation_refs` is non-empty when disposition == mitigated,
+    but that is a content-critic/judgment concern, not a deterministic gate.
+    """
+
+    statement: str                       # REQUIRED — the risk in prose
+    disposition: RiskDisposition         # REQUIRED — mitigated | accepted_residual | open
+    mitigation_refs: List[str] = Field(default_factory=list)  # OPTIONAL — existing ids
+
+
+# A top risk is EITHER a structured RiskItem OR a plain string. Mapping entries
+# parse into RiskItem (typed disposition); plain strings stay strings.
+RiskEntry = Union[RiskItem, str]
+
+
 class RisksAssumptions(_ThemeBase):
-    top_risks: Optional[List[str]] = None
+    top_risks: Optional[List[RiskEntry]] = None
     key_assumptions: Optional[List[str]] = None
     blockers: Optional[List[str]] = None
     dependencies: Optional[List[str]] = None

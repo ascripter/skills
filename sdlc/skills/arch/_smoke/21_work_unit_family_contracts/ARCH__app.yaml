@@ -1,0 +1,117 @@
+# 21 — Meta-corpus dialect (cross-check 23 arm b), all four arms coexisting.
+# `work_unit_family_contracts` declares two shared contracts; terse family
+# members inherit them and omit inputs/output/raises:
+#   * handle_* verbs join cli-verb-handlers via a name-glob   (FAMILY / arm b)
+#   * run_input_gate joins gate-units via member_components    (FAMILY / arm b)
+#   * create_task DECLAREs its own inputs/output/raises        (DECLARE / arm a)
+#   * schemas is kind:module, a file deliverable               (FILE   / arm c)
+# Expectation: validator exits 0 with [OK]. A non-family contract-less unit
+# would still BLOCK (proven by fixtures 17/19/20, which carry no family block).
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-07-08T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "21212121-bbbb-2121-2121-212121212121"
+  status: "complete"
+
+container_id: app
+archetype: backend-api
+overview: "Task manager with a CLI-style surface and no API layer to DEFER to."
+
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+  framework: "Typer"
+
+deployment:
+  shape: container
+  shape_confidence: confirmed
+
+observability:
+  logs: "stdout structured json"
+
+failure_modes:
+  - id: store-timeout
+    description: "Task store connection times out."
+    likelihood: low
+    impact: high
+    mitigation: "Retry with backoff."
+
+# Meta-corpus dialect: one shared DEFER-OR-DECLARE contract per uniform family.
+work_unit_family_contracts:
+  - family: cli-verb-handlers
+    contract: "typer.Context + parsed flags -> process exit code; nothing escapes."
+    inputs: ["typer.Context + parsed flags"]
+    output: "process exit code"
+    raises: []
+    member_name_globs: ["handle_*"]
+  - family: gate-units
+    contract: "artifact at the clause boundary -> GateResult; gates are pure."
+    inputs: ["artifact at the clause boundary"]
+    output: "GateResult (passed: bool + violations: list[str])"
+    raises: []
+    member_components: [gates]
+
+components:
+  - component_id: tasks-service
+    archetype: service
+    purpose: "Task CRUD plus CLI verb handlers."
+    responsibilities:
+      - "Create and delete tasks; expose the CLI verbs."
+    code_location:
+      - "src/tasks/"
+    implements_requirements:
+      - "FR-001"
+    traces_prd_workflows:
+      - "WKF-001"
+    work_units:
+      # FAMILY (arm b) — matches cli-verb-handlers via the handle_* name-glob.
+      - name: handle_create
+        summary: "CLI verb: create a task."
+        implements_requirements: ["FR-001"]
+        status: confirmed
+      - name: handle_delete
+        summary: "CLI verb: delete a task."
+        implements_requirements: ["FR-001"]
+        status: confirmed
+      # DECLARE (arm a) — declares its own interface contract.
+      - name: create_task
+        summary: "Validate the payload and persist a new task."
+        implements_requirements: ["FR-001"]
+        inputs: ["payload: TaskCreate"]
+        output: "Task"
+        raises: ["ValidationError"]
+        status: confirmed
+      # FILE (arm c) — kind:module deliverable; inputs/raises not applicable.
+      - name: schemas
+        kind: module
+        summary: "The task pydantic schema module."
+        implements_requirements: ["FR-001"]
+        output: "src/tasks/schemas.py"
+        status: confirmed
+    status: confirmed
+
+  - component_id: gates
+    archetype: service
+    purpose: "Quality gates for task operations."
+    responsibilities:
+      - "Assert task invariants at the stage boundary."
+    code_location:
+      - "src/gates/"
+    implements_requirements:
+      - "FR-001"
+    traces_prd_workflows:
+      - "WKF-001"
+    work_units:
+      # FAMILY (arm b) — matches gate-units via member_components.
+      - name: run_input_gate
+        summary: "Gate: task payload adequacy."
+        implements_requirements: ["FR-001"]
+        status: confirmed
+    status: confirmed
+
+internal_edges: []
+external_edges: []
+
+arch_warnings:
+  - "WRN-001: persistence_bindings deferred until DATA-MODEL stabilizes."

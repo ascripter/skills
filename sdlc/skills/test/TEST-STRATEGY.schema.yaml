@@ -134,6 +134,24 @@ container_strategies:                       # OPTIONAL — list, grows as contai
     file_path: docs/TEST-STRATEGY__backend-api.yaml   # REQUIRED when present
 
 # ---------------------------------------------------------------------------
+# meta_corpus_dialect — OPTIONAL opt-in flag (default false/absent). Set true
+# ONLY for a sharded / no-API-layer meta-corpus (e.g. a CLI factory dogfooding
+# these skills). It relaxes exactly two checks; a GENERATED app OMITS it and
+# keeps the strict stock behavior:
+#   * TST ids may be container-prefixed — TST-<PREFIX>-NNN (a short uppercase
+#     container tag) as well as flat TST-NNN — so per-container shards share no
+#     id namespace. Global uniqueness still keys on the full id.
+#   * Coverage is traced with covers + component_ref (no per-target fields
+#     required): a component is targeted when its `implements_requirements`
+#     intersect a test's covered FRs (not only when component_ref names it);
+#     covered NFRs resolve against the PRD NFR catalogue rather than a
+#     component's (FR-only, by house style) implements_requirements; and a
+#     failure_mode is exercised when its owning component is covers-targeted.
+#     See references/coverage-and-defer.md.
+# ---------------------------------------------------------------------------
+meta_corpus_dialect: false                  # OPTIONAL — omit/false for a generated app
+
+# ---------------------------------------------------------------------------
 # test_strategy_warnings — non-fatal issues + the DEFERRAL half of the
 # trace-or-defer coverage contract. Universal WRN-NNN family:
 # "WRN-NNN: <message>". A WKF/FR/NFR id named in a warning counts as
@@ -151,7 +169,9 @@ test_strategy_warnings:                     # OPTIONAL — list of "WRN-NNN: ...
 # 2.  TST-NNN format + uniqueness — every tests[].tst_id matches `^TST-\d{3,}$`,
 #     is unique within this file, AND is globally unique across this file plus
 #     every TEST-STRATEGY__*.yaml sibling (blocking — one continuous TST
-#     namespace shared by the whole strategy set).
+#     namespace shared by the whole strategy set). Meta-corpus dialect
+#     (meta_corpus_dialect: true): container-prefixed `TST-<PREFIX>-NNN` is
+#     also accepted; global uniqueness still keys on the full id.
 # 3.  WRN-NNN format — every test_strategy_warnings entry matches
 #     `^WRN-\d{3,}:\s+.+`.
 # 4.  covers existence — every covers entry is FR/NFR/ACR/WKF format AND

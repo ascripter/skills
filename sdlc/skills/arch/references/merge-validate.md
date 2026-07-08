@@ -216,10 +216,11 @@ This validates:
       to a `work_units[].name` on its `<container>/<component>` target
       (sibling-container calls with no API between them).
 
-17. Advisory (never block): **#25** — a concrete repo path named in a claimed
-    FR's text outside every component's `code_location` (a build-time
-    deliverable `task` could never schedule); **#26** — an external `calls`
-    edge with `via_resource_id` not mirrored in `api_consumers[]`.
+17. Advisory (never block): **#25** — a concrete repo path named as inline code
+    (backticks) in a claimed FR's text outside every component's `code_location`
+    (a build-time deliverable `task` could never schedule; bare prose slashes
+    are ignored); **#26** — an external `calls` edge with `via_resource_id` not
+    mirrored in `api_consumers[]`.
 
 ### Exit-code recovery
 

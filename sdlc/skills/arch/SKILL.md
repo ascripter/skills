@@ -383,7 +383,9 @@ Source candidates, in priority order:
    `schema_model` / `dev_tool` / `content_asset` components whose
    `code_location` covers the FR-named paths (see
    `references/component-discovery.md` → Pass 6). Runtime-only seeding
-   misses this class entirely. Tag `⚠ inferred`.
+   misses this class entirely. Tag `⚠ inferred`. (Advisory #25 enforces this
+   only for paths written as inline code in the FR; backtick a genuine
+   deliverable path so the validator can verify its coverage.)
 
 Present the draft as in system mode. Persist to
 `state.sessions[container|<id>].defined_components`. `component_inventory`
@@ -673,10 +675,14 @@ checks emit warnings only.
     `<container>/<component>` target's work_units (sibling-container calls with
     no API between them).
 14. **FR-named deliverable path coverage (#25, advisory)** — a concrete repo
-    path named in a claimed FR's text that no component's `code_location`
-    covers is warned about: a build-time deliverable (schema layer, `tools/`,
-    `templates/`, shipped content) with no owning component can never be
-    scheduled by `task`.
+    path named as inline code (backticks) in a claimed FR's text that no
+    component's `code_location` covers is warned about: a build-time
+    deliverable (schema layer, `tools/`, `templates/`, shipped content) with no
+    owning component can never be scheduled by `task`. Only backtick-delimited
+    tokens **with path shape** (a trailing `/` or a file extension) are scanned;
+    bare prose slashes and backticked non-paths (`and/or`, `PyPI/npm`, ID-lists
+    like `FR-046/047`, enum listings like `pass/fail`) are ignored, so mark a
+    genuine deliverable path as code (e.g. `` `tools/gen/` ``).
 15. **api_consumers mirror (#26, advisory)** — an external `calls` edge with
     `via_resource_id` not mirrored in the container's `api_consumers[]` is
     warned about.

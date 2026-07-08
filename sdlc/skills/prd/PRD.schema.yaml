@@ -160,6 +160,14 @@ use_cases:
 #   out_of_scope             — OOS-NNN sequence.
 #   integrations_required    — INT-NNN sequence.
 #   ai_features              — AIF-NNN sequence.
+# Deliverable-path convention: when an FR names a concrete repo path this
+#   product builds / writes / ships (a schema layer, a `tools/` validator, a
+#   `templates/` dir, a generated sidecar file), write that path as inline code
+#   (backticks). Leave bare: prose slashes (`and/or`), external product names
+#   (`PyPI/npm`), reference-ID lists (`FR-046/047`), and paths mentioned only as
+#   analogies/references. Downstream `sdlc-arch` cross-check #25 keys on the
+#   backticked paths to verify each build-time deliverable has an owning
+#   component + `code_location`; bare prose slashes are (correctly) ignored.
 functional_requirements:
   must_have_features: null    # MVP features (list[string]); each item starts with a stable ID:
                               #   "FR-001: <title and detail description>"
@@ -313,7 +321,18 @@ success_metrics:
 # risks_assumptions — what could go wrong, what we are taking on faith
 # -----------------------------------------------------------------------------
 risks_assumptions:
-  top_risks: null             # ranked list of risks (list[string])
+  top_risks: null             # ranked list of risks — list[string | RiskItem].
+  #                           # An entry is EITHER a plain string (simple form)
+  #                           # OR a structured RiskItem mapping:
+  #  - statement: "Vendor API may rate-limit us at scale"  # REQUIRED — risk in prose
+  #    disposition: mitigated # REQUIRED — mitigated | accepted_residual | open
+  #                           #   mitigated         → handled by mitigation_refs
+  #                           #   accepted_residual → deliberately accepted standing risk
+  #                           #   open              → undecided; surface at HITL (often a QUE)
+  #    mitigation_refs: ["FR-012", "NFR-004"]  # OPTIONAL — EXISTING cross-stage ids
+  #                           #   (FR-/NFR-/TST-/SIG-/QUE-…), non-empty by convention
+  #                           #   when disposition == mitigated. References, not a
+  #                           #   new id family — no dangling check.
   key_assumptions: null       # what we are betting is true (list[string])
   blockers: null              # current blockers (list[string])
   dependencies: null          # critical external dependencies (list[string])

@@ -1,0 +1,36 @@
+# 09 — Same shapes as 08 (container-prefixed TST ids + a covers'd NFR that is in
+# NO implements_requirements) but WITHOUT `meta_corpus_dialect: true`. This is a
+# generated app, so the strict stock rules apply. Expect: [FAIL] —
+#   * TST-SYS-###/TST-BE-### rejected (must match 'TST-NNN'), AND
+#   * TST-BE-002.covers 'NFR-002' is not in the container's/component's
+#     implements_requirements.
+# This is the negative twin of fixture 08: it proves the opt-in marker — not the
+# sharded shape alone — is what unlocks the dialect.
+metadata:
+  test_strategy_version: "1.0"
+  last_updated: "2026-07-08T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 90909090-9090-9090-9090-909090909090
+  status: complete
+test_approach:
+  pyramid_targets: {unit: "~70%", integration: "~20%", e2e: "~10%"}
+coverage_threshold:
+  line_pct: 80.0
+mock_policy: "Mock at process/network boundaries; real in-process deps otherwise."
+fixture_strategy: "Data factories."
+tests:
+  - tst_id: TST-SYS-001
+    name: "Sign-up is audited (e2e)"
+    tier: e2e
+    description: "Drives sign-up and asserts an audit entry is written."
+    directives:
+      - "Arrange: fresh DB; backend running."
+      - "Act: submit the sign-up."
+      - "Assert: the user exists and an audit entry was appended."
+    covers: [WKF-001]
+    involves_containers: [backend]
+    priority: must
+    acceptance: "After sign-up, the user exists and an audit entry is present."
+    status: confirmed
+container_strategies:
+  - {container_id: backend, file_path: docs/TEST-STRATEGY__backend.yaml}

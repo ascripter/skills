@@ -48,6 +48,20 @@ success_metrics:
     - "ACR-001: A task can be added end-to-end in under 3 seconds."
     - "ACR-002: All primary actions pass a keyboard-only walkthrough."
 
+# top_risks is list[string | RiskItem] — a mixed list exercises both forms.
+risks_assumptions:
+  top_risks:
+    - "Scope creep beyond the single-user MVP"          # plain-string form (no regression)
+    - statement: "Local storage corruption loses tasks"  # structured RiskItem form
+      disposition: mitigated
+      mitigation_refs:
+        - "FR-002"
+    - statement: "Adoption slower than modeled"
+      disposition: accepted_residual
+    - statement: "Sync/offline strategy still undecided"
+      disposition: open
+      mitigation_refs: []
+
 # QUE-NNN family — typed open questions; both lists share one counter.
 open_questions:
   undecided_decisions:

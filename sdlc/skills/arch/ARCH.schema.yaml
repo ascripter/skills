@@ -264,6 +264,7 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 # Container-vs-system consistency (see ARCH__CONTAINER.schema.yaml for the
 # remaining checks — owns/api/ux/persistence containment, component traces,
 # component implements_requirements ⊆ parent container's, deployment
-# compatibility, work_unit contract lint #23, deliverable-path coverage #25,
+# compatibility, work_unit contract lint #23, deliverable-path coverage #25
+# (keys on backticked paths in FR text; bare prose slashes are ignored),
 # api_consumers mirror #26, and the external-container file warning).
 # =============================================================================

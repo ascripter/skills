@@ -1,0 +1,35 @@
+# Same container shard as fixture 08, but the system file does NOT opt into the
+# dialect — so these prefixed ids and the NFR-only covers are rejected.
+metadata:
+  test_strategy_container_version: "1.0"
+  last_updated: "2026-07-08T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 91919191-9191-9191-9191-919191919191
+  status: complete
+container_id: backend
+overview: "Unit + integration tests for the user-management backend."
+inherits_from: docs/TEST-STRATEGY.yaml
+coverage_target:
+  line_pct: 85.0
+tests:
+  - tst_id: TST-BE-001
+    name: "create user writes an audit entry"
+    tier: integration
+    description: "Happy path: creating a user appends an audit entry."
+    component_ref: users-service
+    directives: ["Arrange a valid payload; act create(); assert a persisted user and an appended audit entry."]
+    covers: [FR-001, FR-003]
+    priority: must
+    acceptance: "create() persists the user and appends exactly one audit entry."
+    status: confirmed
+  - tst_id: TST-BE-002
+    name: "every mutation is auditable"
+    tier: integration
+    description: "Property: each mutation yields a matching audit entry."
+    component_ref: users-service
+    directives: ["Drive N mutations; assert N matching audit entries."]
+    covers: [NFR-002]
+    priority: should
+    acceptance: "Mutation count equals audit-entry count."
+    status: confirmed
+test_strategy_warnings: []

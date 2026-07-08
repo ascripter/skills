@@ -1,0 +1,30 @@
+container_id: backend
+archetype: backend-api
+overview: "User-management backend; a CLI-style surface with no API layer."
+components:
+  - component_id: users-service
+    archetype: service
+    purpose: "Create and read users."
+    responsibilities: ["Validate and persist a new user."]
+    implements_requirements: [FR-001]           # FRs only (house style)
+    acceptance_criteria: ["create returns the new user id"]
+    failure_modes:
+      - id: db-timeout
+        description: "Database call times out under load."
+        likelihood: medium
+        impact: high
+        mitigation: "Retry with capped backoff."
+    status: confirmed
+  - component_id: audit-log
+    archetype: service
+    purpose: "Append audit entries for mutations."
+    responsibilities: ["Append an audit entry per mutation."]
+    implements_requirements: [FR-003]           # FRs only (house style)
+    acceptance_criteria: ["an audit entry is appended per mutation"]
+    failure_modes:
+      - id: audit-drop
+        description: "An audit entry is silently dropped."
+        likelihood: low
+        impact: high
+        mitigation: "Write-ahead the audit entry before acking the mutation."
+    status: confirmed

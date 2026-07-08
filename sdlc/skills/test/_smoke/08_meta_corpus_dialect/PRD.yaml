@@ -1,0 +1,14 @@
+metadata:
+  status: complete
+functional_requirements:
+  must_have_features:
+    - "FR-001: create users"
+    - "FR-003: write an audit log entry"
+non_functional_requirements:
+  performance_targets:
+    - "NFR-001: p95 latency < 200ms"
+  other:
+    - "NFR-002: every mutation is auditable end-to-end"
+use_cases:
+  core_workflows:
+    - "WKF-001: user signs up and is audited"

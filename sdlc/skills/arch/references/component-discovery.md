@@ -105,7 +105,14 @@ can never schedule building it. Sweep for them explicitly:
 
 3. **Give each a `code_location` that covers every FR-named path** — the
    validator's advisory cross-check #25 flags any path named in a claimed
-   FR that no component's `code_location` covers.
+   FR that no component's `code_location` covers. #25 keys on **backticked
+   tokens with path shape** (a trailing `/` or a file extension): it scans
+   inline code like `` `tools/validate.py` `` or `` `templates/` `` and ignores
+   bare prose slashes AND backticked non-paths (`and/or`, `PyPI/npm`, ID-lists
+   like `FR-046/047`, enum listings like `pass/fail`). When your discovery
+   sweep here turns up a genuine deliverable path that the FR left as bare
+   prose, write it back into the FR text as inline code so #25 can verify its
+   coverage (see prd's FR-authoring note).
 4. **Content assets need authoring units.** A `content_asset` component's
    work_units are not code callables; they are the authoring deliverables
    (`author_review_prompt_pack`, `write_cli_question_inventory`), each with
@@ -303,6 +310,16 @@ Each work_unit carries:
   - Fill `signature` only when the signature itself is the contract (a public
     library API); otherwise codegen renders it from `inputs`/`output` + the
     tech stack.
+  - **FAMILY** (opt-in, meta-corpus dialect only) — a sharded / no-API-layer
+    corpus (a CLI factory with no OPR to DEFER to) may declare a container-level
+    `work_unit_family_contracts` list: one shared `inputs`/`output`/`raises`
+    contract per uniform unit family (gate units, stage-node bodies, CLI verb
+    handlers, sub-agent runners), keyed by `member_components` /
+    `member_name_globs` / `member_archetypes`. A terse family member inherits
+    its family's contract and may omit its own; a member OVERRIDES by declaring
+    its own. Cross-check #23 recognizes this only when the block is present — a
+    generated app carries no such block and keeps the strict per-unit DECLARE
+    rule above.
 
 **Work_unit-completeness check (before closing the component).** Reflect on the
 drafted units against the component's own signals: does every owned API
@@ -377,7 +394,9 @@ spec: `sdlc/skills/prd/references/importance-flows.md`). Reflect on:
    FR-named path fall inside some component's `code_location`? Does every
    content deliverable have authoring work_units or an explicit
    task-derivation rule? Runtime-only sweeps miss this class entirely —
-   it is the reason cross-check #25 exists.
+   it is the reason cross-check #25 exists. (Your discovery reads all prose;
+   #25 only auto-flags paths written as inline code — backtick a genuine
+   deliverable path in the FR text so the validator can enforce its coverage.)
 
 Surface concrete missed **candidate components** via **one multi-select
 `AskUserQuestion`**. Caps: at most **2 sweep passes**; defer leftovers

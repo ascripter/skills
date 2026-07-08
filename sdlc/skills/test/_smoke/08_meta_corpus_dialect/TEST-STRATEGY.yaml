@@ -1,0 +1,38 @@
+# 08 — Meta-corpus dialect happy path (Parts 3 + 4).
+#   * meta_corpus_dialect: true opts into the dialect.
+#   * Part 3 — container-prefixed TST ids (TST-SYS-###, TST-BE-###) validate.
+#   * Part 4a/c — audit-log is targeted by covers-intersection (a test covers
+#     FR-003 which it implements), NOT by component_ref; its acceptance and its
+#     audit-drop failure_mode are covered without component_ref/targets_failure_mode.
+#   * Part 4b — TST-BE-002 covers NFR-002, which is in NO implements_requirements;
+#     it resolves against the PRD NFR catalogue instead of erroring.
+# Expect (with the sibling container file): [OK] complete.
+metadata:
+  test_strategy_version: "1.0"
+  last_updated: "2026-07-08T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 88888888-8888-8888-8888-888888888888
+  status: complete
+meta_corpus_dialect: true
+test_approach:
+  pyramid_targets: {unit: "~70%", integration: "~20%", e2e: "~10%"}
+coverage_threshold:
+  line_pct: 80.0
+mock_policy: "Mock at process/network boundaries; real in-process deps otherwise."
+fixture_strategy: "Data factories."
+tests:
+  - tst_id: TST-SYS-001
+    name: "Sign-up is audited (e2e)"
+    tier: e2e
+    description: "Drives sign-up and asserts an audit entry is written."
+    directives:
+      - "Arrange: fresh DB; backend running."
+      - "Act: submit the sign-up."
+      - "Assert: the user exists and an audit entry was appended."
+    covers: [WKF-001]
+    involves_containers: [backend]
+    priority: must
+    acceptance: "After sign-up, the user exists and an audit entry is present."
+    status: confirmed
+container_strategies:
+  - {container_id: backend, file_path: docs/TEST-STRATEGY__backend.yaml}

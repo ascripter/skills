@@ -1,0 +1,62 @@
+# 22 — Container file for the cross-check #25 backtick-path fixture. One
+# component, code_location = src/tasks/. FR-001's backticked `tools/gen/validate.py`
+# falls outside it -> #25 warns once. The backticked `src/tasks/models.py` is
+# covered, and the FR's bare prose slashes (PyPI/npm, image/audio/3D, FR-002/003,
+# and/or) are ignored entirely.
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-07-08T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "22222222-bbbb-2222-2222-222222222222"
+  status: "complete"
+
+container_id: app
+archetype: backend-api
+overview: "Task manager with a CLI-style surface and no API layer."
+
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+  framework: "Typer"
+
+deployment:
+  shape: container
+  shape_confidence: confirmed
+
+observability:
+  logs: "stdout structured json"
+
+failure_modes:
+  - id: store-timeout
+    description: "Task store connection times out."
+    likelihood: low
+    impact: high
+    mitigation: "Retry with backoff."
+
+components:
+  - component_id: tasks-service
+    archetype: service
+    purpose: "Task CRUD for the CLI."
+    responsibilities:
+      - "Create and delete tasks."
+    code_location:
+      - "src/tasks/"
+    implements_requirements:
+      - "FR-001"
+    traces_prd_workflows:
+      - "WKF-001"
+    work_units:
+      - name: create_task
+        summary: "Validate the payload and persist a new task."
+        implements_requirements: ["FR-001"]
+        inputs: ["payload: TaskCreate"]
+        output: "Task"
+        raises: ["ValidationError"]
+        status: confirmed
+    status: confirmed
+
+internal_edges: []
+external_edges: []
+
+arch_warnings:
+  - "WRN-001: persistence_bindings deferred until DATA-MODEL stabilizes."

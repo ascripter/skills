@@ -90,6 +90,30 @@ Reference the item from a test:
 
 The validator counts the item as covered.
 
+### Meta-corpus dialect (covers-based tracing)
+
+A **sharded / no-API-layer meta-corpus** (a CLI factory dogfooding these
+skills) may set `meta_corpus_dialect: true` on the **system** strategy file and
+trace coverage with just `covers` + `component_ref` — populating none of the
+per-target fields (`targets_work_unit`, `targets_component`,
+`targets_failure_mode`). A generated app OMITS the flag and keeps the strict
+rules above. In the dialect the validator additionally treats an item as
+covered when:
+
+- **component acceptance** — a test's covered FRs intersect the component's
+  `implements_requirements` (covers-targeting), not only when `component_ref`
+  names it;
+- **NFRs** in a test's `covers` — resolved against the **PRD NFR catalogue**,
+  not a component's `implements_requirements` (which by house style lists only
+  FRs), so an NFR-only test does not need the NFR echoed into ARCH;
+- **failure modes** — the owning component is covers-targeted (or the usual
+  `targets_failure_mode`, or a WRN-NNN deferral).
+
+Everything else (requirement/workflow coverage, the WRN-NNN defer path, global
+TST uniqueness) is unchanged. The relaxations are opt-in and monotonic — they
+only *add* ways to satisfy a gate; a genuinely uncovered requirement still
+fails, and the same shapes without the flag fail the strict checks.
+
 ## How to DEFER (the escape hatch)
 
 Some items genuinely warrant no automated test in *this* artifact:

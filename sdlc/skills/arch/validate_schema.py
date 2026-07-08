@@ -58,8 +58,12 @@ Validates:
          DECLARE its interface contract — `inputs`, `output`, and `raises` all
          present (explicit empties `inputs: []` / `raises: []` / `output:
          "None"` count as declared). A unit with traces_api_operation may
-         defer to the API schema. Blocking; a component-level
-         `work_units_waiver` downgrades it to a warning.
+         defer to the API schema. Meta-corpus dialect (opt-in): if the
+         container declares `work_unit_family_contracts`, a unit belonging to a
+         family inherits that family's shared contract and may omit its own
+         (a CLI factory with no API layer declares one contract per uniform
+         unit family instead of repeating it per member). Blocking; a
+         component-level `work_units_waiver` downgrades it to a warning.
     8. Edge-table consistency (block status: complete):
        - #24 container→system edge roll-up: every external_edges[] entry in a
          container file implies a system-level ARCH.yaml.edges row
@@ -70,11 +74,15 @@ Validates:
          on the target `<container>/<component>` (the internal-call analogue
          of via_operation_id for sibling containers with no API between them).
     9. Advisory warnings (never block):
-       - #25 FR-named deliverable paths: a concrete repo path named in the
-         text of an FR that some container/component claims must fall inside
-         some component's code_location — otherwise downstream `task` can
-         never schedule work that builds it (build-time deliverables: schema
-         layers, repo tools/, templates/, shipped content).
+       - #25 FR-named deliverable paths: a concrete repo path named as inline
+         code (backticks) in the text of an FR that some container/component
+         claims must fall inside some component's code_location — otherwise
+         downstream `task` can never schedule work that builds it (build-time
+         deliverables: schema layers, repo tools/, templates/, shipped
+         content). Only backtick-delimited tokens with path shape (a trailing
+         '/' or a file extension) are scanned; bare prose slashes and backticked
+         non-paths (and/or, PyPI/npm, ID-lists like FR-046/047, pass/fail) are
+         ignored.
        - #26 api_consumers mirror: an external `calls` edge with
          via_resource_id should be mirrored in the container's
          api_consumers[].
@@ -92,6 +100,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import re
 import sys
 from enum import Enum
@@ -576,6 +585,61 @@ class ExternalEdge(_Base):
     note: Optional[str] = None
 
 
+class WorkUnitFamilyContract(BaseModel):
+    """One DEFER-OR-DECLARE contract shared by a uniform work_unit *family*
+    (the meta-corpus dialect — DATA-MODEL WorkUnit.meta_corpus_dialect).
+
+    Some corpora — a CLI factory with NO API layer, so no OPR for a unit to
+    DEFER to — declare ONE shared inputs/output/raises contract per uniform
+    unit family (gate units, stage-node bodies, CLI verb handlers,
+    subgraph/sub-agent runners) instead of repeating it on every terse member.
+    A member INHERITS its family's contract unless it overrides with its own
+    inputs/output/raises.
+
+    Declaring a non-empty `work_unit_family_contracts` list opts the container
+    into the dialect: cross-check 23 then treats a family member as DECLARED
+    even when it omits inputs/output/raises. A generated app with no such block
+    keeps the strict per-unit DECLARE requirement. Membership is the UNION of
+    the selectors provided — a unit matches when its owning component_id is in
+    `member_components`, OR that component's archetype is in `member_archetypes`,
+    OR its `name` matches any glob in `member_name_globs`.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    family: str                                    # the family label (e.g. "gate-units")
+    contract: Optional[str] = None                 # prose description of the shared contract
+    inputs: Optional[List[str]] = None             # shared input contract
+    output: Optional[Any] = None                   # shared output contract
+    raises: Optional[List[str]] = None             # shared error contract
+    member_components: Optional[List[str]] = None  # component_ids whose units belong
+    member_archetypes: Optional[List[str]] = None  # component archetypes whose units belong
+    member_name_globs: Optional[List[str]] = None  # fnmatch globs on work_unit.name
+
+
+def _unit_matches_family(
+    comp: "Component",
+    unit_name: Optional[str],
+    families: List[WorkUnitFamilyContract],
+) -> bool:
+    """True if the unit belongs to any declared family contract (meta-corpus
+    dialect). A unit matches when its component_id is listed in a family's
+    `member_components`, its owning component's archetype is listed in
+    `member_archetypes`, or its `name` matches a family `member_name_globs`
+    pattern."""
+    cid = comp.component_id
+    archetype = comp.archetype.value if getattr(comp, "archetype", None) else None
+    for fc in families:
+        if fc.member_components and cid in fc.member_components:
+            return True
+        if fc.member_archetypes and archetype and archetype in fc.member_archetypes:
+            return True
+        if fc.member_name_globs and unit_name:
+            if any(fnmatch.fnmatchcase(unit_name, g) for g in fc.member_name_globs):
+                return True
+    return False
+
+
 class ArchContainer(BaseModel):
     """Top-level docs/ARCH__<container>.yaml."""
 
@@ -598,6 +662,10 @@ class ArchContainer(BaseModel):
     components: Optional[List[Component]] = None
     internal_edges: Optional[List[InternalEdge]] = None
     external_edges: Optional[List[ExternalEdge]] = None
+    # Meta-corpus dialect (optional, opt-in): a non-empty list declares one
+    # shared DEFER-OR-DECLARE contract per uniform work_unit family, so terse
+    # members inherit it (cross-check 23 arm b). Absent for a generated app.
+    work_unit_family_contracts: Optional[List[WorkUnitFamilyContract]] = None
     arch_warnings: List[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -1657,6 +1725,11 @@ def check_work_unit_contracts(
                 demo FR-013 v1.30): the deliverable IS a file whose definition
                 set / content is the interface, so inputs/output/raises are
                 not applicable and the check does not apply.
+      FAMILY  — meta-corpus dialect only: the container declares
+                `work_unit_family_contracts` and the unit belongs to one, so it
+                inherits that family's shared contract and may omit its own
+                inputs/output/raises. A generated app carries no such block, so
+                this arm never fires for it (strict per-unit DECLARE preserved).
 
     Returns (errs, warns). Errs block complete. A component-level
     `work_units_waiver` downgrades that component's contract gaps to warnings
@@ -1664,6 +1737,17 @@ def check_work_unit_contracts(
     """
     errs: List[str] = []
     warns: List[str] = []
+    families = container.work_unit_family_contracts or []
+    if families:
+        known_ids = {c.component_id for c in (container.components or [])}
+        for fc in families:
+            for mc in fc.member_components or []:
+                if mc not in known_ids:
+                    warns.append(
+                        f"{file_label}: work_unit_family_contracts['{fc.family}']"
+                        f".member_components names '{mc}' which is not a component_id "
+                        f"in this container"
+                    )
     for i, comp in enumerate(container.components or []):
         cid = comp.component_id
         waived = bool((comp.work_units_waiver or "").strip())
@@ -1683,13 +1767,16 @@ def check_work_unit_contracts(
             ]
             if not missing:
                 continue
+            if families and _unit_matches_family(comp, op.name, families):
+                continue  # FAMILY case — inherits a declared family contract
             msg = (
                 f"{file_label}: components[{i}]='{cid}'.work_units[{j}]"
                 f"='{op.name}' traces no schema-bearing contract "
                 f"(no traces_api_operation) but leaves {missing} undeclared — "
                 f"DECLARE the interface contract (explicit empties are fine: "
-                f"inputs: [], raises: [], output: \"None\") so atomic tasks "
-                f"compose against a frozen interface"
+                f"inputs: [], raises: [], output: \"None\"), or add it to a "
+                f"work_unit_family_contracts family, so atomic tasks compose "
+                f"against a frozen interface"
             )
             if waived:
                 warns.append(msg + " [waived via work_units_waiver]")
@@ -1813,6 +1900,25 @@ def check_api_consumer_mirror(
 # not a URL. Trailing punctuation is stripped after matching.
 _FR_PATH_TOKEN_RE = re.compile(r"(?<![\w:/])((?:[\w.\-]+/)+[\w.\-*]*)")
 
+# #25 looks for path tokens ONLY inside inline-code (backtick) spans of FR
+# text. Bare prose slashes (and/or, PyPI/npm, ID-lists like FR-046/047, analogy
+# references) are NOT paths — a literal deliverable path must be marked as code.
+# This is the author-controlled 'escape paths, prose is prose' boundary.
+_FR_CODE_SPAN_RE = re.compile(r"`+([^`]+?)`+")
+
+
+def _looks_like_path(token: str) -> bool:
+    """A backticked slash-token is a deliverable PATH only if it has path
+    shape: it ends with '/' (a directory) or its final segment carries a file
+    extension (a '.' in the last segment). This rejects backticked enum
+    listings and ID-lists that carry slashes but are not paths — `pass/fail`,
+    `high/medium/low`, `tier/effort`, `FR-043/FR-045`. Backticks say 'this is
+    literal'; path shape says 'this literal is a path'."""
+    if token.endswith("/"):
+        return True
+    last = token.rstrip("/").rsplit("/", 1)[-1]
+    return "." in last
+
 
 def load_prd_feature_texts(prd_path: Path) -> Dict[str, str]:
     """Return {FR-NNN: full item text} from PRD must_have + nice_to_have
@@ -1854,8 +1960,9 @@ def check_fr_deliverable_paths(
     containers: Dict[str, ArchContainer],
     prd_path: Path,
 ) -> List[str]:
-    """Cross-check #25 (advisory) — every concrete repo path named in the text
-    of a CLAIMED FR must fall inside some component's code_location.
+    """Cross-check #25 (advisory) — every concrete repo path named as inline
+    code (backticks) in the text of a CLAIMED FR must fall inside some
+    component's code_location.
 
     Build-time deliverables (a schema layer, repo-root tools/ validators,
     templates/, shipped content packs) are named by FRs but produce no runtime
@@ -1863,8 +1970,16 @@ def check_fr_deliverable_paths(
     component/code_location/work_unit exists for `task` to ever schedule
     building them. Scope: FRs that appear in some container's or component's
     implements_requirements (the architecture claims them). Only runs when at
-    least one container file declares components. Non-blocking: path prose is
-    heuristic.
+    least one container file declares components.
+
+    Path detection keys on **backtick-delimited** tokens with **path shape**:
+    a literal deliverable path is written as inline code AND either ends in `/`
+    or has a file extension on its last segment. So bare prose slashes
+    (`and/or`, `PyPI/npm`, analogy references) AND backticked non-path tokens
+    (enum listings `high/medium/low`, ID-lists `FR-046/047`, field pairs
+    `pass/fail`) are both ignored rather than mis-read as paths. Non-blocking:
+    the whole check is advisory, so an un-backticked path is a harmless
+    false-negative.
     """
     warns: List[str] = []
     if not containers or not any(c.components for c in containers.values()):
@@ -1904,18 +2019,21 @@ def check_fr_deliverable_paths(
         text = feature_texts.get(fr)
         if not text:
             continue
-        for m in _FR_PATH_TOKEN_RE.finditer(text):
-            token = m.group(1).rstrip(".,;:)")
-            if "://" in token or token.startswith("/"):
-                continue
-            if not _covered(token):
-                warns.append(
-                    f"{fr} names path '{token}' but no component's code_location "
-                    f"covers it — a build-time deliverable with no owning "
-                    f"component means `task` can never schedule building it "
-                    f"(add a schema_model/dev_tool/content_asset component or "
-                    f"extend an existing code_location)"
-                )
+        for span in _FR_CODE_SPAN_RE.finditer(text):
+            for m in _FR_PATH_TOKEN_RE.finditer(span.group(1)):
+                token = m.group(1).rstrip(".,;:)")
+                if "://" in token or token.startswith("/"):
+                    continue
+                if not _looks_like_path(token):
+                    continue
+                if not _covered(token):
+                    warns.append(
+                        f"{fr} names backticked path '{token}' but no component's "
+                        f"code_location covers it — a build-time deliverable with "
+                        f"no owning component means `task` can never schedule "
+                        f"building it (add a schema_model/dev_tool/content_asset "
+                        f"component or extend an existing code_location)"
+                    )
     return warns
 
 

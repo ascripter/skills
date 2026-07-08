@@ -22,6 +22,11 @@ Validates:
        TST counter is one continuous space; downstream Task.test_refs assumes
        a single namespace, so per-file restarts at TST-001 collide). WRN-NNN
        on every test_strategy_warnings entry (WRN stays per-artifact).
+       Meta-corpus dialect (system strategy sets `meta_corpus_dialect: true`):
+       per-container shards may prefix ids as TST-<PREFIX>-NNN (a short
+       container tag) so independently authored shards share no namespace;
+       global uniqueness still keys on the full id. A generated app keeps flat
+       TST-NNN.
     5. Reference integrity (block status: complete):
        - covers entries are FR/NFR/ACR/WKF and resolve to PRD ids.
        - involves_containers / container_strategies resolve to ARCH.yaml.
@@ -198,6 +203,11 @@ class TestStrategySystem(BaseModel):
     environments: Optional[List[Environment]] = None
     tests: Optional[List[SystemTest]] = None
     container_strategies: Optional[List[ContainerStrategyRef]] = None
+    # Meta-corpus dialect opt-in (OPTIONAL). True flips the strategy into the
+    # sharded/no-API-layer meta-corpus mode: container-namespaced TST ids
+    # (TST-<PREFIX>-NNN) and the covers-based coverage mechanism. A generated
+    # app OMITS this (or sets false) and keeps the strict stock behavior.
+    meta_corpus_dialect: Optional[bool] = None
     test_strategy_warnings: Optional[List[str]] = None
 
 
@@ -248,6 +258,11 @@ class TestStrategyContainer(BaseModel):
 # =============================================================================
 
 _TST_RE = re.compile(r"^TST-\d{3,}$")
+# Meta-corpus dialect: a per-container strategy shard prefixes its TST ids with
+# a short uppercase container tag (TST-CLI-001, TST-SBX-014) so independently
+# authored shards share no id namespace. Accepted ONLY when the system strategy
+# opts in via `meta_corpus_dialect: true`; a generated app keeps flat TST-NNN.
+_TST_SHARDED_RE = re.compile(r"^TST-(?:[A-Z][A-Z0-9]*-)?\d{3,}$")
 _WRN_RE = re.compile(r"^WRN-\d{3,}:\s+.+")
 _FR_RE = re.compile(r"^FR-\d+$", re.IGNORECASE)
 _NFR_RE = re.compile(r"^NFR-\d+$", re.IGNORECASE)
@@ -397,6 +412,10 @@ class ArchContainerInfo:
         self.security_concern_ids: Set[str] = set()
         self.comp_units: Dict[str, Set[str]] = {}         # component_id -> {work_units[].name}
                                                           # (names unique only per component)
+        self.comp_implements: Dict[str, Set[str]] = {}    # component_id -> {FR/NFR it implements}
+                                                          # (meta-corpus covers-intersection)
+        self.fmode_component: Dict[str, str] = {}         # failure_mode id -> owning component_id
+                                                          # (container-level fmodes are absent here)
 
 
 def _collect_struct_ids(items: Any, key: str) -> Set[str]:
@@ -424,6 +443,7 @@ def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
         if not isinstance(comp, dict):
             continue
         coid = comp.get("component_id")
+        comp_reqs = _req_tokens_in(comp.get("implements_requirements") or [])
         if coid:
             info.component_ids.add(coid)
             if comp.get("acceptance_criteria"):
@@ -433,7 +453,10 @@ def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
                 if isinstance(wu, dict) and wu.get("name"):
                     units.add(str(wu["name"]).strip())
             info.comp_units[coid] = units
-        info.implements |= _req_tokens_in(comp.get("implements_requirements") or [])
+            info.comp_implements[coid] = comp_reqs
+            for fid in _collect_struct_ids(comp.get("failure_modes"), "id"):
+                info.fmode_component[fid] = coid
+        info.implements |= comp_reqs
         info.failure_mode_ids |= _collect_struct_ids(comp.get("failure_modes"), "id")
     return info
 
@@ -451,15 +474,17 @@ def check_warning_ids(warnings: Optional[List[str]], label: str) -> List[str]:
     return errs
 
 
-def check_tst_ids(tests: List[Any], label: str) -> List[str]:
+def check_tst_ids(tests: List[Any], label: str, meta_mode: bool = False) -> List[str]:
     errs: List[str] = []
     seen: Set[str] = set()
+    rx = _TST_SHARDED_RE if meta_mode else _TST_RE
+    expected = "TST-<PREFIX>-NNN" if meta_mode else "TST-NNN"
     for i, t in enumerate(tests or []):
         tid = getattr(t, "tst_id", None)
         if not tid:
             continue  # required-ness handled by check_required
-        if not _TST_RE.match(str(tid)):
-            errs.append(f"{label}.tests[{i}].tst_id '{tid}' must match 'TST-NNN'")
+        if not rx.match(str(tid)):
+            errs.append(f"{label}.tests[{i}].tst_id '{tid}' must match '{expected}'")
         elif tid in seen:
             errs.append(f"{label}.tests[{i}].tst_id '{tid}' is duplicated")
         else:
@@ -568,8 +593,18 @@ def check_container(
     fams: Dict[str, Set[str]],
     arch: ArchInfo,
     docs_dir: Path,
+    meta_mode: bool = False,
 ) -> Tuple[List[str], List[str]]:
-    """Return (blocking_errors, non_blocking_warnings) for one container file."""
+    """Return (blocking_errors, non_blocking_warnings) for one container file.
+
+    `meta_mode` (the system strategy's `meta_corpus_dialect: true`) turns on the
+    covers-based coverage mechanism: a component is targeted when a test's
+    `covers` FRs intersect its `implements_requirements` (not only when
+    `component_ref` names it); covered NFRs resolve against the PRD NFR
+    catalogue rather than a component's FR-only `implements_requirements`; and a
+    failure_mode is exercised when its owning component is covers-targeted (or
+    via `targets_failure_mode`, or a WRN-NNN deferral). Off for a generated app.
+    """
     errs: List[str] = []
     warns: List[str] = []
     cid = m.container_id
@@ -629,10 +664,17 @@ def check_container(
             if (_FR_RE.match(up) or _NFR_RE.match(up)):
                 covered_reqs.add(up)
                 if ac.present and allowed_reqs and up not in allowed_reqs:
-                    errs.append(
-                        f"{label} tests[{i}].covers '{ref}' is not in the container's or "
-                        f"targeted component's implements_requirements"
-                    )
+                    # Meta-corpus: NFRs resolve against the PRD NFR catalogue
+                    # (already validated via all_ids above), not a component's
+                    # implements_requirements — which by house style lists only
+                    # FRs. FRs still must map to implements_requirements.
+                    if meta_mode and _NFR_RE.match(up):
+                        pass
+                    else:
+                        errs.append(
+                            f"{label} tests[{i}].covers '{ref}' is not in the container's or "
+                            f"targeted component's implements_requirements"
+                        )
         # risk targets
         if t.targets_failure_mode:
             targeted_fmodes.add(t.targets_failure_mode)
@@ -642,6 +684,15 @@ def check_container(
             targeted_concerns.add(t.targets_security_concern)
             if ac.present and t.targets_security_concern not in ac.security_concern_ids:
                 errs.append(f"{label} tests[{i}].targets_security_concern '{t.targets_security_concern}' is not a security_concerns id in ARCH__{cid}.yaml")
+
+    # Meta-corpus covers-based targeting (Part 4a): a component is "targeted"
+    # when a test covers a requirement it implements — not only when
+    # `component_ref` names it. Monotonic (adds coverage, never removes); gated
+    # on meta_mode so a generated app keeps the explicit component_ref rule.
+    if meta_mode:
+        for comp_id, reqs in ac.comp_implements.items():
+            if reqs & covered_reqs:
+                covered_components.add(comp_id)
 
     warnings = m.test_strategy_warnings or []
     deferred_reqs = _req_tokens_in(warnings)
@@ -653,13 +704,16 @@ def check_container(
     for r in sorted(allowed_reqs):
         if r not in covered_reqs and r not in deferred_reqs:
             errs.append(f"{label} requirement coverage: {r} is implemented by this container but no test covers it and no WRN-NNN defers it")
-    # Acceptance coverage (component granularity, trace-or-defer).
+    # Acceptance coverage (component granularity, trace-or-defer). In meta_mode
+    # `covered_components` also counts covers-targeted components (Part 4a/c).
     for comp in sorted(ac.components_with_acceptance):
         if comp not in covered_components and comp not in deferred_components:
             errs.append(f"{label} acceptance coverage: component '{comp}' declares acceptance_criteria but no test targets it and no WRN-NNN defers it")
-    # Risk coverage (trace-or-defer).
+    # Risk coverage (trace-or-defer). Part 4c: in meta_mode a failure_mode is
+    # also exercised when its owning component is covers-targeted.
     for fid in sorted(ac.failure_mode_ids):
-        if fid not in targeted_fmodes and fid not in deferred_fmodes:
+        covered_by_component = meta_mode and ac.fmode_component.get(fid) in covered_components
+        if fid not in targeted_fmodes and not covered_by_component and fid not in deferred_fmodes:
             errs.append(f"{label} risk coverage: failure_mode '{fid}' is not exercised by any test and no WRN-NNN defers it")
     for sid in sorted(ac.security_concern_ids):
         if sid not in targeted_concerns and sid not in deferred_concerns:
@@ -715,6 +769,7 @@ def validate_all(path: Path) -> int:
     warnings: List[str] = []           # always non-blocking
     statuses: List[Tuple[str, Optional[Status]]] = []
     tst_registry: Dict[str, List[str]] = {}   # tst_id -> files declaring it
+    meta_mode = False                  # system strategy's meta_corpus_dialect flag
 
     def _register_tsts(tests: List[Any], file_name: str) -> None:
         seen_here: Set[str] = set()
@@ -739,10 +794,11 @@ def validate_all(path: Path) -> int:
             parse_failed = True
             sysm = None
         if sysm is not None:
+            meta_mode = bool(sysm.meta_corpus_dialect)
             statuses.append((system_path.name, sysm.metadata.status))
             _register_tsts(sysm.tests or [], system_path.name)
             blocking += [f"{system_path.name}: {e}" for e in check_required_system(sysm)]
-            blocking += [f"{system_path.name}: {e}" for e in check_tst_ids(sysm.tests or [], system_path.stem)]
+            blocking += [f"{system_path.name}: {e}" for e in check_tst_ids(sysm.tests or [], system_path.stem, meta_mode)]
             blocking += [f"{system_path.name}: {e}" for e in check_warning_ids(sysm.test_strategy_warnings, system_path.stem)]
             s_errs, s_warns = check_system(sysm, fams, arch, docs_dir)
             blocking += [f"{system_path.name}: {e}" for e in s_errs]
@@ -765,9 +821,9 @@ def validate_all(path: Path) -> int:
         statuses.append((cp.name, cm.metadata.status))
         _register_tsts(cm.tests or [], cp.name)
         blocking += [f"{cp.name}: {e}" for e in check_required_container(cm)]
-        blocking += [f"{cp.name}: {e}" for e in check_tst_ids(cm.tests or [], cp.stem)]
+        blocking += [f"{cp.name}: {e}" for e in check_tst_ids(cm.tests or [], cp.stem, meta_mode)]
         blocking += [f"{cp.name}: {e}" for e in check_warning_ids(cm.test_strategy_warnings, cp.stem)]
-        c_errs, c_warns = check_container(cm, fams, arch, docs_dir)
+        c_errs, c_warns = check_container(cm, fams, arch, docs_dir, meta_mode)
         blocking += [f"{cp.name}: {e}" for e in c_errs]
         warnings += [f"{cp.name}: {w}" for w in c_warns]
 

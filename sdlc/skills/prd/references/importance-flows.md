@@ -340,6 +340,17 @@ that each cover the applicable slots, plus the free-text option. Don't
 ask the user "fill in these slots" — just make sure the candidate
 drafts you propose *do* cover them.
 
+**Deliverable-path markup.** When an Input/Output slot names a concrete
+repo path this product builds / writes / ships (a schema layer, a
+`tools/` validator, a `templates/` dir, a generated sidecar file), write
+that path as **inline code** (backticks) in the stored FR string. Leave
+bare: prose slashes (`and/or`), external product names (`PyPI/npm`),
+reference-ID lists (`FR-046/047`), and paths mentioned only as
+analogies. Downstream `sdlc-arch` cross-check #25 keys on the backticked
+paths to verify each build-time deliverable has an owning component +
+`code_location`; bare prose slashes are (correctly) ignored, so
+back-ticking is what makes a real deliverable path machine-checkable.
+
 **Don't only flatten the slots — also mint the linked instances.** Two
 slots have their own ID families, and burying them solely in the FR's
 prose makes them machine-unreachable for downstream coverage gates:

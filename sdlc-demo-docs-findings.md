@@ -1,4 +1,6 @@
-A review of the sdlc skills which used AICF `docs/` as a reference project that was created via those skills also pointed out some issues with 
+A review of the sdlc skills which used AICF `docs/` as a reference project that was created via those skills also pointed out some issues with the AICF docs. see below. Take it as guidance what to fix, and fix it.
+
+If something is unclear, ask me. Do not make changes beyond what is mentioned, but flag things if you encounter them on the way.
 
 ```md
 # Demo-docs findings — a fix prompt for a separate agent

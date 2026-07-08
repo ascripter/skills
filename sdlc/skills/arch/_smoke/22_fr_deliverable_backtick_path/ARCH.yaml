@@ -1,0 +1,45 @@
+# 22 — Cross-check #25 backtick-path gating. Single container `app`, one
+# component whose code_location is src/tasks/. FR-001 (below) names a
+# backticked path OUTSIDE that location, so #25 warns exactly once; the bare
+# prose slashes in the same FR are ignored. Expectation: validator exits 0
+# ([OK]) with a single cross-check-25 warning.
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-07-08T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "22222222-aaaa-2222-2222-222222222222"
+  status: "complete"
+
+architecture_pattern:
+  pattern: modular_monolith
+  pattern_confidence: confirmed
+  rationale: "Single CLI process; no API layer."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: app
+    archetype: backend-api
+    purpose: "CLI task manager."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "FR-001"
+    traces_prd_workflows:
+      - "WKF-001"
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: "docs/ARCH__app.yaml"
+
+edges: []
+
+non_container_features: []
+
+arch_warnings:
+  - "WRN-001: ownership.team left unset for solo project."

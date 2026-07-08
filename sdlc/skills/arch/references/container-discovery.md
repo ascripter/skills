@@ -221,7 +221,10 @@ Reflect, in order, on:
    (see `component-discovery.md` → Pass 6), occasionally as a dedicated
    tooling/content container. Runtime-driven seeding (Passes 1–5) never
    proposes these, and a deliverable with no owning container means the
-   downstream `task` stage can never schedule building it.
+   downstream `task` stage can never schedule building it. (The validator's
+   advisory #25 only auto-flags paths written as inline code in FR text; your
+   sweep reads all prose, so backtick a genuine deliverable path in the FR so
+   #25 can enforce its coverage.)
 
 Surface the concrete missed **candidate containers** — not category
 labels — via **one multi-select `AskUserQuestion`** ("I may have missed

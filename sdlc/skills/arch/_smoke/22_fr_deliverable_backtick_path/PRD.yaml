@@ -1,0 +1,25 @@
+# Minimal PRD stub for the cross-check #25 backtick-path fixture.
+# FR-001's text mixes five token classes so #25's backtick + path-shape
+# gating is fully exercised:
+#   * `tools/gen/validate.py`  — backticked, path shape, NOT covered -> WARNS
+#   * `src/tasks/models.py`    — backticked, path shape, covered     -> no warn
+#   * `high/low`               — backticked but NO path shape (enum)  -> no warn
+#   * PyPI/npm, image/audio/3D — bare prose slashes                   -> no warn
+#   * FR-002/003, and/or       — bare ID-list / prose                 -> no warn
+# Expectation: cross-check #25 emits EXACTLY ONE warning, naming
+# 'tools/gen/validate.py'. Advisory, so the validator still exits 0.
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-07-08T12:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "22222222-2222-2222-2222-222222222222"
+  monorepo: false
+  status: "complete"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Create and delete tasks from the CLI. The build ships a repo validator at `tools/gen/validate.py` and generated models under `src/tasks/models.py`; priority is a `high/low` flag; distribution via PyPI/npm and asset formats like image/audio/3D stay out of scope (see FR-002/003), and a task may be created and/or deleted."
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Capture and remove a task from the CLI."
