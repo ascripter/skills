@@ -135,6 +135,20 @@ reason** — a bare "WRN-016: TST-019" is valid to the regex but useless to a
 reviewer. Don't defer to dodge work; defer when a separate task would be noise or
 when the work genuinely lives elsewhere.
 
+**A `work_units_waiver` carrying a derivation rule is NOT a deferral — expand
+it.** When an ARCH `content_asset` (or similar) component declares
+`work_units: []` plus a waiver like *"one authoring task per template file
+under templates/ — derived by task, not enumerated here"*, the waiver is a
+**promise addressed to this skill**: apply the rule and emit the concrete
+authoring tasks (one `kind: implementation`, `unit_kind: content` task per
+file the rule yields, each with a single `target_files` entry under the
+component's `code_location` and `component_ref` set). A waivered component
+whose derivation rule is neither expanded into tasks nor explicitly
+re-deferred with a WRN naming the component and the reason means the shipped
+files are produced by nobody — they pass every arch/task gate and silently
+never exist. The scope-completeness sweep must flag any waivered component
+with zero derived tasks.
+
 The user can trigger a deferral mid-interview by typing `defer <id>` — log the
 WRN-NNN with the reason they give.
 

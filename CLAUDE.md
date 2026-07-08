@@ -12,49 +12,59 @@ project from a structured chain of artifacts. Skills are invoked as
 
 | Skill        | Folder              | Inputs                                                                                       | Output(s)                                            |
 |--------------|---------------------|----------------------------------------------------------------------------------------------|------------------------------------------------------|
-| `setup`      | `sdlc/skills/setup` | run ONCE before `prd`; current project root                                                  | `.claude/sdlc/docs_index.py`, `docs/*.yaml` PostToolUse hook in `.claude/settings.json`, `.claude/rules/sdlc-docs-access.md`, `docs/INDEX.yaml` |
+| `setup`      | `sdlc/skills/setup` | run ONCE before `prd`; current project root                                                  | `.claude/sdlc/docs_index.py`, docs PostToolUse hook in `.claude/settings.json` (canonical `docs/*.yaml` **and** `docs/TASKS*.json`), `.claude/rules/sdlc-docs-access.md`, `docs/INDEX.yaml`, `## SDLC Documents` pointer block in `CLAUDE.md` |
 | `prd`        | `sdlc/skills/prd`   | repo scan + ideation + interview                                                             | `docs/PRD.yaml`                                      |
 | `ux`         | `sdlc/skills/ux`    | `docs/PRD.yaml` + interview                                                                  | `docs/UX.yaml`, `docs/UX__<surface>.yaml`            |
 | `design`     | `sdlc/skills/design`| `docs/PRD.yaml` + `docs/UX.yaml` (+ `UX__*`) + interview                                     | `docs/DESIGN.yaml`, `docs/DESIGN__tokens.yaml` (token UIs), `docs/DESIGN__assets.yaml` (asset pipelines) |
-| `data`       | `sdlc/skills/data`  | `docs/PRD.yaml` + `docs/UX.yaml` + interview                                                 | `docs/DATA-MODEL.yaml`                               |
+| `data`       | `sdlc/skills/data`  | `docs/PRD.yaml` (+ `docs/UX.yaml` (+ `UX__*`) — strongly recommended) + interview            | `docs/DATA-MODEL.yaml`                               |
 | `api`        | `sdlc/skills/api`   | `docs/PRD.yaml` + `docs/UX.yaml` + `docs/DATA-MODEL.yaml` + interview                        | `docs/API.yaml`, `docs/API__<resource>.yaml`         |
 | `arch`       | `sdlc/skills/arch`  | `docs/PRD.yaml` + `docs/UX.yaml` (+ `UX__*`) + `docs/DATA-MODEL.yaml` (+ `docs/API.yaml` (+ `API__*`)) + interview                              | `docs/ARCH.yaml`, `docs/ARCH__<container>.yaml`      |
 | `test`       | `sdlc/skills/test`  | `docs/PRD.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH.yaml` (+ `docs/ARCH__<container>.yaml` in container mode) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) + interview | `docs/TEST-STRATEGY.yaml` (system mode), `docs/TEST-STRATEGY__<container>.yaml` (container mode) |
 | `task`       | `sdlc/skills/task`  | **system:** `docs/ARCH.yaml` + `docs/TEST-STRATEGY.yaml` + interview; **container:** `docs/ARCH__<container>.yaml` + `docs/TEST-STRATEGY__<container>.yaml` (+ `docs/DATA-MODEL.yaml`) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) (+ `docs/DESIGN.yaml` (+ `DESIGN__*`)) + interview; both read `docs/PRD.yaml` for FR/NFR id resolution. UX/API/DATA/DESIGN drive the surface/operation/entity/design coverage gates | `docs/TASKS.json` (system mode), `docs/TASKS__<container>.json` (container mode) |
-| `code`       | `sdlc/skills/code`  | `docs/TASKS.json` + `docs/TASKS__<container>.json` (must be `complete` + task-validator-green; v1.3 tasks are self-contained) + `docs/ARCH__<container>.yaml` (tech-stack slice; full contract fallback for pre-1.3 artifacts) (+ `docs/TEST-STRATEGY__<container>.yaml` pre-1.3) (+ `docs/DATA-MODEL.yaml` entity slices) — **no interview** | generated source files at each task's `target_files`, `docs/CODE-MANIFEST.json`, execution ledger in `.claude/skills-state/sdlc-code.state.yaml` |
-| `deploy`     | `sdlc/skills/deploy` | `docs/ARCH.yaml` + interview                                                                | `docs/DEPLOY.yaml`                                   |
+| `code`       | `sdlc/skills/code`  | `docs/TASKS.json` + `docs/TASKS__<container>.json` (must be `complete` + task-validator-green; v1.4 tasks are self-contained) + `docs/ARCH__<container>.yaml` (tech-stack slice; full contract fallback for pre-1.4 artifacts) (+ `docs/TEST-STRATEGY__<container>.yaml` pre-1.3) (+ `docs/DATA-MODEL.yaml` entity slices pre-1.4) — **no interview** | generated source files at each task's `target_files`, `docs/CODE-MANIFEST.json`, execution ledger in `.claude/skills-state/sdlc-code.state.yaml` |
+| `deploy`     | `sdlc/skills/deploy` *(planned — not yet implemented)* | `docs/ARCH.yaml` + interview                                                | `docs/DEPLOY.yaml`                                   |
 
 **Downstream consumers of every output are AI agents, not humans.** Optimize artifacts for unambiguous machine consumption (typed enums, no prose blobs, explicit `null` for unanswered fields).
 Inputs in round brackets `()` are optional to each skill and taken if present.
 
 `code` is an **execution skill**, not an interview skill — the Stage-14 half of
 the factory. It consumes the task graph and *writes the actual source files*
-each task's provenance pins (`target_files` / `target_symbol`), interleaving
-implementation tasks with their test tasks (test-first ready-queue policy) and
-running a test-and-heal loop (≤3 attempts; attempt 3 escalates to a fresh opus
-subagent). Tasks are **self-contained** as of task-artifact v1.3: each
-implementation task embeds its `interface_contract` (and `unit_kind` /
-`unit_summary`), each test task its `test_spec`, so codegen needs no per-task
-ARCH/TEST-STRATEGY lookups — only the container's tech stack stays upstream. Three forms: `/sdlc:code` (whole remaining stitched graph),
-`/sdlc:code <container>` (one subgraph), `/sdlc:code --next` (next incomplete
-unit in `build_order`). Its per-task execution ledger
-(`.claude/skills-state/sdlc-code.state.yaml`) makes every invocation resumable
-and idempotent; generated symbols carry greppable `sdlc-code: <cid>/TSK-NNN`
-markers; `docs/CODE-MANIFEST.json` is the machine-readable ledger downstream
+each task's provenance pins (`target_files` / `target_symbol`). The session
+acts as a **manager** that dispatches waves of up to 3 parallel, non-interactive
+worker subagents; each worker executes one work unit (implementation task + its
+test task, test-first) with a test-and-heal loop (≤3 attempts; attempt 3
+escalates to a manager-dispatched fresh opus subagent). Waves only contain
+tasks with pairwise-disjoint `target_files`; the manager is the sole ledger
+writer, and integration/container/system test rings run serialized between
+waves. Tasks are **self-contained** as of task-artifact v1.4: implementation
+tasks embed their `interface_contract` (and `unit_kind` / `unit_summary`), test
+tasks their `test_spec`, and integration/migration/design/config tasks their
+`operation_contract` / `entity_slice` / `design_spec` / `config_keys` slices,
+so codegen needs no per-task ARCH/TEST-STRATEGY/API/DATA/DESIGN lookups — only
+the container's tech stack stays upstream. Three forms: `/sdlc:code`
+(container-by-container through `build_order`, pausing at each container
+boundary with a continue/stop gate), `/sdlc:code <container>` (one subgraph,
+then stop), `/sdlc:code --next` (next incomplete unit in `build_order`). Its
+per-task execution ledger (`.claude/skills-state/sdlc-code.state.yaml`) makes
+every invocation resumable and idempotent; generated symbols carry greppable
+`sdlc-code: <cid>/TSK-NNN` markers; `docs/CODE-MANIFEST.json` is the
+machine-readable ledger (with per-file `verified` level) downstream
 verify/deploy stages consume. Like `setup`, it is exempt from the interview
 contract below (no themes, no questions file) — HITL is a plan-approval gate,
-conflict/failure gates, and a close report. It honours the downstream-rejection
-rule (refuses draft/invalid task graphs) and never edits `docs/*.yaml` or the
-TASKS files.
+container-boundary gates, conflict/failure gates, and a close report. It
+honours the downstream-rejection rule (refuses draft/invalid task graphs) and
+never edits `docs/*.yaml` or the TASKS files.
 
 `setup` is infrastructure, not an artifact producer. It runs once before `prd`
 and wires a **generated `docs/INDEX.yaml`** — a pure line-range location map over
-the large specs (`PRD.yaml`, `DATA-MODEL.yaml`) — plus a `Write|Edit` PostToolUse
-hook that refreshes it on every `docs/*.yaml` edit, and the
-`.claude/rules/sdlc-docs-access.md` slice-don't-slurp protocol. Each artifact
-skill reads large upstream docs **by slice** via the index (Phase 2) and
-refreshes it after writing (Phase 8). The generator (`docs_index.py`) is
-stdlib-only and copied into the consumer project at `.claude/sdlc/docs_index.py`.
+the large specs (`PRD.yaml`, `DATA-MODEL.yaml`, `TASKS*.json`, …) plus a `shards:`
+inventory of every `docs/*__*` sub-artifact — plus a `Write|Edit` PostToolUse
+hook that refreshes it on every canonical `docs/*.yaml` / `docs/TASKS*.json`
+edit, and the `.claude/rules/sdlc-docs-access.md` slice-don't-slurp protocol.
+Each artifact skill reads large upstream docs **by slice** via the index
+(Phase 2) and refreshes it after writing (Phase 8). The generator
+(`docs_index.py`) is stdlib-only and copied into the consumer project at
+`.claude/sdlc/docs_index.py`; re-running `/sdlc:setup` upgrades an installed copy.
 
 
 ## Canonical naming
@@ -98,7 +108,11 @@ user-invocable: true
 disable-model-invocation: true   # always — these skills are deliberate, not ambient
 model: opus                      # opus | sonnet | opusplan ; sonnet only when the
                                  # logic is genuinely simple and shallow-reasoning
-effort: <low|medium|high|xhigh|max>
+effort: xhigh                    # xhigh is the default for every interview/artifact
+                                 # skill. Sanctioned exceptions (do not "fix" them):
+                                 # setup = sonnet/medium (deterministic installer),
+                                 # code = sonnet/high (100+-task codegen runs; heal
+                                 # attempt 3 already escalates to an opus subagent)
 allowed-tools: Read Write(CLAUDE.md) Write(docs/<OUTPUT>.yaml) Write(.claude/skills-state/sdlc-<skill>.state.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion
 ---
 ```

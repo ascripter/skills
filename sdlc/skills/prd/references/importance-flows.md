@@ -340,6 +340,24 @@ that each cover the applicable slots, plus the free-text option. Don't
 ask the user "fill in these slots" — just make sure the candidate
 drafts you propose *do* cover them.
 
+**Don't only flatten the slots — also mint the linked instances.** Two
+slots have their own ID families, and burying them solely in the FR's
+prose makes them machine-unreachable for downstream coverage gates:
+
+- an **Edge cases** slot answer that names concrete cases → ALSO mint one
+  `EDG-NNN` per case under `use_cases.edge_cases`, naming the owning FR id
+  inside the string ("EDG-004: FR-002 — comment body over 10k chars is
+  rejected with a clear error");
+- a done-condition the detail implies → ALSO mint an `ACR-NNN` under
+  `success_metrics.acceptance_criteria`, naming the FR id ("ACR-012:
+  FR-003 — marking a task done persists across a read"). The validator
+  advises (never blocks) on every must-have FR no ACR names — this is
+  where those entries come from.
+
+The FR prose still summarizes both (it must read standalone); the minted
+EDG/ACR entries are the typed, per-requirement instances `test` and
+`task` consume.
+
 ```
 header: "Detail"
 question: "Detail for '<title>' — pick the framing or write your own."

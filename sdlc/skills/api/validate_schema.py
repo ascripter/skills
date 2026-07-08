@@ -257,6 +257,12 @@ class ExternalDependency(_ThemeBase):
     docs_url: Optional[str] = None
 
 
+class SdkAndClients(_ThemeBase):
+    generated_sdks: Optional[str] = None
+    client_languages: Optional[List[str]] = None
+    distribution: Optional[str] = None
+
+
 class ResourceInventoryItem(_ThemeBase):
     resource_id: Optional[str] = None
     base_path: Optional[str] = None
@@ -307,6 +313,7 @@ class APIProduct(_ThemeBase):
     rate_limiting: Optional[RateLimiting] = None
     events: Optional[Events] = None
     external_dependencies: Optional[List[ExternalDependency]] = None
+    sdk_and_clients: Optional[SdkAndClients] = None
     shared_schemas: Optional[Dict[str, Any]] = None
     resource_inventory: Optional[List[ResourceInventoryItem]] = None
     non_api_features: Optional[List[str]] = None
@@ -336,6 +343,7 @@ class API(BaseModel):
     rate_limiting: Optional[RateLimiting] = None
     events: Optional[Events] = None
     external_dependencies: Optional[List[ExternalDependency]] = None
+    sdk_and_clients: Optional[SdkAndClients] = None
     shared_schemas: Optional[Dict[str, Any]] = None
     resource_inventory: Optional[List[ResourceInventoryItem]] = None
     non_api_features: Optional[List[str]] = None
@@ -356,6 +364,7 @@ class API(BaseModel):
             self.rate_limiting,
             self.events,
             self.external_dependencies,
+            self.sdk_and_clients,
             self.shared_schemas,
             self.resource_inventory,
         ]

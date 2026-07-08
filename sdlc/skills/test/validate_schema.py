@@ -214,7 +214,10 @@ class ContainerTest(BaseModel):
     tier: Optional[TestTier] = None
     description: Optional[str] = None
     component_ref: Optional[str] = None
-    targets_operation: Optional[str] = None   # OPN-NNN of component_ref
+    targets_work_unit: Optional[str] = None   # work_units[].name of component_ref
+    targets_operation: Optional[str] = None   # DEPRECATED pre-1.2 alias (OPN-NNN of the
+                                              # retired ARCH operations[] family); parsed
+                                              # for backward compat, warns, never blocks
     directives: Optional[List[str]] = None
     covers: Optional[List[str]] = None
     targets_failure_mode: Optional[str] = None
@@ -250,7 +253,6 @@ _FR_RE = re.compile(r"^FR-\d+$", re.IGNORECASE)
 _NFR_RE = re.compile(r"^NFR-\d+$", re.IGNORECASE)
 _ACR_RE = re.compile(r"^ACR-\d+$", re.IGNORECASE)
 _WKF_RE = re.compile(r"^WKF-\d+$", re.IGNORECASE)
-_OPN_RE = re.compile(r"^OPN-\d{3,}$", re.IGNORECASE)
 
 _REQ_TOKEN_RE = re.compile(r"\b(?:FR|NFR|ACR|WKF)-\d+\b", re.IGNORECASE)
 
@@ -393,8 +395,8 @@ class ArchContainerInfo:
         self.components_with_acceptance: Set[str] = set()
         self.failure_mode_ids: Set[str] = set()
         self.security_concern_ids: Set[str] = set()
-        self.comp_ops: Dict[str, Set[str]] = {}           # component_id -> {OPN-NNN}
-        self.all_ops: Set[str] = set()                    # union of every component's op_ids
+        self.comp_units: Dict[str, Set[str]] = {}         # component_id -> {work_units[].name}
+                                                          # (names unique only per component)
 
 
 def _collect_struct_ids(items: Any, key: str) -> Set[str]:
@@ -426,12 +428,11 @@ def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
             info.component_ids.add(coid)
             if comp.get("acceptance_criteria"):
                 info.components_with_acceptance.add(coid)
-            ops: Set[str] = set()
-            for op in comp.get("operations") or []:
-                if isinstance(op, dict) and op.get("op_id"):
-                    ops.add(str(op["op_id"]).strip())
-            info.comp_ops[coid] = ops
-            info.all_ops |= ops
+            units: Set[str] = set()
+            for wu in comp.get("work_units") or []:
+                if isinstance(wu, dict) and wu.get("name"):
+                    units.add(str(wu["name"]).strip())
+            info.comp_units[coid] = units
         info.implements |= _req_tokens_in(comp.get("implements_requirements") or [])
         info.failure_mode_ids |= _collect_struct_ids(comp.get("failure_modes"), "id")
     return info
@@ -591,7 +592,7 @@ def check_container(
     covered_components: Set[str] = set()
     targeted_fmodes: Set[str] = set()
     targeted_concerns: Set[str] = set()
-    targeted_ops: Set[str] = set()
+    targeted_units: Set[str] = set()          # qualified "<component_id>/<unit name>"
 
     for i, t in enumerate(m.tests or []):
         # component_ref integrity
@@ -601,21 +602,22 @@ def check_container(
                 errs.append(f"{label} tests[{i}].component_ref '{t.component_ref}' is not a component in ARCH__{cid}.yaml")
         if t.tier == TestTier.unit and not t.component_ref:
             errs.append(f"{label} tests[{i}] is unit-tier but has no component_ref")
-        # targets_operation integrity — the atomic test grain (OPN-NNN of the
-        # targeted component).
-        if t.targets_operation:
-            op = str(t.targets_operation).strip()
-            if not _OPN_RE.match(op):
-                errs.append(f"{label} tests[{i}].targets_operation '{t.targets_operation}' is not an OPN-NNN id")
+        # targets_work_unit integrity — the atomic test grain (work_units[].name
+        # of the targeted component; names are unique only within a component,
+        # so component_ref is required alongside).
+        if t.targets_work_unit:
+            unit = str(t.targets_work_unit).strip()
+            if not t.component_ref:
+                errs.append(f"{label} tests[{i}].targets_work_unit '{unit}' set without component_ref — work_unit names only resolve within a component")
             else:
-                ou = op.upper()
-                targeted_ops.add(ou)
-                if ac.present and ac.all_ops and ou not in {x.upper() for x in ac.all_ops}:
-                    errs.append(f"{label} tests[{i}].targets_operation '{op}' is not an operations[].op_id in ARCH__{cid}.yaml")
-                elif t.component_ref:
-                    comp_ops = {x.upper() for x in ac.comp_ops.get(t.component_ref, set())}
-                    if comp_ops and ou not in comp_ops:
-                        errs.append(f"{label} tests[{i}].targets_operation '{op}' is not an operation of component '{t.component_ref}'")
+                targeted_units.add(f"{t.component_ref}/{unit}")
+                comp_units = ac.comp_units.get(t.component_ref, set())
+                if ac.present and comp_units and unit not in comp_units:
+                    errs.append(f"{label} tests[{i}].targets_work_unit '{unit}' is not a work_units[].name of component '{t.component_ref}' in ARCH__{cid}.yaml")
+        # Legacy pre-1.2 alias: parsed, warned about, never blocks (ARCH no
+        # longer emits operations[], so OPN ids resolve against nothing).
+        if t.targets_operation:
+            warns.append(f"{label} tests[{i}].targets_operation '{t.targets_operation}' is deprecated (OPN family retired) — migrate to targets_work_unit referencing ARCH work_units[].name")
         # covers integrity
         for ref in t.covers or []:
             up = str(ref).upper()
@@ -662,14 +664,16 @@ def check_container(
     for sid in sorted(ac.security_concern_ids):
         if sid not in targeted_concerns and sid not in deferred_concerns:
             errs.append(f"{label} risk coverage: security_concern '{sid}' is not exercised by any test and no WRN-NNN defers it")
-    # Operation coverage (ADVISORY — never blocks). A test strategy is risk-driven,
-    # so a trivial operation may legitimately have no dedicated test; we surface the
-    # gap rather than force it. No-op when no component declares operations.
-    if ac.all_ops:
-        deferred_ops = {x.upper() for x in _deferred_literals(warnings, ac.all_ops)}
-        for op in sorted({x.upper() for x in ac.all_ops}):
-            if op not in targeted_ops and op not in deferred_ops:
-                warns.append(f"{label} operation coverage: operation '{op}' (ARCH__{cid}) is exercised by no test (targets_operation) — add a test or defer via a WRN-NNN")
+    # Work-unit coverage (ADVISORY — never blocks). A test strategy is risk-driven,
+    # so a trivial work unit may legitimately have no dedicated test; we surface the
+    # gap rather than force it. No-op when no component declares work_units.
+    all_unit_names = {u for units in ac.comp_units.values() for u in units}
+    if all_unit_names:
+        deferred_units = _deferred_literals(warnings, all_unit_names)
+        for comp_id in sorted(ac.comp_units):
+            for unit in sorted(ac.comp_units[comp_id]):
+                if f"{comp_id}/{unit}" not in targeted_units and unit not in deferred_units:
+                    warns.append(f"{label} work-unit coverage: '{comp_id}/{unit}' (ARCH__{cid}) is exercised by no test (targets_work_unit) — add a test or defer via a WRN-NNN")
     return errs, warns
 
 

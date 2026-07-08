@@ -20,7 +20,7 @@ description: >
 user-invocable: true
 disable-model-invocation: true
 model: opus
-effort: high
+effort: xhigh
 allowed-tools: Read Write(CLAUDE.md) Write(docs/TEST-STRATEGY.yaml) Write(docs/TEST-STRATEGY__*.yaml) Write(.claude/skills-state/sdlc-test.state.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion
 ---
 
@@ -481,17 +481,21 @@ Walk the themes in `test-questions.yaml` order. Themes are tagged
    `tst_id`, `name`, `tier` (∈ unit / integration / property / contract /
    load / security / accessibility), `description`, `component_ref` (a
    `components[].component_id` from `ARCH__<container>.yaml`, when the test
-   targets one), `targets_operation` (the component `operations[].op_id` /
-   `OPN-NNN` this test exercises — the atomic test grain; seed one unit test per
-   operation, mirroring `task`'s per-operation slicing), `directives`, `covers`
+   targets one), `targets_work_unit` (the component `work_units[].name` this
+   test exercises — the atomic test grain; work units are name-addressed and
+   unique only within their component, so `component_ref` is required alongside;
+   seed one unit test per work unit, mirroring `task`'s per-work_unit slicing),
+   `directives`, `covers`
    (FR/NFR/ACR), `targets_failure_mode` / `targets_security_concern` (the ARCH
    risk id this negative case exercises), `priority`, `setup`, `fixtures`,
    `mocks`, `acceptance`. Run the scope-completeness sweep after the per-item
    loop. The coverage gate (Phase 7) requires every container/component
    requirement, acceptance criterion, failure mode, and security concern to be
-   covered or deferred; component operations are an **advisory** coverage layer
-   (seed one test per operation; a gap warns but never blocks — a trivial getter
-   may go untested or be deferred with a `WRN-NNN`).
+   covered or deferred; component work units are an **advisory** coverage layer
+   (seed one test per work unit; a gap warns but never blocks — a trivial getter
+   may go untested or be deferred with a `WRN-NNN`). A pre-1.2 artifact's
+   `targets_operation` (retired `OPN-NNN` family) is parsed as a deprecated
+   alias — the validator warns but never blocks.
 
 #### Tier mechanics
 
@@ -614,8 +618,14 @@ reflects the new content right away (the setup hook also does this, but a hook
 added mid-session only activates next session). Harmless no-op if not installed.
 
 After the CLAUDE.md write succeeds: set the active sub-session's
-`status: complete` in the state file (keep the file as audit trail) and tell
-the user where the artifacts live and what `--next` would do.
+`status: complete` in the state file (keep the file as audit trail), tell
+the user where the artifacts live and what `--next` would do, and point at
+what comes next:
+
+> This container's test strategy is complete. Run `/sdlc:test --next` for the
+> next container, or `/sdlc:task` once every container has a strategy (it
+> consumes `docs/ARCH.yaml` + `docs/TEST-STRATEGY.yaml` and the per-container
+> files).
 
 ## Test tiers — the typed vocabulary
 

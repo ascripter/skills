@@ -146,11 +146,13 @@ states:
 
 # -----------------------------------------------------------------------------
 # interactions — ordered list of user actions on this surface.
-# Each interaction is one event handler downstream.
+# Each interaction is one event handler downstream. TYPED — the validator
+# enforces this exact field set (extra keys tolerated, wrong types rejected),
+# so every run emits the same interaction shape for codegen.
 # -----------------------------------------------------------------------------
-interactions:                   # list[Interaction]
+interactions:                   # list[Interaction]; VALIDATED
   # Each Interaction:
-  #   - id: kebab-case unique within this surface
+  #   - id: kebab-case unique within this surface (string)
   #     actor: user | system
   #     trigger: click | submit | keypress | hover | focus | blur |
   #              long_press | swipe | drag | drop | timer | navigation |
@@ -168,7 +170,7 @@ interactions:                   # list[Interaction]
 # If the catalog grows large, a future split into a separate
 # `docs/UX-COMPONENTS.yaml` is an easy migration path.
 # -----------------------------------------------------------------------------
-components:                     # list[Component]
+components:                     # list[Component]; VALIDATED (typed field set)
   # Each Component:
   #   - id: kebab-case unique within this surface
   #     type: button | input | textarea | select | checkbox | radio |
@@ -184,12 +186,20 @@ components:                     # list[Component]
   #       placeholder: <copy or i18n_key>
   #     aria_role: <ARIA role string> | null
   #     keyboard_shortcuts: list[string]  # e.g. ["Cmd+K","Enter"]
+  #     binds: list[string]               # "Entity.field" data bindings — which
+  #                                       # DATA-MODEL field this input/display
+  #                                       # component reads or writes (e.g.
+  #                                       # ["Task.title"]). OPTIONAL, but it is
+  #                                       # what lets codegen scaffold a form
+  #                                       # without guessing field mappings;
+  #                                       # entity names should match PRD ENT /
+  #                                       # DATA-MODEL entities.
   null
 
 # -----------------------------------------------------------------------------
 # validation_rules — for input fields on this surface
 # -----------------------------------------------------------------------------
-validation_rules:               # list[ValidationRule]
+validation_rules:               # list[ValidationRule]; VALIDATED (typed field set)
   # Each ValidationRule:
   #   - field: <component_id of the input>
   #     rules: list[string]    # e.g. ["required","max_length=140","regex=^[A-Z]"]

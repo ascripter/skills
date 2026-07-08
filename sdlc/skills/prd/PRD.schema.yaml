@@ -144,7 +144,12 @@ use_cases:
   secondary_jobs: null        # supporting JTBD (list[string]); continues the JTB-NNN
                               # sequence from primary_jobs_to_be_done
   edge_cases: null            # explicit edge cases worth handling (list[string]);
-                              # each item: "EDG-NNN: <edge case>"
+                              # each item: "EDG-NNN: <edge case>". When an edge
+                              # case stresses one specific feature, name its
+                              # FR-NNN inside the string ("EDG-004: FR-002 —
+                              # comment body over 10k chars is rejected with a
+                              # clear error") so downstream test/task can slice
+                              # edge cases per requirement.
 
 # -----------------------------------------------------------------------------
 # functional_requirements — what the product must, should, won't do
@@ -294,8 +299,13 @@ success_metrics:
                               # its ACR→TST coverage gate against — a PRD that
                               # emits none leaves that gate mechanism-only.
                               # Phrase each criterion as an observable,
-                              # verifiable outcome; name the FR it accepts
-                              # when it accepts one specific feature.
+                              # verifiable outcome, and NAME THE FR it accepts
+                              # by id inside the string when it accepts one
+                              # specific feature ("ACR-012: FR-003 — marking a
+                              # task done persists across a read"). The FR-NNN
+                              # token is the machine-extractable FR↔ACR link;
+                              # the validator emits an ADVISORY (never blocks)
+                              # for every must-have FR no criterion names.
   definition_of_done: null    # team-level DoD (list[string])
   user_satisfaction_target: null  # e.g. "NPS > 30", "CSAT 4.2/5" (string|null)
 

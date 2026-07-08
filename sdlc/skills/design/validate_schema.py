@@ -162,6 +162,17 @@ class BrandIdentity(_Block):
     imagery_style: Optional[str] = None
 
 
+class SurfaceOverride(_Block):
+    """Per-surface styling deviation on top of the global system. Keyed by
+    SCR-NNN in surface_overrides. Presence of an entry = concrete per-surface
+    design work `task` derives (in addition to the global theme/token task)."""
+
+    density: Optional[Literal["compact", "comfortable", "spacious"]] = None
+    token_overrides: Optional[Dict[str, Any]] = None
+    component_variants: Optional[Dict[str, Any]] = None
+    notes: Optional[str] = None
+
+
 class DesignMetadata(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -187,6 +198,7 @@ class DesignProduct(_Block):
     brand_identity: Optional[BrandIdentity] = None
     implements_requirements: Optional[List[str]] = None
     traces_ux_surfaces: Optional[List[str]] = None
+    surface_overrides: Optional[Dict[str, SurfaceOverride]] = None
 
 
 class Design(BaseModel):
@@ -206,6 +218,7 @@ class Design(BaseModel):
     brand_identity: Optional[BrandIdentity] = None
     implements_requirements: Optional[List[str]] = None
     traces_ux_surfaces: Optional[List[str]] = None
+    surface_overrides: Optional[Dict[str, SurfaceOverride]] = None
 
     # Multi-product mode
     products: Optional[Dict[str, DesignProduct]] = None
@@ -219,6 +232,7 @@ class Design(BaseModel):
             self.brand_identity,
             self.implements_requirements,
             self.traces_ux_surfaces,
+            self.surface_overrides,
         ]
         any_single = any(t is not None for t in single)
         if self.metadata.monorepo:
@@ -473,6 +487,13 @@ def check_design_id_prefixes(design: Design) -> List[str]:
                 f"{label}traces_ux_surfaces",
             )
         )
+        overrides = getattr(scope, "surface_overrides", None)
+        if overrides:
+            for key in overrides:
+                if not isinstance(key, str) or not SCR_ID_RE.match(key.strip()):
+                    errors.append(
+                        f"{label}surface_overrides: key '{key}' must be an 'SCR-NNN' id"
+                    )
     return errors
 
 

@@ -446,6 +446,40 @@ class SurfaceStates(_ThemeBase):
     success: Optional[Any] = None
 
 
+class SurfaceInteraction(_ThemeBase):
+    """One event handler downstream — typed so every run emits the same shape."""
+
+    id: Optional[str] = None                    # kebab-case, unique per surface
+    actor: Optional[str] = None                 # user | system
+    trigger: Optional[str] = None               # click | submit | keypress | ... | cli_invoke
+    trigger_target: Optional[str] = None        # component_id | "surface"
+    preconditions: Optional[List[str]] = None
+    effects: Optional[List[str]] = None
+    target_surface: Optional[str] = None        # SCR-NNN | surface_id | null
+    error_paths: Optional[List[str]] = None
+
+
+class SurfaceComponent(_ThemeBase):
+    """One component to instantiate — typed so codegen sees a stable contract."""
+
+    id: Optional[str] = None                    # kebab-case, unique per surface
+    type: Optional[str] = None                  # button | input | table | ... | custom
+    library_ref: Optional[str] = None
+    variants: Optional[List[str]] = None
+    content_slots: Optional[Dict[str, Any]] = None
+    aria_role: Optional[str] = None
+    keyboard_shortcuts: Optional[List[str]] = None
+    binds: Optional[List[str]] = None           # "Entity.field" data bindings — which
+                                                # DATA-MODEL field each input/display
+                                                # component reads or writes
+
+
+class SurfaceValidationRule(_ThemeBase):
+    field: Optional[str] = None                 # component_id of the input
+    rules: Optional[List[str]] = None           # ["required", "max_length=140", ...]
+    error_message: Optional[str] = None
+
+
 class UXSurface(BaseModel):
     """Top-level per-surface document."""
 
@@ -463,9 +497,9 @@ class UXSurface(BaseModel):
     exit_conditions: Optional[List[str]] = None
     layout: Optional[SurfaceLayout] = None
     states: Optional[SurfaceStates] = None
-    interactions: Optional[List[Any]] = None
-    components: Optional[List[Any]] = None
-    validation_rules: Optional[List[Any]] = None
+    interactions: Optional[List[SurfaceInteraction]] = None
+    components: Optional[List[SurfaceComponent]] = None
+    validation_rules: Optional[List[SurfaceValidationRule]] = None
     accessibility_notes: Optional[Any] = None  # list[string] | "inherit" | null
     traces_workflows: Optional[List[str]] = None
     implements_requirements: Optional[List[str]] = None
@@ -786,6 +820,87 @@ def check_coverage(prd_ids: List[str], traced_ids: List[str]) -> List[str]:
     return [w for w in prd_ids if w not in traced_set]
 
 
+_FR_HEAD_EXTRACT_RE = re.compile(r"^(FR-\d+)(?::|\s|$)")
+_FR_TOKEN_RE = re.compile(r"\bFR-\d+\b", re.IGNORECASE)
+
+
+def load_prd_must_have_fr_ids(prd_path: Path) -> List[str]:
+    """FR-NNN ids from PRD functional_requirements.must_have_features
+    (union across products in monorepo mode). Empty when PRD is absent."""
+    if not prd_path.exists():
+        return []
+    try:
+        raw = yaml.safe_load(prd_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return []
+    if not isinstance(raw, dict):
+        return []
+    ids: List[str] = []
+
+    def _collect(scope: Any) -> None:
+        if not isinstance(scope, dict):
+            return
+        fr = scope.get("functional_requirements") or {}
+        for entry in (fr.get("must_have_features") or []) if isinstance(fr, dict) else []:
+            if isinstance(entry, str):
+                m = _FR_HEAD_EXTRACT_RE.match(entry.strip())
+                if m:
+                    ids.append(m.group(1))
+
+    if (raw.get("metadata") or {}).get("monorepo"):
+        for prod in (raw.get("products") or {}).values():
+            _collect(prod)
+    else:
+        _collect(raw)
+    return ids
+
+
+def check_fr_coverage(
+    prd_fr_ids: List[str], ux: "UX", surfaces: Dict[str, UXSurface]
+) -> List[str]:
+    """ADVISORY (never blocks) — must-have FRs no surface implements.
+
+    Trace-or-defer: an FR is covered when some surface (file or inventory
+    entry) lists it in implements_requirements, OR a ux_warnings entry names
+    it (an intentional 'not a UI concern' deferral). WKF coverage stays the
+    blocking gate; this advisory catches the FRs with no workflow AND no
+    surface — the ones silently unrepresented at the UX layer.
+    """
+    covered = {
+        str(x).strip().upper()
+        for surface in surfaces.values()
+        for x in (surface.implements_requirements or [])
+    }
+    for inv in _iter_inventory_items(ux):
+        for x in getattr(inv, "implements_requirements", None) or []:
+            covered.add(str(x).strip().upper())
+    deferred = {
+        m.upper()
+        for w in _iter_ux_warnings(ux)
+        for m in _FR_TOKEN_RE.findall(w)
+    }
+    return [f for f in prd_fr_ids if f.upper() not in covered | deferred]
+
+
+def _iter_inventory_items(ux: "UX"):
+    for scope in _iter_ux_scopes(ux):
+        for item in getattr(scope, "surface_inventory", None) or []:
+            yield item
+
+
+def _iter_ux_warnings(ux: "UX"):
+    for scope in _iter_ux_scopes(ux):
+        for w in getattr(scope, "ux_warnings", None) or []:
+            if isinstance(w, str):
+                yield w
+
+
+def _iter_ux_scopes(ux: "UX"):
+    yield ux
+    for prod in (getattr(ux, "products", None) or {}).values():
+        yield prod
+
+
 # =============================================================================
 # File loading / validation orchestration
 # =============================================================================
@@ -926,11 +1041,19 @@ def validate_all(ux_path: Path) -> int:
     # 6) Downstream-claim maturity check (advisory, never blocks)
     downstream_warnings = check_downstream_claims(ux, ux_path.parent)
 
+    # 7) FR-coverage advisory (never blocks): must-have FRs with no surface
+    # implements_requirements trace and no ux_warnings deferral.
+    fr_gaps = check_fr_coverage(load_prd_must_have_fr_ids(prd_path), ux, surfaces)
+
     def _print_downstream_warnings() -> None:
         if downstream_warnings:
             print(f"\nWARNINGS ({len(downstream_warnings)} surface(s) claimed downstream but not 'confirmed'):")
             for w in downstream_warnings:
                 print(f"  - {w}")
+        if fr_gaps:
+            print(f"\nAdvisory (never blocks): {len(fr_gaps)} must-have FR(s) implemented by no surface and deferred by no ux_warnings entry:")
+            for f in fr_gaps:
+                print(f"  - {f}")
 
     status = ux.metadata.status
     n_surfaces = len(surfaces)

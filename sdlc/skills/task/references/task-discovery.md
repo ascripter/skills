@@ -24,7 +24,8 @@ or `⚠ inferred` (derived).
 | `TEST-STRATEGY__<cid>.tests[]` (each `TST-NNN`) | **one first-class test task per `TST-NNN`** (never grouped) | `test` | `implements_tests` = [TST-NNN] |
 | `ARCH__<cid>.internal_edges` (`calls`/`reads`/`writes`) | a wiring task (or fold into the consumer's impl task) | `integration` | `depends_on` the two components' tasks |
 | container package skeleton | one skeleton task | `scaffold` | — (usually the root dep) |
-| DATA entities the container persists (a `repository` component's `traces_data_entities`) | the schema/DDL + migration task — the **entity realization** unit, distinct from the repository code that queries it | `migration` | `touches_entities` = [EntityName] |
+| DATA entities the container persists (a `repository` component's `traces_data_entities`) | the schema/DDL + migration task — the **entity realization** unit, distinct from the repository code that queries it. **Non-DDL paradigms** (file_native, document without migrations): entity realization is the `schema_model` component's `implementation` task(s) with `touches_entities` instead — seed NO migration task; the entity-coverage gate accepts either | `migration` | `touches_entities` = [EntityName] |
+| an ARCH component with `work_units: []` + a **derivation-rule `work_units_waiver`** (e.g. "one authoring task per template file under templates/") | **expand the rule**: one authoring task per file it yields — the waiver is a promise addressed to this skill, not a deferral (see `coverage-and-defer.md`) | `implementation` (`unit_kind: content`) | `component_ref` = component_id; one `target_files` per task under its `code_location` |
 | API operations of an owned resource (`traces_api_operations`, or all ops of a `traces_api_resources`) | the endpoint/contract work (often folded into the controller's impl task) | `implementation` | `touches_operations` = [operation_id] |
 | UX surfaces the container renders (`owns_ux_surfaces` / a component's `traces_ux_surfaces`) — frontend containers | the screen/command impl task | `implementation` | `implements_surfaces` = [SCR-NNN] |
 | `DESIGN__tokens.yaml` (token_based_ui) — frontend containers | the theme/token wiring task | `design` | `target_files` = theme/token files |
@@ -51,7 +52,7 @@ file. Copy the unit's `kind` onto the task as `unit_kind` (omit for
 vs. emit the module/content/tool file), nothing more. Do NOT map content →
 `chore` or tooling → some other kind — that would strip the atomicity pins.
 
-### Embed the per-task specifics (schema v1.3 — the self-sufficiency contract)
+### Embed the per-task specifics (schema v1.3/v1.4 — the self-sufficiency contract)
 
 The codegen agent works from **the task alone**: per-task specifics are
 embedded on the task at seeding/write time; only container-general facts (tech
@@ -75,8 +76,25 @@ check 20, names exactly which tasks to re-confirm).
   `directives`, `acceptance`, and `covers` from
   `TEST-STRATEGY__<cid>.yaml` — the test-authoring agent must not need to
   open it.
+- **`operation_contract`** (v1.4; every `integration` task naming
+  `touches_operations`): one entry per operation — copy its
+  `operation_id`/method/path and the request/response DTO slices + error
+  responses from the owning `API__*.yaml`.
+- **`entity_slice`** (v1.4; every `migration` task naming `touches_entities`):
+  one entry per entity — copy its field defs, table-level constraints, and the
+  relationships it participates in from `DATA-MODEL.yaml`.
+- **`design_spec`** (v1.4; every `design` task): copy the token groups the
+  theme/token file must encode from `DESIGN__tokens.yaml`, and/or the full
+  `generation_brief` of every `touches_assets` AST from `DESIGN__assets.yaml`.
+- **`config_keys`** (v1.4; every `config` task): enumerate every settings key
+  (name / source / default / secret flag / one-line description). Ground them
+  in ARCH (`persistence_bindings`, external edges, `deployment`), API auth
+  schemes, and the PRD's integration list — the codegen agent must not invent
+  keys.
 
-The validator blocks `complete` on a v1.3 artifact missing either (check 18).
+The validator blocks `complete` on an artifact missing an embed its version
+requires (check 18: v1.3 for `interface_contract`/`test_spec`, v1.4 for the
+four kind embeds).
 
 When ARCH declares no work_units on a non-trivial component, that is an upstream
 gap: the right fix is `/sdlc:arch <container>` to add `work_units[]`, not to
@@ -175,6 +193,14 @@ for headless / backend containers.
   `DESIGN__assets.yaml` (`touches_assets`). AICF does NOT generate the binary
   assets (post-MVP); the brief sidecar is the actionable deliverable, so asset
   realization is **advisory** — surface it, don't block on it.
+- `surface_overrides` present → each entry is a per-surface deviation from the
+  global system (a denser grid, a bespoke hero, an inverted modal) the user
+  declared deliberately, so it is **concrete design work**. For every
+  `SCR-NNN` key whose surface this container owns, seed one `design` task that
+  applies the override (density / `token_overrides` / `component_variants` /
+  bespoke notes), naming that `SCR-NNN` in `implements_surfaces` and embedding
+  the entry as its `design_spec`. This is *in addition to* the global
+  theme/token task. Advisory (trace-or-defer via `WRN-NNN`), not blocking.
 - `headless` → no-op (mirrors headless UX).
 
 A shared design-token package consumed by **≥2** frontends in a monorepo is

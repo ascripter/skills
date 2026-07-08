@@ -12,7 +12,7 @@ description: >
 user-invocable: true
 disable-model-invocation: true
 model: opus
-effort: high
+effort: xhigh
 allowed-tools: Read Write(CLAUDE.md) Write(docs/DESIGN.yaml) Write(docs/DESIGN__*.yaml) Write(.claude/skills-state/sdlc-design.state.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion WebFetch
 ---
 
@@ -281,6 +281,18 @@ and presented in a final-approval draft for the user to correct — not asked as
 their own theme. Omit `traces_ux_surfaces` to mean "applies to all visual
 surfaces".
 
+#### surface_overrides (no separate theme)
+
+The global system is the default for every surface. Only when a UX surface
+**deliberately deviates** — a denser data grid, a bespoke hero page, an
+inverted-scheme modal — infer a `surface_overrides` entry keyed by that
+`SCR-NNN` (`density` / `token_overrides` / `component_variants` / `notes`).
+Draft candidates from surfaces whose UX notes signal a distinct visual
+treatment and confirm with the user in the same trace-approval draft. Each
+entry is concrete design work: downstream `task` derives one per-surface
+`design` task per override. Leave `surface_overrides` null when no surface
+deviates (the common case) — do not manufacture entries (anti-padding).
+
 ### Phase 7 — Write & validate
 
 Write `docs/DESIGN.yaml` and every applicable sub-file in one consistent batch.
@@ -316,7 +328,11 @@ On validation exit 0 (`[OK]` or `[DRAFT]`), call `set_claude_md_pointer.py` to
 inject/update the skill's bullet in the shared `## SDLC Documents` section.
 Then **refresh the navigation index**: if `.claude/sdlc/docs_index.py` exists,
 run `python .claude/sdlc/docs_index.py`. Set state `status: complete` (keep the
-file as audit trail) and tell the user where the artifacts live.
+file as audit trail), tell the user where the artifacts live, and point at what
+comes next:
+
+> Design complete. Next: `/sdlc:data` (data model; it consumes `docs/PRD.yaml`
+> and, recommended, `docs/UX.yaml`).
 
 ## Session state file
 

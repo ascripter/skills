@@ -40,7 +40,13 @@ tasks:                          # THE LEDGER — keyed by qualified task id
       - {path: "pnpm-workspace.yaml", sha256: "<64-hex>"}
     heal_attempts: 0
     escalated: false
-    verified: static_only       # unit_ring | static_only | none
+    verified: static_only       # unit_ring | static_only | static_format | none
+                                #   static_format = a non-code deliverable
+                                #   (JSON/YAML/CSS/SVG/MD/content) that passed
+                                #   its format checks — the floor for text
+                                #   assets; `none` is reserved for "not even a
+                                #   static check exists". Projected per-file
+                                #   into CODE-MANIFEST.json files[].verified.
   "backend-api/TSK-007":
     status: failed
     failure: "TST-006 red after 3 attempts: <last assertion error, one line>"
@@ -53,9 +59,11 @@ explicitly skips something — don't store the transitive cascade.
 
 Rules:
 
-- **Write after every task** — step 6 of the Phase-4 protocol. Also after
+- **Write after every task, by the MANAGER only** — step 3 of the Phase-4
+  wave protocol (workers report; the manager verifies hashes and records).
+  Also after
   every ring closure and every gate decision. An interruption loses at most
-  the task in flight.
+  the wave in flight.
 - `task_fingerprint` = sha256 over the task's JSON object serialized with
   sorted keys and no whitespace (`json.dumps(task, sort_keys=True,
   separators=(",", ":"))`), first 16 hex chars. `topo_order.py --fingerprints`

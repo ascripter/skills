@@ -115,16 +115,21 @@ factory for tests — mine every structured field.
 
 For each `components[]`:
 
-- **Seed one `unit` test per component `operations[]` entry** (`OPN-NNN`) — the
-  atomic test grain, mirroring how the `task` skill slices one task per
-  operation. Set `component_ref: <component_id>` AND
-  `targets_operation: <OPN-NNN>`, and pull the op's `traces` into the test:
-  `covers` ← the op's `implements_requirements`, plus a happy-path assertion from
-  its `summary` / `satisfies_acceptance`. Every component operation SHOULD get a
-  test (the advisory operation-coverage warning flags any that don't); defer a
-  genuinely trivial op (a plain getter) with a `WRN-NNN`.
-- For a component that declares **no** `operations[]`, fall back to seeding from
-  each `responsibilities[]` and `acceptance_criteria[]` entry (the older grain).
+- **Seed one `unit` test per component `work_units[]` entry** (name-addressed —
+  work units carry no id family) — the atomic test grain, mirroring how the
+  `task` skill slices one task per work_unit. Set
+  `component_ref: <component_id>` AND `targets_work_unit: <work_units[].name>`
+  (both are needed — unit names are unique only within their component), and
+  pull the unit's traces into the test: `covers` ← the unit's
+  `implements_requirements`, plus a happy-path assertion from its `summary` /
+  `satisfies_acceptance`; its `interface_contract` (inputs/output/raises) names
+  the argument/return/error shapes to assert. Every component work unit SHOULD
+  get a test (the advisory work-unit-coverage warning flags any that don't);
+  defer a genuinely trivial unit (a plain getter) with a `WRN-NNN` naming the
+  unit.
+- For a component that declares **no** `work_units[]` (waived or plumbing),
+  fall back to seeding from each `responsibilities[]` and
+  `acceptance_criteria[]` entry (the older grain).
 - Map the component's `implements_requirements` (FR/NFR) into the tests'
   `covers` so the **requirement-coverage gate** is satisfied.
 - `validator` / `serializer` / `repository` archetypes warrant explicit

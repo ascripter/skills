@@ -76,12 +76,20 @@ class Metadata(BaseModel):
     upstream_provenance: Optional[List[Dict[str, Any]]] = None
 
 
+VERIFIED_LEVELS = {"unit_ring", "static_only", "static_format", "none"}
+
+# files[].verified became REQUIRED at this manifest version; older manifests
+# get a warning instead of an error.
+VERIFIED_MIN_VERSION = (1, 1)
+
+
 class FileEntry(BaseModel):
     path: str
     sha256: str
     producing_tasks: List[str]
     heal_attempts: int
     generated_by_model: Optional[str] = None
+    verified: Optional[str] = None  # unit_ring | static_only | static_format | none
     created: bool
 
 
@@ -118,6 +126,12 @@ def run_checks(m: Manifest, docs_dir: Path, project_root: Path) -> tuple[List[st
     if m.metadata.generated_by != "sdlc-code":
         warnings.append(f"metadata.generated_by is {m.metadata.generated_by!r}, expected 'sdlc-code'")
 
+    try:
+        version = tuple(int(x) for x in (m.metadata.code_manifest_version or "0").split(".")[:2])
+    except ValueError:
+        version = (0, 0)
+    verified_required = version >= VERIFIED_MIN_VERSION
+
     seen_paths: set[str] = set()
     for i, f in enumerate(m.files):
         where = f"files[{i}] ({f.path!r})"
@@ -136,6 +150,13 @@ def run_checks(m: Manifest, docs_dir: Path, project_root: Path) -> tuple[List[st
                 errors.append(f"{where}: producing task {t!r} is not a qualified id (TASKS/TSK-NNN or <cid>/TSK-NNN)")
         if f.heal_attempts < 0:
             errors.append(f"{where}: heal_attempts must be >= 0")
+        if f.verified is not None and f.verified not in VERIFIED_LEVELS:
+            errors.append(f"{where}: verified {f.verified!r} is not one of {sorted(VERIFIED_LEVELS)}")
+        elif f.verified is None:
+            msg = f"{where}: missing verified level (unit_ring | static_only | static_format | none)"
+            (errors if verified_required else warnings).append(
+                msg if verified_required else msg + " (advisory: manifest predates v1.1)"
+            )
 
     for i, w in enumerate(m.code_warnings or []):
         if not WRN_RE.match(w):

@@ -1014,6 +1014,23 @@ questions:
     confidence_field: false
     importance: med
 
+  - theme: seed_and_fixtures
+    id: seed_data
+    schema_path: seed_and_fixtures.seed_data
+    question: "Concrete rows for lookup/reference tables? (Draft the rows per lookup entity; user approves or edits.)"
+    hint: >
+      The agent DRAFTS the rows from enums_and_lookups.lookup_tables + the
+      enums (e.g. Role: admin/member; Plan: free/pro with prices) rather than
+      asking the user to type them. Concrete rows are what stop codegen and
+      test fixtures from inventing reference values. Reference data only —
+      never bulk sample data. Skip when there are no lookup tables.
+    suggested_answers: []
+    free_text_allowed: true
+    required: false
+    capture_rationale: false
+    confidence_field: false
+    importance: high
+
   # ---------------------------------------------------------------------------
   # External Data Sources (optional, pre-filled from PRD.integrations_required)
   # ---------------------------------------------------------------------------

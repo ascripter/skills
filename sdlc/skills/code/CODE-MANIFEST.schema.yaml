@@ -29,7 +29,8 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  code_manifest_version: "1.0"             # REQUIRED
+  code_manifest_version: "1.1"             # REQUIRED — 1.1 added files[].verified
+                                           #   (per-file verification level)
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-code                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — session id from the ledger
@@ -60,6 +61,17 @@ files:                                      # REQUIRED — list, may be empty on
                                             #   task spent on this file (0 = first try)
     generated_by_model: sonnet | opus       # OPTIONAL — model that produced the final
                                             #   content (opus ⇒ an escalation touched it)
+    verified: unit_ring | static_only | static_format | none
+                                            # REQUIRED at manifest version >= 1.1 (older
+                                            #   manifests warn) — the highest verification
+                                            #   level this file's content reached, projected
+                                            #   from the ledger: unit_ring (its tests ran
+                                            #   green), static_only (compiled/typechecked
+                                            #   only), static_format (non-code deliverable,
+                                            #   format checks passed), none (no machine
+                                            #   check possible). Downstream verify/deploy
+                                            #   MUST be able to tell a test-verified file
+                                            #   from an unverified one.
     created: true | false                   # REQUIRED — true when this skill created the
                                             #   file; false when it edited a pre-existing one
 
@@ -76,7 +88,9 @@ code_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 # =============================================================================
 # Blocking (schema-invalid or force status:draft):
 # 1. Required-field completeness; files[] entries each carry path, sha256,
-#    non-empty producing_tasks, heal_attempts >= 0, created.
+#    non-empty producing_tasks, heal_attempts >= 0, created, and — at manifest
+#    version >= 1.1 — verified (vocabulary-checked: unit_ring | static_only |
+#    static_format | none; missing on a pre-1.1 manifest warns instead).
 # 2. Path safety — every path is repo-relative (no absolute, no "..",
 #    backslashes normalized).
 # 3. Qualified-id format — every producing_tasks entry matches

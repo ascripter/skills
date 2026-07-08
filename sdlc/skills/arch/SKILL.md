@@ -763,8 +763,12 @@ reflects the new content right away (the setup hook also does this, but a hook
 added mid-session only activates next session). Harmless no-op if not installed.
 
 After the CLAUDE.md write succeeds: set the active session's `status:
-complete` in the state file (keep the file as audit trail) and tell the
-user where the artifacts live.
+complete` in the state file (keep the file as audit trail), tell the
+user where the artifacts live, and point at what comes next:
+
+> This container's architecture is complete. Run `/sdlc:arch --next` for
+> the next undrilled container, or `/sdlc:test` once every container is
+> specified (it consumes `docs/ARCH.yaml` + the per-container files).
 
 ## Session state file
 

@@ -717,16 +717,18 @@ questions:
     importance: critical
 
   - theme: container_suite
-    id: targets_operation
-    schema_path: test.targets_operation
-    question: "Which component operation does this test exercise (OPN-NNN)?"
+    id: targets_work_unit
+    schema_path: test.targets_work_unit
+    question: "Which component work unit does this test exercise (work_units[].name)?"
     hint: >
-      The ATOMIC test grain. A unit test targets one operation (operations[].op_id
-      / OPN-NNN) of its component_ref in ARCH__<container>.yaml — mirroring how the
-      `task` skill slices one task per operation. Seed ONE unit test per component
-      operation so the suite is method-granular. Every component operation SHOULD
-      be exercised by a test (advisory operation-coverage warning otherwise) or
-      deferred via a WRN-NNN. Validated ⊆ the component_ref's operations[].op_id.
+      The ATOMIC test grain. A unit test targets one work unit (work_units[].name
+      — name-addressed, no id family) of its component_ref in
+      ARCH__<container>.yaml — mirroring how the `task` skill slices one task per
+      work_unit. Seed ONE unit test per component work unit so the suite is
+      callable-granular. Every component work unit SHOULD be exercised by a test
+      (advisory work-unit-coverage warning otherwise) or deferred via a WRN-NNN.
+      Validated ⊆ the component_ref's work_units[].name (component_ref required
+      when set — names are unique only within a component).
     suggested_answers: []
     free_text_allowed: true
     required: false

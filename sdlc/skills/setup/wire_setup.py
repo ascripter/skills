@@ -54,8 +54,9 @@ INDEX_MARKER = "`docs/INDEX.yaml`"
 # sentinel — we detect it by the `Access them via` substring.
 ACCESS_NOTE = (
     "**Access the docs below via `docs/INDEX.yaml`, sliced — never load "
-    "`PRD.yaml` or `DATA-MODEL.yaml` whole.** `INDEX.yaml` is a generated "
-    "location map (file + line range + summary per symbol); look a symbol up "
+    "`PRD.yaml`, `DATA-MODEL.yaml` or `TASKS.json` whole.** `INDEX.yaml` is a "
+    "generated location map (file + line range + summary per symbol, plus a "
+    "`shards:` inventory of every `docs/*__*` sub-artifact); look a symbol up "
     "there and `Read` only its range. Full protocol: "
     "`.claude/rules/sdlc-docs-access.md`."
 )

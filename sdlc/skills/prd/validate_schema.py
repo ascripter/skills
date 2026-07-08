@@ -669,6 +669,38 @@ def _is_empty(value: object) -> bool:
     return False
 
 
+_FR_HEAD_RE = re.compile(r"^\s*(FR-\d+)\s*:")
+_FR_TOKEN_RE = re.compile(r"\bFR-\d+\b", re.IGNORECASE)
+
+
+def check_acr_coverage(prd: PRD) -> List[str]:
+    """ADVISORY (never blocks): must-have FRs no acceptance criterion names.
+
+    Downstream `test` gates ACR→TST coverage, so a must-have FR that no
+    ACR-NNN entry names (an `FR-NNN` token inside the criterion string) has
+    no machine-linked done-condition — flag it so the interview can add one.
+    """
+    gaps: List[str] = []
+
+    def _scope(label: str, root: object) -> None:
+        frs = _get_dotted(root, "functional_requirements.must_have_features") or []
+        acrs = _get_dotted(root, "success_metrics.acceptance_criteria") or []
+        named = {m.upper() for a in acrs if isinstance(a, str) for m in _FR_TOKEN_RE.findall(a)}
+        for entry in frs:
+            if not isinstance(entry, str):
+                continue
+            head = _FR_HEAD_RE.match(entry)
+            if head and head.group(1).upper() not in named:
+                gaps.append(f"{label}{head.group(1)}: no acceptance_criteria entry names it")
+
+    if prd.metadata.monorepo and prd.products:
+        for slug, product in prd.products.items():
+            _scope(f"products.{slug}.", product)
+    else:
+        _scope("", prd)
+    return gaps
+
+
 def check_required(prd: PRD) -> List[str]:
     """Return list of missing required field paths.
 
@@ -737,7 +769,14 @@ def validate_file(path: Path) -> int:
 
     missing = check_required(prd)
     id_violations = check_ids(prd) + check_open_questions(prd)
+    acr_gaps = check_acr_coverage(prd)
     status = prd.metadata.status
+
+    def _print_acr_gaps() -> None:
+        if acr_gaps:
+            print(f"\nAdvisory (never blocks): {len(acr_gaps)} must-have FR(s) not named by any acceptance criterion:")
+            for g in acr_gaps:
+                print(f"  - {g}")
 
     if status == "complete":
         if missing or id_violations:
@@ -752,6 +791,7 @@ def validate_file(path: Path) -> int:
                     print(f"  - {v}")
             return 1
         print(f"[OK] PRD.yaml is valid and complete ({path})")
+        _print_acr_gaps()
         return 0
 
     # status == "draft"
@@ -773,6 +813,7 @@ def validate_file(path: Path) -> int:
         )
         for v in id_violations:
             print(f"  - {v}")
+    _print_acr_gaps()
     return 0
 
 

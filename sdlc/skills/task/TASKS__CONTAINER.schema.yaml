@@ -56,11 +56,16 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  tasks_container_version: "1.3"           # REQUIRED — 1.3 introduced the embedded
+  tasks_container_version: "1.4"           # REQUIRED — 1.3 introduced the embedded
                                            #   per-task specifics (unit_kind, unit_summary,
-                                           #   interface_contract, test_spec); the validator
-                                           #   gates their presence checks on >= 1.3 so older
-                                           #   artifacts warn instead of failing
+                                           #   interface_contract, test_spec); 1.4 extends
+                                           #   embedding to the remaining grounded kinds
+                                           #   (integration → operation_contract, migration →
+                                           #   entity_slice, design → design_spec, config →
+                                           #   config_keys) so EVERY task is self-contained.
+                                           #   The validator gates each presence check on the
+                                           #   version that introduced it, so older artifacts
+                                           #   warn instead of failing
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-task                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -105,6 +110,11 @@ tasks:                                      # REQUIRED — list[Task], non-empty
       #   integration    — wire two components together / a within-container call
       #   migration      — schema / persistence / data-migration setup (DDL,
       #                    repository wiring) — the home for entity realization
+      #                    in DDL-authoring paradigms. In a non-DDL paradigm
+      #                    (file_native / document without migrations) entity
+      #                    realization is an implementation task instead (a
+      #                    schema_model module work_unit with touches_entities)
+      #                    — the entity-coverage gate (#13) accepts either.
       #   config         — env / settings wiring for this container (config_loader
       #                    component; deploy owns secrets backends)
       #   design         — realize the DESIGN system for this container's surfaces:
@@ -191,6 +201,51 @@ tasks:                                      # REQUIRED — list[Task], non-empty
         - "Assert: 201 with a persisted id."
       acceptance: "Creating a task returns 201 with a persisted id."
       covers: [FR-001]                      #   the TST's covered requirement ids
+    # --- v1.4 self-containment embeds: one per grounded kind. Same rationale
+    #     as interface_contract/test_spec — the Stage-14 codegen agent works
+    #     from the task alone; it must NOT need to open API__*/DATA-MODEL/
+    #     DESIGN__* per task. Each is EMBEDDED AT WRITE TIME and type-checked
+    #     loosely (list/mapping) — deep validation of a copy would over-
+    #     validate; the #20 drift advisory catches divergence. ---
+    operation_contract:                     # REQUIRED for kind:integration at >= 1.4 when
+                                            #   touches_operations is non-empty (older
+                                            #   artifacts warn instead) — one entry per
+                                            #   touches_operations id, embedded from the
+                                            #   owning API__<resource>.yaml:
+      - operation_id: create-user           #   the endpoints[].operation_id
+        method: POST                        #   HTTP method (or rpc/graphql verb)
+        path: /v1/users                     #   route / procedure path
+        request_schema: {}                  #   the request DTO slice (inline or the
+                                            #   named shared_schemas/$ref shape)
+        response_schema: {}                 #   the success-response DTO slice
+        errors: []                          #   the operation's error responses
+    entity_slice:                           # REQUIRED for kind:migration at >= 1.4 when
+                                            #   touches_entities is non-empty (older artifacts
+                                            #   warn instead) — one entry per touches_entities
+                                            #   name, embedded from DATA-MODEL.yaml:
+      - entity: User                        #   the DATA-MODEL entity name (PascalCase)
+        fields: []                          #   the entity's field defs (name / type /
+                                            #   nullable / unique / references / check)
+        constraints: []                     #   table-level constraints affecting the DDL
+        relationships: []                   #   the relationships this entity participates in
+    design_spec:                            # REQUIRED for kind:design at >= 1.4 (older
+                                            #   artifacts warn instead) — the design slice this
+                                            #   task realizes, embedded from DESIGN__tokens.yaml
+                                            #   / DESIGN__assets.yaml:
+      tokens: {}                            #   the token groups (color/typography/…) the
+                                            #   theme/token file must encode (token_based_ui)
+      assets:                               #   one entry per touches_assets AST-NNN with its
+        - id: AST-002                       #   full generation_brief copied verbatim
+          generation_brief: {}
+    config_keys:                            # REQUIRED for kind:config at >= 1.4 (older
+                                            #   artifacts warn instead) — the enumerated
+                                            #   settings this task wires; the codegen agent
+                                            #   must NOT invent keys:
+      - key: DATABASE_URL                   #   the env var / settings key name
+        source: env                         #   env | file | flag | derived
+        default: null                       #   literal default, or null = required
+        secret: true                        #   true ⇒ placeholder + deploy owns the value
+        description: <one line>             #   what it configures
     touches_entities:                       # OPTIONAL — DATA-MODEL entity names
       - User                                #   (PascalCase) this task reads/writes.
                                             #   VALIDATED ⊆ DATA-MODEL.yaml entities
@@ -337,7 +392,9 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     API__*.yaml is present.
 # 13. Entity coverage — every entity the container's components trace
 #     (∪ components[].traces_data_entities in ARCH__<cid>.yaml) is realized by a
-#     task (touches_entities) or transitively (a realized repository component
+#     task (touches_entities — ANY kind: a migration task in DDL paradigms, an
+#     implementation task realizing a schema_model module in non-DDL/file_native
+#     paradigms) or transitively (a realized repository component
 #     tracing it) OR deferred. Advisory sibling: a DATA entity living in a store
 #     the container binds but traced by no component (a likely ARCH gap) warns.
 # 14. Requirement coverage — every FR/NFR in the container's + components'
@@ -366,16 +423,23 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     the placement check is skipped when no code_location.
 # 17. Coverage / integrity failures force metadata.status: draft (they do not
 #     crash the validator) so partial task graphs remain saveable as drafts.
-# 18. Embedded per-task specifics (VERSION-GATED at tasks_container_version
-#     >= 1.3; older artifacts get warnings instead of errors) — every
+# 18. Embedded per-task specifics (VERSION-GATED — each presence check blocks
+#     at the artifact version that introduced it, warns below) — every
 #     kind:implementation task carries interface_contract with source +
-#     inputs + output + raises present (explicit empties count: inputs: [],
+#     inputs + output + raises present (v1.3; explicit empties count: inputs: [],
 #     raises: [], output: "None"); a non-callable unit_kind (module / content /
 #     tooling) is exempt (mirrors arch #23's FILE case). Every kind:test task
-#     carries test_spec with tier + directives + acceptance. unit_kind is
-#     vocabulary-checked (callable | module | content | tooling); an
-#     interface_contract on a non-implementation task or a test_spec on a
-#     non-test task is an error at any version. Blocks complete.
+#     carries test_spec with tier + directives + acceptance (v1.3). At >= 1.4:
+#     every kind:integration task with touches_operations carries an
+#     operation_contract entry per named operation; every kind:migration task
+#     with touches_entities carries an entity_slice entry per named entity;
+#     every kind:design task carries design_spec; every kind:config task
+#     carries config_keys. unit_kind is
+#     vocabulary-checked (callable | module | content | tooling); any embed on
+#     the wrong kind (interface_contract off implementation, test_spec off
+#     test, operation_contract off integration, entity_slice off migration,
+#     design_spec off design, config_keys off config) is an error at any
+#     version. Blocks complete.
 # 19. All-confirmed gate — a file claiming metadata.status: complete must have
 #     every task status: confirmed. The SKILL confirms tasks through its
 #     drill-down/sweep flow (no manual step); a leftover draft task in a

@@ -260,6 +260,20 @@ external_dependencies:          # list[ExternalDependency]; each:
   null
 
 # -----------------------------------------------------------------------------
+# sdk_and_clients — SDK generation + distribution policy (optional theme).
+# Written by the sdk_and_clients interview theme; all fields nullable.
+# -----------------------------------------------------------------------------
+sdk_and_clients:
+  generated_sdks: null          # string — e.g. "none" | "openapi-generator (auto)"
+                                #   | "custom (hand-rolled)" | "mix — auto for
+                                #   internal, custom for public"
+  client_languages: null        # list[string] — languages actually published
+                                #   (e.g. ["TypeScript", "Python"])
+  distribution: null            # string — e.g. "Public registries (npm, PyPI)" |
+                                #   "Internal artifactory only" | "GitHub Releases"
+                                #   | "Not distributed — embedded in monorepo"
+
+# -----------------------------------------------------------------------------
 # shared_schemas — OpenAPI 3.1 component schemas referenced by ≥2 resources.
 # Resource-local schemas live in the per-resource file's `schemas` block.
 # May `$ref` DATA entities (see references/openapi-embedding.md for syntax).

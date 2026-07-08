@@ -447,6 +447,10 @@ class FieldSpec(_Permissive):
     references: Optional[str] = None  # "Entity.field"
     on_delete: Optional[OnDelete] = None
     check: Optional[str] = None
+    # Structured app-level validation (codegen renders Pydantic/zod validators
+    # from this, never from parsing `check` SQL). Keys: min / max / min_length /
+    # max_length / regex / format / enum. Type-checked as a mapping only.
+    validation: Optional[Dict[str, Any]] = None
     comment: Optional[str] = None
     # file-native attribute — a literal Python type expression, e.g.
     # "Optional[list[FeatureSpec]]". Optionality is encoded in the type itself,
@@ -457,10 +461,29 @@ class FieldSpec(_Permissive):
     embedding: Optional[bool] = None
 
 
+class EntityLifecycleTransition(_Permissive):
+    from_: Optional[str] = Field(default=None, alias="from")
+    to: Optional[str] = None
+    trigger: Optional[str] = None
+    guard: Optional[str] = None
+
+
+class EntityLifecycle(_Permissive):
+    """Per-entity state machine: the allowed-transition graph downstream
+    `test` (state-transition cases) and `task`/`code` (guard logic) consume.
+    Enums list the status VALUES; this block adds the legal moves."""
+
+    field: Optional[str] = None       # the status-bearing field name
+    initial: Optional[str] = None
+    transitions: Optional[List[EntityLifecycleTransition]] = None
+    terminal: Optional[List[str]] = None
+
+
 class Entity(_Permissive):
     description: Optional[str] = None
     primary_key: Optional[Union[str, List[str]]] = None
     fields: Optional[Dict[str, FieldSpec]] = None
+    lifecycle: Optional[EntityLifecycle] = None
     traces_prd_features: Optional[List[str]] = None
     traces_ux_surfaces: Optional[List[str]] = None
     traces_prd_workflows: Optional[List[str]] = None
@@ -664,6 +687,9 @@ class SearchAndAnalytics(_Permissive):
 class SeedAndFixtures(_Permissive):
     seed_strategy: Optional[str] = None
     dev_fixtures_path: Optional[str] = None
+    # Concrete reference rows keyed by entity name (lookup/enum-backed tables
+    # only). Type-checked loosely; each row is a field: value mapping.
+    seed_data: Optional[Dict[str, List[Dict[str, Any]]]] = None
 
 
 class ExternalDataSource(_Permissive):

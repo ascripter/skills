@@ -290,6 +290,16 @@ entities:                          # REQUIRED — dict[<PascalCaseEntityName>, E
         on_delete: null            # one of: cascade | restrict | set_null |
                                    #         no_action (applies only if references)
         check: null                # string — check constraint expression
+        validation: null           # OPTIONAL structured app-level validation —
+                                   #   dict with any of: min, max, min_length,
+                                   #   max_length, regex, format (email | url |
+                                   #   uuid | iso8601 | slug | semver | other),
+                                   #   enum (list of allowed values). This is
+                                   #   what codegen turns into Pydantic/zod
+                                   #   validators WITHOUT parsing SQL `check`
+                                   #   strings; `check` stays the DB-level twin.
+                                   #   Applies to every paradigm (file_native
+                                   #   included — its only other home was prose).
         comment: null              # string — human-readable note
         description: null          # string — preferred note field for file_native
       email:
@@ -323,6 +333,22 @@ entities:                          # REQUIRED — dict[<PascalCaseEntityName>, E
                                    # the end of the entities theme catches entities
                                    # implied by an upstream WKF whose draft list
                                    # missed.
+    lifecycle: null                # OPTIONAL per-entity state machine. Enums
+                                   #   list the status VALUES; this block adds
+                                   #   the allowed-transition graph `test` needs
+                                   #   for state-transition cases and `task`/
+                                   #   `code` need for guard logic. Shape:
+                                   #   lifecycle:
+                                   #     field: status              # the status-bearing field
+                                   #     initial: pending           # state a new row starts in
+                                   #     transitions:               # list — one per allowed move
+                                   #       - {from: pending,  to: paid,     trigger: "payment confirmed"}
+                                   #       - {from: paid,     to: shipped,  trigger: "fulfilment"}
+                                   #       - {from: paid,     to: refunded, trigger: "refund", guard: "within 30 days"}
+                                   #     terminal: [refunded, shipped]  # states with no exit
+                                   #   Any move not listed is forbidden — that is
+                                   #   the machine-readable contract. Omit for
+                                   #   entities with no meaningful state machine.
 
 # -----------------------------------------------------------------------------
 # relationships — explicit edges between entities. Inline FK references on
@@ -660,12 +686,22 @@ search_and_analytics:              # optional
   # cdc_strategy: outbox           # none | debezium | outbox | trigger | other
 
 # -----------------------------------------------------------------------------
-# seed_and_fixtures — OPTIONAL.
+# seed_and_fixtures — OPTIONAL. `seed_data` is the CONCRETE half: the actual
+# rows lookup/enum-backed tables ship with, so codegen and test fixtures don't
+# invent values. Keep it to reference data (roles, statuses, categories,
+# plans) — never bulk sample data.
 # -----------------------------------------------------------------------------
 seed_and_fixtures:                 # optional
   null
   # seed_strategy: "Idempotent SQL script run in entrypoint; checks SeedMarker."
   # dev_fixtures_path: "fixtures/dev/"
+  # seed_data:                     # dict[PascalCaseEntityName, list[row]] — each
+  #   Role:                        # row a dict of field: value for that entity;
+  #     - {id: 1, name: admin}     # entity must exist in `entities`, and the
+  #     - {id: 2, name: member}    # entity SHOULD be named in lookup_tables.
+  #   Plan:
+  #     - {id: free,  monthly_price: 0}
+  #     - {id: pro,   monthly_price: 12}
 
 # -----------------------------------------------------------------------------
 # external_data_sources — OPTIONAL. Pre-filled from

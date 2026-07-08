@@ -112,19 +112,27 @@ v1.3), never from imagination:
   keys results to TST ids.
 - **`integration`** — the wiring the edge describes: register routes into the
   app, bind DI, or build the consumer-side client against the provider's
-  contract (`touches_operations` → API schemas). Cross-container `integration`
+  contract — method/path/schemas from the task's embedded `operation_contract`
+  (v1.4). Pre-1.4 fallback: resolve `touches_operations` in `API__*.yaml`.
+  Cross-container `integration`
   tasks in `TASKS.json` wire consumer code to the provider's *contract*, never
   reach into the provider's internals.
 - **`migration`** — DDL/schema/ORM-migration files for `touches_entities`,
-  fields and relations from the DATA-MODEL entity slices. The entity
+  fields and relations from the task's embedded `entity_slice` (v1.4;
+  pre-1.4 fallback: the DATA-MODEL entity slices). The entity
   realization unit — repositories then query what this task created.
 - **`config`** — typed settings loading + env plumbing (`.env.example`,
-  settings module). Placeholder *values* for secrets, never real ones;
+  settings module) for exactly the task's embedded `config_keys` (v1.4) —
+  never invent keys; a needed-but-missing key is a `WRN` + gate question,
+  not a guess (pre-1.4 fallback: ground keys in ARCH persistence bindings /
+  external edges + API auth + PRD integrations). Placeholder *values* for
+  secrets, never real ones;
   secrets backends belong to `/sdlc:deploy`.
-- **`design`** — token/theme files from `DESIGN__tokens.yaml`; for asset
+- **`design`** — token/theme files from the task's embedded
+  `design_spec.tokens`; for asset
   pipelines, the folder scaffold + one `assets/<name>.brief.md` sidecar per
-  AST in `touches_assets` (the brief's content comes from
-  `DESIGN__assets.yaml`).
+  entry in `design_spec.assets[]` (each carries its `generation_brief`
+  verbatim). Pre-1.4 fallback: `DESIGN__tokens.yaml` / `DESIGN__assets.yaml`.
 - **`chore` / `docs` / `deploy-prep`** — per `description` + the ladder.
   `deploy-prep` stops at handoff stubs (CI skeleton, Dockerfile placeholders)
   — `/sdlc:deploy` owns the real thing.

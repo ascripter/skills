@@ -113,7 +113,10 @@ can never schedule building it. Sweep for them explicitly:
    its content mechanically, declare that rule in `work_units_waiver`
    (e.g. "one authoring task per template file under templates/ — derived
    by task, not enumerated here") so the derivation rule is explicit
-   rather than absent.
+   rather than absent. Word the rule precisely: downstream `task` **expands
+   it** into concrete per-file authoring tasks (it is a promise, not a
+   waiver of the work — see task's `references/coverage-and-defer.md`), so
+   the rule must name the directory/tree the files live in.
 
 These are `⚠ inferred` — user confirms. Tag `source: deliverable-sweep`.
 

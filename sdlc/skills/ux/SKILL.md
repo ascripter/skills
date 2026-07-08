@@ -400,7 +400,11 @@ the new content right away (the setup hook also does this, but a hook added
 mid-session only activates next session). Harmless no-op if not installed.
 
 After the CLAUDE.md write succeeds: set `status: complete` in the state
-file (keep the file — audit trail), tell the user where the artifacts live.
+file (keep the file — audit trail), tell the user where the artifacts live,
+and point at what comes next:
+
+> UX complete. Next: `/sdlc:design` (look & feel — tokens, aesthetic
+> direction, assets; it consumes `docs/PRD.yaml` + `docs/UX.yaml`).
 
 ## Session state file
 

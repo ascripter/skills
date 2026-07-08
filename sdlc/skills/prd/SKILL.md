@@ -343,8 +343,11 @@ hook added during the current session only activates next session — running it
 here closes that gap. Harmless no-op if the generator isn't installed.
 
 After the CLAUDE.md write succeeds: set `status: complete` in the state
-file (do not delete it — it's an audit trail), and tell the user where
-the artifacts live.
+file (do not delete it — it's an audit trail), tell the user where the
+artifacts live, and point at what comes next:
+
+> PRD complete. Next: `/sdlc:ux` (functional UX surfaces & flows; it
+> consumes `docs/PRD.yaml`).
 
 ## Session state file
 

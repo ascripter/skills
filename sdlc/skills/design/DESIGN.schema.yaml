@@ -226,6 +226,26 @@ traces_ux_surfaces: null        # list[string] — SCR-NNN ids this design syste
                                 # covers. Optional; OMIT to mean "all visual
                                 # surfaces" (the common case for a global system).
 
+# -----------------------------------------------------------------------------
+# surface_overrides — OPTIONAL per-surface styling on top of the global system.
+# The global system is the default for every surface; add an entry here ONLY
+# when a surface deliberately deviates (a denser data grid, a hero page with a
+# bespoke look, an inverted-scheme modal). Downstream `task` derives one
+# per-surface design task per entry (in addition to the global theme/token
+# task), so an entry = concrete design work.
+# -----------------------------------------------------------------------------
+surface_overrides: null         # dict[SCR-NNN, SurfaceOverride] — each:
+                                #   SCR-004:
+                                #     density: compact          # compact | comfortable | spacious | null
+                                #     token_overrides: {}       # DTCG-shaped partial set overriding
+                                #                               #   DESIGN__tokens.yaml for this surface
+                                #     component_variants: {}    # component type/id -> variant to use
+                                #                               #   (e.g. {button: ghost, table: striped})
+                                #     notes: <one or two lines> # the bespoke intent, concrete enough
+                                #                               #   to style from
+                                # Keys are UX SCR-NNN ids (validated when UX.yaml
+                                # is readable). Absent/null = no surface deviates.
+
 # =============================================================================
 # MULTI-PRODUCT MODE (monorepo) — uncomment and use *instead of* the top-level
 # blocks above. Each entry under `products:` mirrors the single-product shape.

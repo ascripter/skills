@@ -236,7 +236,15 @@ component_library:
                                 #         none | custom (enum)
   theming_approach_confidence: null
   theming_tokens:               # any tokens worth pinning at the global level;
-                                # may be null/{} if punted to library defaults
+                                # may be null/{} if punted to library defaults.
+                                # PRECEDENCE: this block is a HINT — it records
+                                # the theming decision + a few placeholder
+                                # values captured during the UX interview. When
+                                # /sdlc:design has run, docs/DESIGN__tokens.yaml
+                                # is the CANONICAL, complete token set; any
+                                # conflict resolves in DESIGN's favour, and
+                                # downstream consumers (task/code) read tokens
+                                # from DESIGN, never from here.
     colors: null                # color tokens (any — list, map, or string)
     typography: null            # font + scale (any)
     spacing: null               # spacing scale (any)

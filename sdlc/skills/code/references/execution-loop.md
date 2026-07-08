@@ -1,7 +1,8 @@
-# Execution loop — scheduling, rings, heal, escalation (sdlc-code)
+# Execution loop — scheduling, waves, rings, heal, escalation (sdlc-code)
 
-Read this on entering Phase 4. It defines the order tasks run in, the four
-verification rings, the heal loop, and the opus escalation.
+Read this on entering Phase 4. It defines the order tasks run in, the
+manager/worker wave protocol, the verification rings, the heal loop, and the
+opus escalation.
 
 ---
 
@@ -33,7 +34,40 @@ Never hand-compute the order. Run the tool; it also diffs against the ledger:
 python "${CLAUDE_SKILL_DIR}/topo_order.py" --scope all --state .claude/skills-state/sdlc-code.state.yaml
 ```
 
-## The four rings
+## Waves & workers (the manager protocol)
+
+The session is the **manager**; source files are written by **worker
+subagents** dispatched in parallel waves. The rules that make this safe:
+
+- **Wave composition.** From the ready set, pick up to **3 work units** — a
+  work unit is one implementation task plus the test task(s) whose
+  `depends_on` reaches it (impl + its tests heal together, so they share a
+  worker). The units' combined `target_files` (+ test files) must be
+  **pairwise disjoint** — a candidate overlapping another pending task's
+  files waits or runs **solo** (scaffold tasks, barrel/exports files, shared
+  config). When in doubt, solo: correctness beats parallelism.
+- **The worker brief is the task packet.** Verbatim task JSON (v1.4 embeds
+  included), the container tech-stack slice, the provenance-marker and
+  path-safety rules from `emit-rules.md`, the established test command, and
+  the write boundary (its `target_files` + the test file, nothing else).
+  Workers are **non-interactive**: no AskUserQuestion, no ledger writes, no
+  reading other tasks' fresh output. A worker that hits a decision only the
+  user can make reports `blocked: <question>` instead of guessing.
+- **Worker verification**: static ring, then unit ring, heal **≤2 attempts**
+  inline, then stop and report: files written (+ sha256), ring outcomes,
+  heal count, failure output if red.
+- **Integration**: as each worker returns, the manager verifies the reported
+  hashes against disk, writes the ledger (manager is the **sole ledger
+  writer**), and refills the wave. Attempt 3 (opus) is always
+  manager-dispatched — see "The escalation brief".
+- **Serialization points**: component/container/system rings run in the
+  manager between waves (never inside workers — parallel suites collide on
+  ports/DBs/fixtures). A container boundary additionally carries the bare-run
+  continue/stop gate.
+- **Fallback**: no Agent tool → execute units inline one at a time with the
+  identical per-unit protocol; say so in the close report.
+
+## The verification rings
 
 Verification runs at four widening scopes. Each ring has the same failure
 protocol (heal ≤3, escalate on 3, flag on exhaust) — only the test selection
@@ -41,7 +75,7 @@ and blast radius differ.
 
 | Ring | Fires when | Runs | Catches |
 |---|---|---|---|
-| **static** | after *every* task's write | cheapest machine check the stack affords on the touched file(s): `python -m py_compile` / `tsc --noEmit` / `node --check` / `cargo check` / a syntax-level lint | typos, broken imports, malformed code |
+| **static** | after *every* task's write | cheapest machine check the stack affords on the touched file(s): `python -m py_compile` / `tsc --noEmit` / `node --check` / `cargo check` / a syntax-level lint. **Non-code deliverables verify by format**: JSON/YAML parse (`python -c "import json,sys; json.load(open(sys.argv[1]))"` / `yaml.safe_load`), SVG/XML well-formedness (`xml.etree`), CSS brace/at-rule sanity, Markdown heading/link resolution — a content file passing these records `verified: static_format`, never `none` | typos, broken imports, malformed code, unparseable assets |
 | **unit** | a `test` task completes | exactly the tests that task authored, against the implementation(s) it `depends_on` | a unit that doesn't meet its contract |
 | **component** | the last task with `component_ref == C` completes | all unit tests exercising C together | cross-unit interactions inside a component |
 | **container** | the last task of `TASKS__<cid>.json` completes | the container's integration-level TSTs + its whole suite | wiring, DI, cross-component contracts |
@@ -56,8 +90,10 @@ scaffold task's outputs/acceptance usually name it (`pnpm --filter X test`,
 test run, confirm it works, record it in the ledger
 (`containers[<cid>].test_command`) so every later ring reuses it. If no
 runnable test command can be established (no runner in the scaffold, missing
-toolchain), say so at the gate, mark affected rings `verified: none`, and
-continue — generation without verification is degraded, not blocked.
+toolchain), say so at the gate, record the best level actually reached
+(`static_only` for compiled/typechecked code, `static_format` for
+format-verified content, `none` only when not even a static check exists),
+and continue — generation without verification is degraded, not blocked.
 
 A test task whose `depends_on` only reaches the scaffold (weakly linked) still
 runs at its topo position; the component ring backstops the pairing. Rings
@@ -66,7 +102,9 @@ their boundary, not after every member task.
 
 ## The heal loop
 
-On a red ring:
+On a red ring (attempts 1–2 run **inside the worker** for unit-ring failures,
+inline in the manager for the serialized higher rings; attempt 3 is always
+manager-dispatched):
 
 - **Attempt 1 (inline, sonnet).** Read the failure output. Diagnose against
   the *contract*, not the test: the task's embedded `interface_contract`
@@ -105,7 +143,8 @@ re-derive project context:
 You are healing one atomic codegen unit that failed its tests twice.
 
 TASK (verbatim JSON): <the task object, qualified id included — carries the
-  embedded interface_contract / test_spec on v1.3 artifacts>
+  embedded interface_contract / test_spec (v1.3) and the per-kind grounding
+  slices (v1.4)>
 INTERFACE CONTRACT: <the task's interface_contract; pre-1.3: the ARCH
   work_unit slice or the API operation schema the unit defers to>
 ACCEPTANCE: <the task's acceptance list>

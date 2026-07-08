@@ -3,7 +3,8 @@ name: data
 description: >
   Launch in empty context. Create or update DATA-MODEL.yaml for a software
   product across six storage paradigms (relational, document, key_value, graph,
-  vector, file_native). Reads docs/PRD.yaml and any docs/UX*.yaml as upstream
+  vector, file_native). Reads docs/PRD.yaml (required) and any docs/UX*.yaml
+  (optional but strongly recommended) as upstream
   inputs, scans pre-fill candidates, recommends a storage paradigm from PRD
   signals and asks the structural paradigm/monorepo/bounded-contexts questions,
   then routes a resume-aware thematic interview down the paradigm-appropriate
@@ -16,7 +17,7 @@ description: >
 user-invocable: true
 disable-model-invocation: true
 model: opus
-effort: high
+effort: xhigh
 allowed-tools: Read Write(CLAUDE.md) Write(docs/DATA-MODEL.yaml) Write(.claude/skills-state/sdlc-data.state.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion
 ---
 
@@ -31,7 +32,8 @@ truth.
 
 1. **Resume check** → load existing state if any (otherwise scan from scratch).
 2. **Scan inputs** → read `docs/PRD.yaml` (required) and every `docs/UX*.yaml`
-   (required); build pre-fill map.
+   (optional but strongly recommended — warn and confirm before continuing
+   without UX context); build pre-fill map.
 3. **Entity-candidate discovery** → propose a draft entity list early.
 4. **Structural questions** → **storage paradigm** (agent recommends from PRD
    signals; user confirms) → monorepo (inherited from PRD)? → bounded contexts?
@@ -146,7 +148,8 @@ Build the pre-fill map (see `references/pre-fill-sources.md` for the full
 mapping table). Tag each candidate:
 
 - **`✓ found`** — value is a direct quote/value from a file (e.g.
-  `PRD.security_compliance.encryption_at_rest: true` → `data_classification.encrypted_at_rest_default: true`).
+  `PRD.security_compliance.encryption_at_rest: true` → `data_classification.encrypted_at_rest`
+  must end up non-empty; the actual `Entity.field` entries are proposed per entity).
 - **`⚠ inferred`** — derived from signals (e.g. `PRD.data_model.key_entities: [User]` →
   candidate entity name `User`, but no fields yet).
 
@@ -365,7 +368,19 @@ The selected `state.storage_paradigm` decides which themes run:
    `type/nullable/unique/primary_key/references/on_delete`; file_native:
    `pydantic_type` + `description`, no primary_key; graph: node properties;
    vector: `payload_fields` + one `embedding: true` field; key_value: fields +
-   key design captured in `key_value_design`).
+   key design captured in `key_value_design`). Two paradigm-independent
+   attributes to capture during the same drill-down:
+
+   - **`validation`** (per field, optional) — structured app-level rules
+     (`min`/`max`/`min_length`/`max_length`/`regex`/`format`/`enum`) whenever
+     the user states a constraint. This is the machine home codegen renders
+     Pydantic/zod validators from; a constraint expressed only as a SQL
+     `check` string or prose is unreachable for non-relational paradigms.
+   - **`lifecycle`** (per entity, optional) — when an entity has a
+     status-like field, ask for the allowed transitions and record the state
+     machine (`field`/`initial`/`transitions[]`/`terminal`). Enums hold the
+     *values*; `lifecycle` holds the *legal moves* — what `test` needs for
+     state-transition cases and `task`/`code` for guard logic.
 
    **Decompose, don't skim.** For every entity, recurse into its field types:
    any field whose type is a custom model (directly, in a `list[...]`/`dict[...]`,
@@ -388,8 +403,10 @@ The selected `state.storage_paradigm` decides which themes run:
   > Address now, skip, or mark as todo?"
   - **now** → run the theme's questions.
   - **skip** → record under `skipped_themes` in state, move on.
-  - **todo** → append `"TODO: address theme <name>"` to
-    `data_warnings`, move on.
+  - **todo** → mint the next writer-managed warning id and append
+    `"WRN-NNN: theme <name> deferred (todo) — revisit before relying on this
+    section"` to `data_warnings` (bump `state.last_ids.WRN`), move on. A bare
+    `TODO:` entry would fail the validator's `WRN-NNN` format check.
 
 #### Conditional promotion
 
@@ -506,8 +523,12 @@ the tree, so a current `docs/INDEX.yaml` matters most here. If
 added mid-session only activates next session. Harmless no-op if not installed.
 
 After the CLAUDE.md write succeeds: set `status: complete` in the state
-file (do not delete it — it's an audit trail), and tell the user where the
-artifacts live.
+file (do not delete it — it's an audit trail), tell the user where the
+artifacts live, and point at what comes next:
+
+> Data model complete. Next: `/sdlc:api` (optional — a REST/GraphQL contract
+> projecting these entities), or skip straight to `/sdlc:arch` if the system
+> has no formal API surface.
 
 ## Session state file
 

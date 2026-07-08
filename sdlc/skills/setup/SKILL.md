@@ -4,9 +4,11 @@ description: >
   Run ONCE before /sdlc:prd to bootstrap a project for the SDLC document
   pipeline. Wires an automatic docs/INDEX.yaml navigation map: installs a
   stdlib-only generator, a Write|Edit PostToolUse hook that refreshes the
-  index on every docs/*.yaml edit, the slice-don't-slurp access rule, and the
+  index on every canonical docs/*.yaml or docs/TASKS*.json edit (shard edits
+  refresh the shards inventory), the slice-don't-slurp access rule, and the
   CLAUDE.md pointer. Trigger only on /sdlc:setup or a direct request to set up
-  the sdlc docs toolchain / docs index. Idempotent — safe to re-run.
+  the sdlc docs toolchain / docs index. Idempotent — safe to re-run; a re-run
+  also upgrades a previously installed generator.
 user-invocable: true
 disable-model-invocation: true
 model: sonnet
@@ -30,8 +32,8 @@ fills gaps and refreshes the index, never duplicates.
 
 | Target | Purpose |
 |---|---|
-| `.claude/sdlc/docs_index.py` | Stdlib-only index generator (zero deps; copied from this skill). Also a `--show <symbol>` power tool. |
-| `.claude/settings.json` | A `Write\|Edit\|MultiEdit` **PostToolUse hook** that regenerates the index after any `docs/*.yaml` edit. Merged in — existing settings preserved. |
+| `.claude/sdlc/docs_index.py` | Stdlib-only index generator (zero deps; copied from this skill). Covers the canonical YAML docs **and** the JSON canonicals (`TASKS.json`, `CODE-MANIFEST.json`), and emits a `shards:` inventory of every `docs/*__*` sub-artifact. Also a `--show <symbol>` power tool. |
+| `.claude/settings.json` | A `Write\|Edit\|MultiEdit` **PostToolUse hook** that regenerates the index after any canonical `docs/*.yaml` / `docs/TASKS*.json` edit (and after shard writes, to keep the `shards:` inventory current). Merged in — existing settings preserved. |
 | `.claude/rules/sdlc-docs-access.md` | The slice-don't-slurp retrieval protocol agents follow. |
 | `CLAUDE.md` (`## SDLC Documents`) | Slice-first access note + the `docs/INDEX.yaml` pointer. Coexists with the per-artifact bullets `prd`/`ux`/`data`/`arch` add to the same section. |
 | `docs/INDEX.yaml` | Generated once now (no-op if `docs/` is empty). |
@@ -88,10 +90,11 @@ Summarize what was installed and the action log. Then flag the timing caveat:
 
 > **Claude Code loads hooks from `settings.json` at session start.** A hook added
 > mid-session does not fire until the next session. `INDEX.yaml` was generated
-> now, and `sdlc:prd`/`ux`/`data`/`arch` each refresh it after they write, so the
-> map stays current in this session regardless. The hook simply guarantees the
-> refresh keeps happening on **manual** `docs/*.yaml` edits too, from next
-> session on.
+> now, and every artifact skill (`sdlc:prd`/`ux`/`design`/`data`/`api`/`arch`/
+> `test`/`task`) refreshes it after it writes (Phase 8 of the canonical flow),
+> so the map stays current in this session regardless. The hook simply
+> guarantees the refresh keeps happening on **manual** `docs/` edits too, from
+> next session on.
 
 Suggest the user restart the session (or `/hooks` to verify) if they want the
 automatic hook active immediately, then move on to `/sdlc:prd`.

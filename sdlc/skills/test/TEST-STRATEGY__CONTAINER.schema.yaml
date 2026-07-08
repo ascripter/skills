@@ -24,13 +24,17 @@
 #   * WRN-NNN — one per `test_strategy_warnings` entry (per-artifact counter
 #               in state.sessions[<key>].last_ids.WRN — the universal
 #               warnings convention).
-# Upstream ids it REFERENCES: FR/NFR/ACR (PRD); component_id, operations[].op_id
-#   (OPN-NNN), failure_modes[].id, security_concerns[].id (the matching
+# Upstream ids it REFERENCES: FR/NFR/ACR (PRD); component_id,
+#   work_units[].name (name-addressed — ARCH work_units carry NO id family),
+#   failure_modes[].id, security_concerns[].id (the matching
 #   ARCH__<container>.yaml).
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  test_strategy_container_version: "1.1"   # REQUIRED
+  test_strategy_container_version: "1.2"   # REQUIRED — 1.2 replaced
+                                           #   targets_operation (OPN-NNN, retired
+                                           #   with ARCH operations[]) with
+                                           #   targets_work_unit (work_units[].name)
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-test                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -84,16 +88,23 @@ tests:                                      # REQUIRED — list[ContainerTest], 
     component_ref: <component_id>           # OPTIONAL (REQUIRED for unit tier) — a
                                             #   components[].component_id in the matching
                                             #   ARCH__<container>.yaml. Validated.
-    targets_operation: OPN-001              # OPTIONAL — the component operation
-                                            #   (operations[].op_id, OPN-NNN) in
-                                            #   ARCH__<container>.yaml this test exercises.
-                                            #   Slices the suite to ONE test per method/
-                                            #   operation (the atomic test grain that
-                                            #   mirrors the `task` skill). VALIDATED ⊆ the
-                                            #   component_ref's operations[].op_id. Every
-                                            #   component operation SHOULD be exercised by
-                                            #   a test (advisory operation-coverage) — see
+    targets_work_unit: <work_unit name>     # OPTIONAL — the component work unit
+                                            #   (components[].work_units[].name in
+                                            #   ARCH__<container>.yaml — name-addressed,
+                                            #   no id family) this test exercises. Slices
+                                            #   the suite to ONE test per callable (the
+                                            #   atomic test grain that mirrors the `task`
+                                            #   skill's per-work_unit tasks). VALIDATED ⊆
+                                            #   the component_ref's work_units[].name
+                                            #   (requires component_ref when set). Every
+                                            #   work unit SHOULD be exercised by a test
+                                            #   (advisory work-unit coverage) — see
                                             #   cross-check 11.
+    # targets_operation: OPN-001            # DEPRECATED (pre-1.2 alias) — OPN-NNN of the
+                                            #   retired ARCH operations[] family. Parsed
+                                            #   for backward compatibility; emits a
+                                            #   deprecation warning, never blocks. New
+                                            #   writes use targets_work_unit.
     directives:                             # REQUIRED — non-empty. Arrange/act/assert,
       - <string>                            #   what to mock, edge cases. For property
                                             #   tests: the invariant + input space.
@@ -160,14 +171,18 @@ test_strategy_warnings:                     # OPTIONAL — list of "WRN-NNN: ...
 #     security_concerns[].id (container + component level) in
 #     ARCH__<container>.yaml is targeted by some test (targets_failure_mode /
 #     targets_security_concern / covers) OR deferred via a WRN-NNN. Blocks complete.
-# 11. targets_operation integrity — every targets_operation is OPN-NNN and resolves
-#     to an operations[].op_id in ARCH__<container>.yaml; when the test also sets
-#     component_ref, the op must belong to that component. Blocks complete.
-#     PLUS operation coverage (ADVISORY, never blocks): a component operation that
-#     no test exercises (targets_operation) and no WRN-NNN defers emits a WARNING —
-#     the suite isn't atomic for that method. Advisory (not blocking) because a
-#     test strategy is risk-driven: a trivial operation may legitimately have no
-#     dedicated test. No-op when no component declares operations.
+# 11. targets_work_unit integrity — every targets_work_unit resolves to a
+#     work_units[].name in ARCH__<container>.yaml; the test MUST also set
+#     component_ref, and the unit must belong to that component (work_unit names
+#     are unique only within their component). Blocks complete.
+#     PLUS work-unit coverage (ADVISORY, never blocks): a component work unit that
+#     no test exercises (targets_work_unit) and no WRN-NNN defers emits a WARNING —
+#     the suite isn't atomic for that callable. Advisory (not blocking) because a
+#     test strategy is risk-driven: a trivial work unit may legitimately have no
+#     dedicated test. No-op when no component declares work_units.
+#     LEGACY: a pre-1.2 `targets_operation` (OPN-NNN) emits a deprecation warning
+#     only — it resolves against nothing (ARCH no longer emits operations[]) and
+#     never blocks, so old artifacts stay loadable.
 # 10. Coverage failures force metadata.status: draft (they do not crash the
 #     validator) so partial strategies remain saveable as drafts.
 # =============================================================================

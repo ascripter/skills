@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Navigation-index generator for the large SDLC YAML artifacts under ``docs/``.
+"""Navigation-index generator for the large SDLC artifacts under ``docs/``.
 
-``docs/PRD.yaml`` and ``docs/DATA-MODEL.yaml`` grow large enough that a downstream
-agent loading them whole burns a big slice of its context window. This script
-produces ``docs/INDEX.yaml`` — a pure *location map* (file + line range + a short
-summary per addressable symbol) that lets an agent ``Read`` only the lines it
-needs. The index duplicates no field bodies, so it cannot drift in content; only
-line ranges move, and the ``Write|Edit`` PostToolUse hook (installed by the
-``sdlc:setup`` skill) keeps those current. The retrieval protocol agents follow
-lives in ``.claude/rules/sdlc-docs-access.md``.
+``docs/PRD.yaml``, ``docs/DATA-MODEL.yaml`` and ``docs/TASKS.json`` grow large
+enough that a downstream agent loading them whole burns a big slice of its
+context window. This script produces ``docs/INDEX.yaml`` — a pure *location map*
+(file + line range + a short summary per addressable symbol) that lets an agent
+``Read`` only the lines it needs, plus a ``shards:`` inventory naming every
+``docs/*__*`` sub-artifact so agents can discover per-surface/container/resource
+files without reading each parent's inventory block. The index duplicates no
+field bodies, so it cannot drift in content; only line ranges move, and the
+``Write|Edit`` PostToolUse hook (installed by the ``sdlc:setup`` skill) keeps
+those current. The retrieval protocol agents follow lives in
+``.claude/rules/sdlc-docs-access.md``.
 
 This file is dropped into a consumer project at ``.claude/sdlc/docs_index.py`` by
 ``sdlc:setup``. It is **stdlib-only by design**: a line-based scanner over the
-regular 2-space-indented YAML the SDLC skills emit. No YAML parser is imported, so
+regular 2-space-indented YAML — and pretty-printed JSON (``TASKS.json``,
+``CODE-MANIFEST.json``) — the SDLC skills emit. No YAML parser is imported, so
 the script has zero runtime dependencies and runs under any Python 3.8+ without an
 environment to set up.
 
@@ -22,10 +26,12 @@ Usage
     python docs_index.py --docs-dir path     # ... for a non-default docs dir
     python docs_index.py --hook              # PostToolUse mode: regen iff the
                                              #   edited file (read from stdin JSON)
-                                             #   is a canonical doc; else no-op
+                                             #   is a canonical doc or a shard;
+                                             #   else no-op
     python docs_index.py --show <symbol>     # print one symbol's [start,end] slice
-                                             #   (entity / enum name, FR-### id, or
-                                             #   a stage_dossiers map key)
+                                             #   (entity / enum name, FR-### id,
+                                             #   TSK-### id, or a stage_dossiers
+                                             #   map key)
 
 Project root is resolved from ``--project-root``, then ``$CLAUDE_PROJECT_DIR``,
 then the current working directory. ``docs/`` is taken relative to that root
@@ -53,11 +59,19 @@ INDEX_FILENAME = "INDEX.yaml"
 PRIORITY_FILES: tuple[str, ...] = (
     "PRD.yaml",
     "UX.yaml",
+    "DESIGN.yaml",
     "DATA-MODEL.yaml",
     "API.yaml",
     "ARCH.yaml",
-    "DEPLOY.yaml",
+    "TEST-STRATEGY.yaml",
+    "TASKS.json",
+    "CODE-MANIFEST.json",
+    "DEPLOY.yaml",  # planned — no producing skill yet
 )
+
+# Canonical docs that are JSON, not YAML. Their shards (``TASKS__<cid>.json``)
+# are excluded like every ``__`` shard but listed in the ``shards:`` inventory.
+_JSON_CANONICALS: frozenset = frozenset({"TASKS.json", "CODE-MANIFEST.json"})
 
 _SUMMARY_LIMIT = 120
 
@@ -98,11 +112,14 @@ def _is_canonical(name: str) -> bool:
     """True for a top-level SDLC doc the index should cover.
 
     Excludes the index itself, per-surface/container/resource sub-artifacts
-    (``UX__login.yaml``, ``ARCH__backend.yaml`` — they carry ``__`` and load
-    cheaply whole), draft scratch files, and version-suffixed snapshots
-    (``PRDv1.3.yaml``).
+    (``UX__login.yaml``, ``ARCH__backend.yaml``, ``TASKS__backend.json`` — they
+    carry ``__`` and load cheaply whole; the ``shards:`` inventory names them),
+    draft scratch files, and version-suffixed snapshots (``PRDv1.3.yaml``).
+    JSON canonicals are whitelisted by exact name (``_JSON_CANONICALS``).
     """
-    if name == INDEX_FILENAME or not name.endswith(".yaml"):
+    if name == INDEX_FILENAME:
+        return False
+    if not (name.endswith(".yaml") or name in _JSON_CANONICALS):
         return False
     if "__" in name or "_draft" in name.lower():
         return False
@@ -112,12 +129,41 @@ def _is_canonical(name: str) -> bool:
     return True
 
 
+def _is_shard(name: str) -> bool:
+    """True for a ``<PARENT>__<slug>`` sub-artifact (YAML or JSON).
+
+    Shards are never content-indexed (they load cheaply whole) but are listed
+    in the ``shards:`` inventory, and an edit to one refreshes the index so
+    that inventory stays current.
+    """
+    if "__" not in name or "_draft" in name.lower():
+        return False
+    return name.endswith(".yaml") or name.endswith(".json")
+
+
+def _shard_parent(name: str) -> str:
+    """The canonical file a shard belongs to (``UX__x.yaml`` → ``UX.yaml``)."""
+    stem = name.split("__", 1)[0]
+    return stem + (".json" if name.endswith(".json") else ".yaml")
+
+
 def _discover_files(docs_dir: Path) -> list[str]:
     """Return canonical doc filenames present in ``docs_dir``, in index order."""
-    present = {p.name for p in docs_dir.glob("*.yaml") if _is_canonical(p.name)}
+    candidates = list(docs_dir.glob("*.yaml")) + list(docs_dir.glob("*.json"))
+    present = {p.name for p in candidates if _is_canonical(p.name)}
     ordered = [f for f in PRIORITY_FILES if f in present]
     ordered += sorted(present - set(ordered))
     return ordered
+
+
+def _discover_shards(docs_dir: Path) -> "dict[str, list[str]]":
+    """Map each parent canonical filename to its sorted shard filenames."""
+    shards: dict[str, list[str]] = {}
+    candidates = list(docs_dir.glob("*__*.yaml")) + list(docs_dir.glob("*__*.json"))
+    for p in candidates:
+        if _is_shard(p.name):
+            shards.setdefault(_shard_parent(p.name), []).append(p.name)
+    return {parent: sorted(names) for parent, names in sorted(shards.items())}
 
 
 # ---------------------------------------------------------------------------
@@ -416,6 +462,95 @@ _EXTRACTORS = {
 
 
 # ---------------------------------------------------------------------------
+# JSON canonicals (TASKS.json, CODE-MANIFEST.json)
+# ---------------------------------------------------------------------------
+
+# A task's stable id inside a pretty-printed task object.
+_TSK_LINE_RE = re.compile(r'"task_id"\s*:\s*"(?P<id>[A-Z]+-\d+)"')
+# A top-level JSON key line: ``  "key": ...`` (checked only at root depth).
+_JSON_KEY_RE = re.compile(r'^\s*"(?P<key>[^"]+)"\s*:')
+# A one-line title/name/summary member, used for the symbol summary.
+_JSON_TITLE_RE = re.compile(r'"(?:title|name|summary)"\s*:\s*"(?P<val>[^"]*)"')
+
+
+def _scan_json(lines: "list[str]") -> "tuple[dict[str, tuple[int, int]], list[SymbolSlice]]":
+    """Line-range map for a pretty-printed JSON canonical (stdlib, no parse).
+
+    Returns top-level-key sections plus one symbol per ``"task_id"`` object.
+    Assumes the machine-written ``json.dump(indent=…)`` shape the skills emit:
+    strings never span lines, and a task object's ``{`` opens on or before the
+    line carrying its ``task_id`` member. Compact single-line objects are not
+    symbol-indexed (their enclosing section still is). Best-effort by design —
+    a malformed file yields empty results, never an exception.
+    """
+    sections: "dict[str, tuple[int, int]]" = {}
+    symbols: "list[SymbolSlice]" = []
+    stack: "list[dict]" = []  # frames: {"ch": "{"|"[", "line": int, "tid": str|None}
+    current_key: "Optional[tuple[str, int]]" = None  # (key, start_line)
+
+    def close_section(end_line: int) -> None:
+        nonlocal current_key
+        if current_key is not None:
+            sections[current_key[0]] = (current_key[1], max(current_key[1], end_line))
+            current_key = None
+
+    for i, line in enumerate(lines, start=1):
+        if len(stack) == 1 and stack[0]["ch"] == "{":
+            key_match = _JSON_KEY_RE.match(line)
+            if key_match is not None:
+                close_section(i - 1)
+                current_key = (key_match.group("key"), i)
+        in_str = esc = False
+        for ch in line:
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch in "{[":
+                stack.append({"ch": ch, "line": i, "tid": None})
+            elif ch in "}]":
+                if not stack:
+                    return {}, []  # malformed — bail out empty
+                frame = stack.pop()
+                if frame["ch"] == "{" and frame["tid"]:
+                    summary = ""
+                    for j in range(frame["line"] - 1, i):
+                        title = _JSON_TITLE_RE.search(lines[j])
+                        if title is not None:
+                            summary = _summarize(title.group("val"))
+                            break
+                    symbols.append(
+                        SymbolSlice(
+                            file="",  # filled by the caller
+                            path=f"tasks[{frame['tid']}]",
+                            start=frame["line"],
+                            end=i,
+                            kind="task",
+                            context=None,
+                            summary=summary,
+                        )
+                    )
+                if not stack:
+                    close_section(i - 1)
+        tsk_match = _TSK_LINE_RE.search(line)
+        if tsk_match is not None:
+            for frame in reversed(stack):
+                if frame["ch"] == "{":
+                    if frame["tid"] is None:
+                        frame["tid"] = tsk_match.group("id")
+                    break
+    close_section(len(lines))
+    symbols.sort(key=lambda s: s.start)
+    return sections, symbols
+
+
+# ---------------------------------------------------------------------------
 # Index assembly
 # ---------------------------------------------------------------------------
 
@@ -426,6 +561,7 @@ class DocIndex(NamedTuple):
     generated_from: "dict[str, dict[str, object]]"
     sections: "dict[str, dict[str, tuple[int, int]]]"
     symbols: "dict[str, SymbolSlice]"
+    shards: "dict[str, list[str]]"
 
 
 def build_index(docs_dir: Path) -> DocIndex:
@@ -450,6 +586,13 @@ def build_index(docs_dir: Path) -> DocIndex:
             "sha256": sha256(text.encode("utf-8")).hexdigest(),
             "lines": len(lines),
         }
+        if filename.endswith(".json"):
+            file_sections, json_symbols = _scan_json(lines)
+            sections[filename] = file_sections
+            for sym in json_symbols:
+                sym = sym._replace(file=filename)
+                symbols[sym.file + ":" + sym.path] = sym
+            continue
         file_sections = _top_level_sections(lines)
         sections[filename] = file_sections
         for extractor in _EXTRACTORS.get(filename, ()):
@@ -463,14 +606,19 @@ def build_index(docs_dir: Path) -> DocIndex:
     named: dict[str, SymbolSlice] = {}
     for sym in ordered:
         named[_symbol_name(sym)] = sym
-    return DocIndex(generated_from=generated_from, sections=sections, symbols=named)
+    return DocIndex(
+        generated_from=generated_from,
+        sections=sections,
+        symbols=named,
+        shards=_discover_shards(docs_dir),
+    )
 
 
 def _symbol_name(sym: SymbolSlice) -> str:
-    """The lookup key an agent uses: entity/enum name, FR id, or dossier key."""
-    fr = re.search(r"\[(FR-\d+)\]$", sym.path)
-    if fr is not None:
-        return fr.group(1)
+    """The lookup key an agent uses: entity/enum name, FR/TSK id, or dossier key."""
+    bracketed = re.search(r"\[((?:FR|TSK)-\d+)\]$", sym.path)
+    if bracketed is not None:
+        return bracketed.group(1)
     return sym.path.rsplit(".", 1)[-1]
 
 
@@ -481,8 +629,9 @@ def _symbol_name(sym: SymbolSlice) -> str:
 _HEADER = (
     "# GENERATED by .claude/sdlc/docs_index.py — DO NOT HAND-EDIT.\n"
     "# Regenerated automatically by the Write|Edit PostToolUse hook on any\n"
-    "# docs/*.yaml edit. A pure location map (file + line range + one-line\n"
-    "# summary) over the large SDLC YAML artifacts; it duplicates NO field\n"
+    "# canonical docs/*.yaml or docs/TASKS*.json edit (shard edits refresh the\n"
+    "# shards inventory). A pure location map (file + line range + one-line\n"
+    "# summary) over the large SDLC artifacts; it duplicates NO field\n"
     "# bodies. Retrieval protocol: .claude/rules/sdlc-docs-access.md\n"
 )
 
@@ -514,6 +663,14 @@ def render_index_yaml(index: DocIndex) -> str:
         out.append(f"  {fname}:")
         for key, (start, end) in secs.items():
             out.append(f"    {key}: [{start}, {end}]")
+
+    if index.shards:
+        out.append("")
+        out.append("# shards: every docs/<PARENT>__<slug> sub-artifact present, keyed by")
+        out.append("# its parent canonical. Shards load cheaply whole — no line ranges.")
+        out.append("shards:")
+        for parent, names in index.shards.items():
+            out.append(f"  {parent}: [{', '.join(_flow(n) for n in names)}]")
 
     out.append("")
     out.append("# symbols: grouped by file. Each row is positional —")
@@ -594,9 +751,13 @@ def _edited_path_from_stdin() -> Optional[str]:
 
 
 def _path_is_relevant(file_path: str) -> bool:
-    """True if ``file_path`` is a canonical doc whose edit should trigger a regen."""
+    """True if ``file_path``'s edit should trigger a regen.
+
+    Canonical docs move line ranges; shard writes (``UX__x.yaml``,
+    ``TASKS__cid.json``) change the ``shards:`` inventory. Both refresh.
+    """
     p = Path(file_path)
-    return "docs" in p.parts and _is_canonical(p.name)
+    return "docs" in p.parts and (_is_canonical(p.name) or _is_shard(p.name))
 
 
 def _force_utf8_stdio() -> None:

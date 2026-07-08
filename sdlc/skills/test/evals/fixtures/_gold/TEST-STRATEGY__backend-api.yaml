@@ -1,12 +1,13 @@
 # GOLD reference output for the backend-api container eval. Not staged as an
 # input — used only to self-test grade.py (a correct output should score green).
 metadata:
-  test_strategy_container_version: "1.1"
-  last_updated: "2026-06-26T10:00:00Z"
+  test_strategy_container_version: "1.2"
+  last_updated: "2026-07-07T00:00:00Z"
   generated_by: sdlc-test
   session_id: "testbe01-tbe1-tbe1-tbe1-testbackendapi"
   status: complete
   changelog:
+    - "1.2 (2026-07-07): Migrate targets_operation (OPN, retired) to targets_work_unit (ARCH work_units[].name)."
     - "1.1 (2026-06-26): Trace unit tests to component operations (targets_operation / OPN)."
     - "1.0 (2026-05-28): Initial backend-api container test strategy (gold)."
 container_id: backend-api
@@ -22,7 +23,7 @@ tests:
     tier: unit
     description: "Happy-path create on the tasks controller."
     component_ref: tasks-controller
-    targets_operation: OPN-003
+    targets_work_unit: create-task
     directives:
       - "Arrange a valid create payload."
       - "Act: call create()."
@@ -36,7 +37,7 @@ tests:
     tier: unit
     description: "Status transition on the tasks controller."
     component_ref: tasks-controller
-    targets_operation: OPN-004
+    targets_work_unit: update-task
     directives:
       - "Arrange an open task."
       - "Act: mark it done."
@@ -50,7 +51,7 @@ tests:
     tier: unit
     description: "Happy-path comment add."
     component_ref: comments-controller
-    targets_operation: OPN-006
+    targets_work_unit: create-comment
     directives:
       - "Arrange a task; act: add a comment; assert it is persisted and listed."
     covers: [FR-002]
@@ -62,7 +63,7 @@ tests:
     tier: unit
     description: "Digest enable/disable + send-time round trip."
     component_ref: digest-settings-controller
-    targets_operation: OPN-008
+    targets_work_unit: update-digest-settings
     directives:
       - "Arrange settings payload; act: save; assert read-back matches; runs newest-first."
     covers: [FR-004]
@@ -74,7 +75,7 @@ tests:
     tier: integration
     description: "Controller + repository against a real test Postgres."
     component_ref: persistence-repository
-    targets_operation: OPN-009
+    targets_work_unit: write-row
     directives:
       - "Arrange a test DB; act: write then read a Task; assert equality."
     covers: [FR-001]
@@ -86,7 +87,7 @@ tests:
     tier: security
     description: "Abuse case for the jwt-forgery concern."
     component_ref: auth-middleware
-    targets_operation: OPN-001
+    targets_work_unit: verify-token
     directives:
       - "Arrange a token signed by a wrong key / expired."
       - "Act: call any protected endpoint."
@@ -116,4 +117,4 @@ tests:
     acceptance: "A DB outage surfaces as a retried, then graceful, 503 — never a crash."
     status: confirmed
 test_strategy_warnings:
-  - "WRN-001: OPN-002 (list-tasks), OPN-005 (list-comments), OPN-007 (get-digest-settings) and OPN-010 (read-row) are trivial read/list getters exercised transitively by the controller and repository round-trip tests; no dedicated unit test."
+  - "WRN-001: work units list-tasks, list-comments, get-digest-settings and read-row are trivial read/list getters exercised transitively by the controller and repository round-trip tests; no dedicated unit test."

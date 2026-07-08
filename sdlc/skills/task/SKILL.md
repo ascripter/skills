@@ -22,7 +22,7 @@ description: >
 user-invocable: true
 disable-model-invocation: true
 model: opus
-effort: high
+effort: xhigh
 allowed-tools: Read Write(CLAUDE.md) Write(docs/TASKS.json) Write(docs/TASKS__*.json) Write(.claude/skills-state/sdlc-task.state.yaml) Bash Bash(ls *) Glob Grep AskUserQuestion
 ---
 
@@ -39,12 +39,15 @@ code-generation factory fans out over. Two artifacts:
   that container's scaffold, per-component implementation tasks, first-class
   test tasks, and within-container wiring.
 
-Container tasks are **self-contained for codegen** (schema v1.3): each
+Container tasks are **self-contained for codegen** (schema v1.4): each
 implementation task embeds its work_unit's interface contract
-(`interface_contract`, plus `unit_kind`/`unit_summary`) and each test task
-embeds its TST's specifics (`test_spec`), so `/sdlc:code` acts on a task
-without per-task ARCH/TEST-STRATEGY lookups — only container-general facts
-(tech stack) stay upstream.
+(`interface_contract`, plus `unit_kind`/`unit_summary`), each test task
+embeds its TST's specifics (`test_spec`), and — since v1.4 — each
+integration/migration/design/config task embeds its grounding slice
+(`operation_contract` / `entity_slice` / `design_spec` / `config_keys`),
+so `/sdlc:code` acts on a task
+without per-task ARCH/TEST-STRATEGY/API/DATA/DESIGN lookups — only
+container-general facts (tech stack) stay upstream.
 
 This is the SDLC factory's Stage-13 "Task Breakdown": per-container task
 subgraphs are produced one container at a time, then **deterministically
@@ -109,6 +112,7 @@ many containers they touch:
 | `TASKS__CONTAINER.schema.yaml` | Human-readable canonical schema for `docs/TASKS__<container>.json`. |
 | `validate_schema.py` | Pydantic v2 validator (system + every container file + coverage + the union-graph acyclicity check). Loads the JSON artifacts. |
 | `count_work_units.py` | Deterministic, plumbing-aware per-component work_unit counter for an `ARCH__<container>.yaml` — a real YAML parse, never a grep. Run it in Phase 2 preflight; quote its output in any readiness/refusal message. |
+| `crosscheck_artifacts.py` | Cross-artifact integrity linter over the whole docs/ chain (TEST↔ARCH work_units, TASKS↔ARCH/TEST/API/DATA/UX/PRD refs, ARCH edge grounding). Run it in Phase 7 system mode; `/sdlc:code` runs it as a preflight too. |
 | `set_claude_md_pointer.py` | Deterministic CLAUDE.md pointer injector, called in Phase 8. |
 | `references/interview-mechanics.md` | AskUserQuestion batch format, EXIT semantics, importance-tier flows. Read on entering Phase 6. |
 | `references/task-discovery.md` | How to seed the task graph from ARCH components + TEST tests + API + DATA (system and container). Read in Phase 3. |
@@ -399,7 +403,11 @@ than inventing from a blank page. Load `references/task-discovery.md` and
    grouped** — with the TST's `tier`/`directives`/`acceptance`/`covers`
    embedded as `test_spec` (v1.3). Tag `✓ found`.
 3. **`ARCH__<container>.internal_edges`** — `calls` edges between components seed
-   `integration` tasks. Tag `✓ found`.
+   `integration` tasks; when such a task names `touches_operations`, embed the
+   operations' method/path/schemas as `operation_contract` (v1.4). Likewise
+   embed `entity_slice` on migration tasks, `design_spec` on design tasks, and
+   `config_keys` on config tasks — see `references/task-discovery.md` →
+   "Embed the per-task specifics". Tag `✓ found`.
 4. **Container `scaffold`** — one task for the package skeleton/manifest. Tag
    `⚠ inferred`.
 5. **DATA entities the components persist** — a `repository` component's
@@ -474,7 +482,10 @@ straight to the task graph.
    equal a `work_units[].name` on `component_ref`), `unit_kind` + `unit_summary`
    + `interface_contract` (embedded from the ARCH work_unit / resolved API
    operation — v1.3), `implements` (FR/NFR), `implements_tests` (TST) +
-   `test_spec` (embedded from the TST entry — v1.3), `implements_surfaces` (SCR),
+   `test_spec` (embedded from the TST entry — v1.3), `operation_contract` /
+   `entity_slice` / `design_spec` / `config_keys` (the v1.4 per-kind embeds
+   for integration / migration / design / config tasks),
+   `implements_surfaces` (SCR),
    `implements_workflows` (WKF), `touches_entities`, `touches_operations`,
    `touches_assets` (AST), `depends_on`, `inputs`, `target_files`, `outputs`,
    `acceptance`, `priority`.
@@ -532,6 +543,19 @@ across all files — the stitch). Coverage, scope, dependency, and ID-format
 failures force `metadata.status: draft`; upstream-status issues emit warnings
 only. The full check list (and the merge logic + recovery flow on `[FAIL]`) lives
 in `references/merge-validate.md`; in summary:
+
+**In system mode (the stitch), additionally run the cross-artifact linter:**
+
+```bash
+python "${CLAUDE_SKILL_DIR}/crosscheck_artifacts.py" --docs-dir docs
+```
+
+It verifies every cross-artifact reference across the whole chain
+(TEST `targets_work_unit` ↔ ARCH work_units, TASKS `target_symbol`/refs ↔
+ARCH/TEST/API/DATA/UX/PRD, ARCH edge grounding) — the class of desync no
+single artifact's validator can see. `[FAIL]` lines are real broken refs:
+fix the referencing artifact (or re-run the upstream skill) before declaring
+the stitch complete.
 
 **Coverage** (block complete — trace-or-defer, see `references/coverage-and-defer.md`).
 An item is covered if a task names it OR a task realizes a component that traces it
@@ -618,8 +642,13 @@ section if missing). For bullet detection and append behaviour, see
 installed.
 
 After the CLAUDE.md write succeeds: set the active sub-session's
-`status: complete` in the state file (keep the file as audit trail) and tell the
-user where the artifacts live and what `--next` would do.
+`status: complete` in the state file (keep the file as audit trail), tell the
+user where the artifacts live and what `--next` would do, and point at what
+comes next:
+
+> This container's task graph is complete. Run `/sdlc:task --next` for the next
+> container, or `/sdlc:code` once every container has a complete, validator-green
+> task graph (it executes the tasks and writes the source).
 
 ## Task kinds — the typed vocabulary
 
@@ -654,6 +683,11 @@ Like `arch`/`test`, `task` keeps **per-mode sub-sessions** in one file:
 
 ```yaml
 # changelog:
+#   1.3 (2026-07-07): Schema v1.4 — extend embedding to the remaining grounded
+#     kinds (operation_contract on integration, entity_slice on migration,
+#     design_spec on design, config_keys on config); expand derivation-rule
+#     work_units_waivers into per-file authoring tasks; entity realization in
+#     non-DDL paradigms rides implementation tasks (no forced migration kind).
 #   1.2 (2026-07-07): Schema v1.3 — embed per-task specifics at seeding/write
 #     time (interface_contract from the ARCH work_unit or resolved API operation;
 #     test_spec from the TST entry; unit_kind/unit_summary), draft target_files
@@ -665,7 +699,7 @@ Like `arch`/`test`, `task` keeps **per-mode sub-sessions** in one file:
 #     preflight gate set is explicitly closed (no invented git/changelog gates).
 #   1.0: initial two-mode (system/container) task graph + --next resolver.
 session_file_version: "1"
-skill_version: "1.2"
+skill_version: "1.3"
 last_updated: <iso8601>
 spec_order: []                  # container_ids in --next / build_order sequence (providers first)
 

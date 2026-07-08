@@ -111,7 +111,16 @@ Before doing anything else, check for
 
 `sdlc:api` does NOT re-interview anything that already lives in
 `docs/PRD.yaml`, `docs/UX.yaml`, or `docs/DATA-MODEL.yaml`. Read these
-files at startup and validate each via its upstream skill:
+files at startup and validate each via its upstream skill.
+
+**Slice, don't slurp.** When `docs/INDEX.yaml` exists (the project ran
+`/sdlc:setup`), read the large upstreams **by line range via the index**:
+look the needed section/symbol up in `INDEX.yaml` (`sections` /
+`symbols`, or `python .claude/sdlc/docs_index.py --show <symbol>`) and
+`Read` only that slice — the extraction lists below name exactly which
+blocks each upstream contributes. Fall back to a whole-file read only
+when `INDEX.yaml` is absent or the doc is genuinely small. See
+`.claude/rules/sdlc-docs-access.md`.
 
 1. **`docs/PRD.yaml`** — required.
 
@@ -415,8 +424,15 @@ For the bullet detection rule and append behavior, see
 `references/merge-validate.md`.
 
 After the CLAUDE.md write succeeds: set `status: complete` in the state
-file (keep the file — audit trail), tell the user where the artifacts
-live.
+file (keep the file — audit trail), then **refresh the navigation
+index** (`python .claude/sdlc/docs_index.py`; no-op if the project never
+ran `/sdlc:setup` — the freshly-installed hook isn't active until the
+next session, so the explicit refresh keeps `INDEX.yaml` current now).
+Close by telling the user where the artifacts live and what comes next:
+
+> API contract complete. Next: `/sdlc:arch` (system architecture; it
+> consumes `docs/API.yaml` and warns if it's absent — yours is now in
+> place).
 
 ## Session state file
 

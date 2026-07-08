@@ -58,13 +58,16 @@ Validates:
        - Union: every PRD must-have FR is realized somewhere or deferred (hard
          only once the whole graph is stitched; advisory before).
        Surface/operation gates soften to advisory when UX/API are absent.
-    7. Embedded per-task specifics (v1.3, container files):
-       - #18 (blocking at tasks_container_version >= 1.3; advisory below):
-         every kind:implementation task embeds interface_contract
-         (source/inputs/output/raises; explicit empties count; non-callable
-         unit_kind exempt) and every kind:test task embeds test_spec
-         (tier/directives/acceptance) — so the codegen agent works from the
-         task alone, no per-task ARCH/TEST-STRATEGY lookup.
+    7. Embedded per-task specifics (v1.3/v1.4, container files):
+       - #18 (each presence check blocks at the version that introduced it;
+         advisory below): every kind:implementation task embeds
+         interface_contract (v1.3; source/inputs/output/raises; explicit
+         empties count; non-callable unit_kind exempt) and every kind:test
+         task embeds test_spec (v1.3; tier/directives/acceptance); at v1.4
+         additionally kind:integration embeds operation_contract,
+         kind:migration embeds entity_slice, kind:design embeds design_spec,
+         kind:config embeds config_keys — so the codegen agent works from the
+         task alone, no per-task ARCH/TEST-STRATEGY/API/DATA/DESIGN lookup.
        - #19 (blocking, any version): a file claiming status complete has every
          task status: confirmed (the skill confirms via its drill-down flow).
        - #20 (advisory): embedded copies drifting from the current ARCH
@@ -155,6 +158,11 @@ FILE_PRODUCING_KINDS = {"scaffold", "test", "migration", "config", "design"}
 # at this artifact version; older artifacts get warnings instead of errors.
 EMBEDDED_SPECS_MIN_VERSION = (1, 3)
 
+# The v1.4 self-containment embeds (operation_contract / entity_slice /
+# design_spec / config_keys) became REQUIRED at this version; below it they
+# warn instead (older artifacts predate the fields).
+EMBEDS_V14_MIN_VERSION = (1, 4)
+
 
 def _version_tuple(v: Optional[str]) -> Tuple[int, int]:
     """Parse 'MAJOR.MINOR[...]' leniently; unparseable → (0, 0) (pre-1.3)."""
@@ -227,6 +235,13 @@ class ContainerTask(BaseModel):
     unit_summary: Optional[str] = None   # the work_unit's one-liner, copied
     interface_contract: Optional[InterfaceContract] = None
     test_spec: Optional[TestSpec] = None
+    # v1.4 self-containment embeds — one per grounded kind. Loosely typed on
+    # purpose: they are WRITE-TIME COPIES of upstream slices; deep-validating a
+    # copy would over-validate (the #20 drift advisory catches divergence).
+    operation_contract: Optional[List[Dict[str, Any]]] = None  # kind:integration
+    entity_slice: Optional[List[Dict[str, Any]]] = None        # kind:migration
+    design_spec: Optional[Dict[str, Any]] = None               # kind:design
+    config_keys: Optional[List[Dict[str, Any]]] = None         # kind:config
     implements: Optional[List[str]] = None
     implements_tests: Optional[List[str]] = None
     implements_surfaces: Optional[List[str]] = None
@@ -679,11 +694,21 @@ def load_data_entities(data_path: Path) -> Tuple[Set[str], bool, bool]:
     return {str(n) for n in names}, True, polyglot
 
 
+def _collect_override_scrs(block: Any, info: "DesignInfo") -> None:
+    """Add every SCR-NNN key of a surface_overrides mapping to info.override_scrs."""
+    if isinstance(block, dict):
+        for key in block:
+            k = str(key).strip().upper()
+            if _SCR_RE.match(k):
+                info.override_scrs.add(k)
+
+
 class DesignInfo:
     def __init__(self) -> None:
         self.present: bool = False
         self.functional_structure: Set[str] = set()   # token_based_ui|asset_pipeline|headless
         self.ast_ids: Set[str] = set()                # AST-NNN from DESIGN__assets.yaml
+        self.override_scrs: Set[str] = set()          # SCR-NNN keys of surface_overrides
 
 
 def load_design(docs_dir: Path) -> DesignInfo:
@@ -696,6 +721,12 @@ def load_design(docs_dir: Path) -> DesignInfo:
             info.functional_structure = {str(x).strip() for x in fs}
         elif isinstance(fs, str):
             info.functional_structure = {fs.strip()}
+        # surface_overrides — single-product at top level, or per product in
+        # monorepo mode. Collect SCR keys from either shape.
+        _collect_override_scrs(raw.get("surface_overrides"), info)
+        for prod in (raw.get("products") or {}).values():
+            if isinstance(prod, dict):
+                _collect_override_scrs(prod.get("surface_overrides"), info)
     assets = _safe_yaml(docs_dir / "DESIGN__assets.yaml")
     if assets is not None:
         for a in assets.get("assets") or []:
@@ -809,17 +840,26 @@ def check_embedded_specs(cm: TasksContainer, label: str) -> Tuple[List[str], Lis
 
     interface_contract on every kind:implementation task (non-callable
     unit_kind exempt — the FILE is the contract) and test_spec on every
-    kind:test task. VERSION-GATED: blocking at tasks_container_version >= 1.3,
-    warnings below (older artifacts predate the fields). Vocabulary and
+    kind:test task; at >= 1.4 additionally operation_contract (integration),
+    entity_slice (migration), design_spec (design) and config_keys (config).
+    VERSION-GATED: each presence check blocks at the version that introduced
+    it, warns below (older artifacts predate the fields). Vocabulary and
     wrong-kind placement are errors at ANY version.
     """
     errs: List[str] = []
     warns: List[str] = []
-    gated = _version_tuple(cm.metadata.tasks_container_version) >= EMBEDDED_SPECS_MIN_VERSION
+    version = _version_tuple(cm.metadata.tasks_container_version)
+    gated = version >= EMBEDDED_SPECS_MIN_VERSION
+    gated14 = version >= EMBEDS_V14_MIN_VERSION
 
     def report(msg: str) -> None:
         (errs if gated else warns).append(
             msg if gated else msg + " (advisory: artifact predates v1.3)"
+        )
+
+    def report14(msg: str) -> None:
+        (errs if gated14 else warns).append(
+            msg if gated14 else msg + " (advisory: artifact predates v1.4)"
         )
 
     for i, t in enumerate(cm.tasks or []):
@@ -871,6 +911,54 @@ def check_embedded_specs(cm: TasksContainer, label: str) -> Tuple[List[str], Lis
             ]
             if missing:
                 report(f"{where}.test_spec leaves {missing} empty (check 18)")
+
+        # --- v1.4 self-containment embeds (wrong-kind placement errors at
+        #     ANY version; presence gated at >= 1.4) ---
+        for field_name, owner_kind, value in (
+            ("operation_contract", "integration", t.operation_contract),
+            ("entity_slice", "migration", t.entity_slice),
+            ("design_spec", "design", t.design_spec),
+            ("config_keys", "config", t.config_keys),
+        ):
+            if value is not None and t.kind != owner_kind:
+                errs.append(f"{where}: {field_name} on a kind:{t.kind} task ({owner_kind} only)")
+
+        if t.kind == "integration" and (t.touches_operations or []):
+            if not t.operation_contract:
+                report14(
+                    f"{where}: kind:integration names touches_operations but embeds no "
+                    f"operation_contract — copy each operation's method/path/schemas from "
+                    f"API__*.yaml so the codegen agent needs no upstream lookup (check 18)"
+                )
+            else:
+                embedded_ops = {str(e.get("operation_id", "")).strip() for e in t.operation_contract}
+                missing_ops = [o for o in t.touches_operations if o not in embedded_ops]
+                if missing_ops:
+                    report14(f"{where}.operation_contract misses touches_operations entries {missing_ops} (check 18)")
+        if t.kind == "migration" and (t.touches_entities or []):
+            if not t.entity_slice:
+                report14(
+                    f"{where}: kind:migration names touches_entities but embeds no "
+                    f"entity_slice — copy each entity's field defs from DATA-MODEL.yaml "
+                    f"so the codegen agent needs no upstream lookup (check 18)"
+                )
+            else:
+                embedded_ents = {str(e.get("entity", "")).strip() for e in t.entity_slice}
+                missing_ents = [e for e in t.touches_entities if e not in embedded_ents]
+                if missing_ents:
+                    report14(f"{where}.entity_slice misses touches_entities entries {missing_ents} (check 18)")
+        if t.kind == "design" and not t.design_spec:
+            report14(
+                f"{where}: kind:design without design_spec — embed the token groups "
+                f"and/or per-AST generation briefs from DESIGN__tokens.yaml / "
+                f"DESIGN__assets.yaml so the codegen agent needs no upstream lookup (check 18)"
+            )
+        if t.kind == "config" and not t.config_keys:
+            report14(
+                f"{where}: kind:config without config_keys — enumerate every key "
+                f"(name/source/default/secret) so the codegen agent does not invent "
+                f"settings (check 18)"
+            )
     return errs, warns
 
 
@@ -1179,6 +1267,7 @@ def check_container(
     realized_units: Set[Tuple[str, str]] = set()   # (component_ref, target_symbol) built
     symbol_task_count: Dict[Tuple[str, str], int] = {}   # for the uniqueness gate
     has_design_task = False
+    design_task_surfaces: Set[str] = set()   # SCR ids named by kind:design tasks
 
     for i, t in enumerate(m.tasks or []):
         if t.kind == "design":
@@ -1264,6 +1353,8 @@ def check_container(
                 errs.append(f"{label} tasks[{i}].implements_surfaces '{ref}' is not a surface in UX.yaml")
             else:
                 explicit_surfaces.add(s.upper())
+                if t.kind == "design":
+                    design_task_surfaces.add(s.upper())
         for ref in t.implements_workflows or []:
             w = str(ref).strip().upper()
             if not _WKF_RE.match(w):
@@ -1396,6 +1487,18 @@ def check_container(
         for ast in sorted(design.ast_ids):
             if ast not in realized_ast and not _deferred_literals(warnings, {ast}):
                 warns.append(f"{label} asset {ast} (DESIGN__assets) has no scaffolding/brief task")
+    # Per-surface design coverage — each DESIGN surface_overrides entry for a
+    # surface this container owns is concrete bespoke design work: expect a
+    # kind:design task naming that SCR in implements_surfaces (trace-or-defer).
+    if owned_slugs and design.present and design.override_scrs and ux.present:
+        owned_scrs = {scr for slug in owned_slugs if (scr := ux.to_scr(slug))}
+        for scr in sorted(design.override_scrs & owned_scrs):
+            if scr not in design_task_surfaces and not _deferred_literals(warnings, {scr}):
+                warns.append(
+                    f"{label} surface_override {scr} (DESIGN surface_overrides) has no "
+                    f"kind:design task naming it in implements_surfaces — derive a per-surface "
+                    f"design task or defer via a WRN-NNN"
+                )
     return errs, warns
 
 

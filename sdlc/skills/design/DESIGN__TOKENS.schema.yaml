@@ -9,6 +9,10 @@
 # This is the value-add over UX's component_library.theming_tokens: UX records
 # the *decision* to use tokens and maybe a couple of placeholder colours;
 # DESIGN__tokens.yaml records the *full, concrete* set, ready to ship.
+# PRECEDENCE: once this file exists it is the CANONICAL token home — UX's
+# theming_tokens block is a hint only, any conflict resolves in THIS file's
+# favour, and downstream consumers (task/code) read tokens from here, never
+# from UX. (The same precedence note lives in UX.schema.yaml.)
 #
 # -----------------------------------------------------------------------------
 # DTCG shape
