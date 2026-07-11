@@ -135,6 +135,28 @@ reason** — a bare "WRN-016: TST-019" is valid to the regex but useless to a
 reviewer. Don't defer to dodge work; defer when a separate task would be noise or
 when the work genuinely lives elsewhere.
 
+### Paired deferral: impl and test deferral sets stay symmetric (CLAUDE.md §6a)
+
+Deferral is not a per-artifact choice made in isolation. A behaviour has a
+**test** (in `test`) and an **impl task** (here) — deferring one while keeping the
+other ships a lie: an untested branch under a "full coverage" claim, or a tested
+branch nobody builds. Keep the two sets **symmetric**:
+
+- If `test` **deferred the test** for a behaviour (its work_unit / FR / component
+  is named in `TEST-STRATEGY__<cid>.test_strategy_warnings`, so no `TST-NNN`
+  exists for it) and you still emit its impl task, that impl task must be
+  **post-MVP** (`priority: could`) or itself **deferred** in `task_warnings` —
+  else it builds a branch with no test while the artifact claims full coverage.
+  Cross-check #23 **warns** on this asymmetry (it can't hard-block across two
+  artifacts + two id-namespaces, but the warning is your signal to fix it).
+- The honest resolutions are exactly two: **defer both** (drop the impl task to
+  post-MVP / name it in a WRN too) or **claim partial coverage** (restore the
+  test so the pair is live again). Don't silently keep the impl.
+
+Because a test deferred in the `test` stage leaves **no `TST-NNN`** to key on,
+this reconciliation is driven off the *test's deferral warnings*, not its test
+ids — the validator reads `test_strategy_warnings` for the behaviour token.
+
 **A `work_units_waiver` carrying a derivation rule is NOT a deferral — expand
 it.** When an ARCH `content_asset` (or similar) component declares
 `work_units: []` plus a waiver like *"one authoring task per template file

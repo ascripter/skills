@@ -43,14 +43,16 @@ fallback. The work-unit coverage gate holds you to realizing every
 `coverage-and-defer.md`. See `granularity-and-ordering.md` for the full model.
 
 **Every work_unit kind maps to `kind: implementation`.** A unit may carry a
-`kind` (`callable` default, or `module` / `content` / `tooling` — demo FR-013
-v1.30 deliverable classes). The task derivation is identical for all four —
-same `component_ref`/`target_symbol`/one-`target_files` shape, same coverage
-gates — because a non-callable unit is still exactly one deliverable in one
-file. Copy the unit's `kind` onto the task as `unit_kind` (omit for
-`callable`): it is the codegen agent's rendering-mode switch (render a method
-vs. emit the module/content/tool file), nothing more. Do NOT map content →
-`chore` or tooling → some other kind — that would strip the atomicity pins.
+`kind` (`callable` default, or `module` / `content` / `tooling` / `entrypoint` —
+demo FR-013 v1.30 deliverable classes + the composition/dispatch root). The task
+derivation is identical for all five — same `component_ref`/`target_symbol`/
+one-`target_files` shape, same coverage gates — because each unit is still
+exactly one deliverable in one file. Copy the unit's `kind` onto the task as
+`unit_kind` (omit for `callable`): it is the codegen agent's rendering-mode
+switch (render a method; emit the module/content/tool file; or render the
+`entrypoint` composition root — arg/mode parse + step-sequencing + setup + exit
+codes), nothing more. Do NOT map content → `chore`, tooling → some other kind, or
+entrypoint → `scaffold` — that would strip the atomicity pins.
 
 ### Embed the per-task specifics (schema v1.3/v1.4 — the self-sufficiency contract)
 

@@ -148,8 +148,11 @@ SYSTEM_KINDS = {
 
 # WorkUnit deliverable classes (mirrors arch's _WORK_UNIT_KINDS). A non-callable
 # unit_kind delivers a FILE, so the embedded interface_contract does not apply
-# to it (schema #18 — mirrors arch #23's FILE exemption).
-UNIT_KINDS = {"callable", "module", "content", "tooling"}
+# to it (schema #18 — mirrors arch #23's FILE exemption). `entrypoint` is
+# CALLABLE-dialect (the composition/dispatch root of a single-file / multi-mode
+# deliverable — argv/env in, exit code out), so it is NOT in the non-callable
+# set and its interface_contract still applies.
+UNIT_KINDS = {"callable", "module", "content", "tooling", "entrypoint"}
 NON_CALLABLE_UNIT_KINDS = {"module", "content", "tooling"}
 CONTRACT_SOURCES = {"work_unit", "api_operation"}
 
@@ -621,6 +624,37 @@ def load_test_specs(path: Path) -> Dict[str, dict]:
                 "covers": t.get("covers"),
             }
     return out
+
+
+def load_test_coverage(path: Path) -> Tuple[Set[str], Set[str], List[str]]:
+    """For the Gap-4 impl/test deferral-symmetry check. From a
+    TEST-STRATEGY(.__container).yaml return:
+      * live_units  — work_unit names a LIVE test targets (targets_work_unit),
+      * live_covers — requirement ids a live test covers (covers, uppercased),
+      * defer_warnings — the test_strategy_warnings list (the deferral blob).
+    A behaviour with NO live test whose id is named in defer_warnings was
+    deferred on the TEST side; the matching impl task must then also be
+    post-MVP/deferred (or 'full coverage' is overclaimed)."""
+    live_units: Set[str] = set()
+    live_covers: Set[str] = set()
+    defer_warnings: List[str] = []
+    raw = _safe_yaml(path)
+    if not isinstance(raw, dict):
+        return live_units, live_covers, defer_warnings
+    for t in raw.get("tests") or []:
+        if not isinstance(t, dict):
+            continue
+        wu = t.get("targets_work_unit")
+        if isinstance(wu, str) and wu.strip():
+            live_units.add(wu.strip())
+        elif isinstance(wu, list):
+            live_units |= {str(x).strip() for x in wu if str(x).strip()}
+        for c in t.get("covers") or []:
+            live_covers.add(str(c).strip().upper())
+    for w in raw.get("test_strategy_warnings") or []:
+        if isinstance(w, str):
+            defer_warnings.append(w)
+    return live_units, live_covers, defer_warnings
 
 
 class UxInfo:
@@ -1104,6 +1138,76 @@ def resolve_dep(scope: str, ref: str) -> Optional[str]:
     return None
 
 
+# Priority importance ranks (must > should > could) for the monotonicity gate.
+_PRIORITY_RANK = {"must": 3, "should": 2, "could": 1}
+
+
+def _priority_str(p: Any) -> Optional[str]:
+    if p is None:
+        return None
+    return p.value if isinstance(p, Priority) else str(p)
+
+
+def check_priority_monotonic(
+    sysm: Optional[TasksSystem],
+    containers: List[Tuple[str, TasksContainer]],
+) -> List[str]:
+    """Gap-3 (BLOCKING on complete) — dependency edges must be PRIORITY-MONOTONIC:
+    a task must not depend on a STRICTLY-LOWER-priority task (rank must > should >
+    could). A must-task waiting on a could-task makes the priority-phased (MVP)
+    slice unsequenceable — the exact defect that wires an aggregator/integration
+    task to every sibling branch and produces must→could edges. Only fires when
+    BOTH endpoints carry a priority (required on `complete`); resolution/cycle
+    errors are check_dependencies_and_cycles' job. Returns blocking errors."""
+    errs: List[str] = []
+    nodes = collect_graph_nodes(sysm, containers)
+    prio: Dict[str, Optional[str]] = {}
+    label: Dict[str, str] = {}
+
+    def _register(scope: str, tasks: List[Any]) -> None:
+        for t in tasks or []:
+            if not t.tsk_id:
+                continue
+            n = _node(scope, t.tsk_id)
+            prio[n] = _priority_str(t.priority)
+            label[n] = t.tsk_id if scope == "TASKS" else f"{scope}/{t.tsk_id}"
+
+    if sysm is not None:
+        _register("TASKS", sysm.tasks or [])
+    for cid, cm in containers:
+        _register(cid, cm.tasks or [])
+
+    def _check(scope: str, tasks: List[Any]) -> None:
+        for t in tasks or []:
+            if not t.tsk_id:
+                continue
+            src = _node(scope, t.tsk_id)
+            src_p = prio.get(src)
+            if src_p not in _PRIORITY_RANK:
+                continue
+            for ref in t.depends_on or []:
+                dep = resolve_dep(scope, ref)
+                if dep is None or dep not in nodes:
+                    continue
+                dep_p = prio.get(dep)
+                if dep_p not in _PRIORITY_RANK:
+                    continue
+                if _PRIORITY_RANK[dep_p] < _PRIORITY_RANK[src_p]:
+                    errs.append(
+                        f"{label[src]} ({src_p}) depends_on {label[dep]} ({dep_p}): "
+                        f"a higher-priority task must not depend on a strictly-lower-"
+                        f"priority one — the priority-phased (MVP) slice would be "
+                        f"unsequenceable. Promote {label[dep]} to '{src_p}' or lower "
+                        f"{label[src]} to '{dep_p}'."
+                    )
+
+    if sysm is not None:
+        _check("TASKS", sysm.tasks or [])
+    for cid, cm in containers:
+        _check(cid, cm.tasks or [])
+    return errs
+
+
 def check_dependencies_and_cycles(
     sysm: Optional[TasksSystem],
     containers: List[Tuple[str, TasksContainer]],
@@ -1427,6 +1531,52 @@ def check_container(
         if tid not in covered_tst and tid not in deferred_tst:
             errs.append(f"{label} test coverage: {tid} (TEST-STRATEGY__{cid}) is realized by no task and no WRN-NNN defers it")
 
+    # Impl/test deferral SYMMETRY (Gap-4, advisory). An impl task whose behaviour
+    # has NO live test AND was deferred on the TEST side (its work_unit / FR /
+    # component named in TEST-STRATEGY's test_strategy_warnings) must itself be
+    # post-MVP (priority: could) or deferred here — else "full coverage" is
+    # overclaimed for a branch that ships with no test.
+    if cid:
+        live_units, live_covers, test_defer_warns = load_test_coverage(
+            docs_dir / f"TEST-STRATEGY__{cid}.yaml"
+        )
+        if test_defer_warns:
+            for i, t in enumerate(m.tasks or []):
+                if t.kind != "implementation":
+                    continue
+                sym = (t.target_symbol or "").strip()
+                impl_frs = {str(r).upper() for r in (t.implements or [])}
+                behaviour: Set[str] = set(impl_frs)
+                if sym:
+                    behaviour.add(sym)
+                if t.component_ref:
+                    behaviour.add(t.component_ref)
+                if not behaviour:
+                    continue
+                covered_live = (sym and sym in live_units) or bool(impl_frs & live_covers)
+                if covered_live:
+                    continue
+                test_deferred = _deferred_literals(test_defer_warns, behaviour)
+                if not test_deferred:
+                    continue
+                self_keys = set(behaviour)
+                if t.tsk_id:
+                    self_keys.add(t.tsk_id)
+                self_deferred = (
+                    _priority_str(t.priority) == "could"
+                    or bool(_deferred_literals(warnings, self_keys))
+                )
+                if self_deferred:
+                    continue
+                warns.append(
+                    f"{label} tasks[{i}] '{t.tsk_id}' builds {sorted(behaviour)} but "
+                    f"its test was deferred in TEST-STRATEGY__{cid} "
+                    f"({sorted(test_deferred)}) — impl/test deferral is asymmetric. "
+                    f"Mark this task post-MVP (priority: could) or add a matching "
+                    f"WRN-NNN task_warnings deferral, or restore the test; otherwise "
+                    f"'full coverage' is overclaimed."
+                )
+
     # Surface coverage (trace-or-defer; soften when UX.yaml is absent).
     owned_slugs = arch.owns_ux.get(cid, set()) if cid else set()
     if owned_slugs:
@@ -1705,6 +1855,8 @@ def validate_all(path: Path) -> int:
 
     # Union-graph dependency resolution + acyclicity (the stitch).
     blocking += [f"graph: {e}" for e in check_dependencies_and_cycles(sysm, containers)]
+    # Priority-monotonic edges — no must→could dependency (Gap-3). Blocks complete.
+    blocking += [f"graph: {e}" for e in check_priority_monotonic(sysm, containers)]
 
     # Global (union) requirement coverage + orphaned-entity advisory.
     fr_gaps, ent_warns, fully_stitched = global_coverage(

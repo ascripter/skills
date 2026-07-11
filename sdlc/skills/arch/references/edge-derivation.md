@@ -78,6 +78,7 @@ when the evidence is unambiguous.**
 | `calls` (internal) | `via_unit` (the callee `work_units[].name` on the `to` component) + `via_resource_id` when the callee traces a resource |
 | `calls` (external, callee exposes an API) | `via_resource_id` (the API resource being called) + `via_operation_id` (the specific API endpoint on the called container). Mirror the resource into this container's `api_consumers[]` (cross-check #26). |
 | `calls` (external, callee is an internal SIBLING with no API between them) | `via_unit` (the callee `work_units[].name` on the `<container_id>/<component_id>` target — requires that `to` form). The cross-container analogue of the internal via_unit. |
+| `calls` (external, SUBPROCESS/CLI seam — callee invoked as a process) | `via_unit` → the callee's **`entrypoint`** work_unit; `invocation` → this caller's mode selector + resolved args/params. See the subprocess-seam rule below. |
 | `reads`/`writes` | `via_entity` (the DATA entity primarily accessed)                |
 | `publishes`      | `via_channel_id` (the API.events channel)                        |
 | `subscribes_to`  | `via_channel_id` (the API.events channel)                        |
@@ -99,6 +100,26 @@ historical failure mode is exactly a backfill that covered all N internal
 edges and skipped the one cross-container call to an internal sibling —
 enumerate the edge list from the files, don't enumerate from memory of "the
 edges I was just editing".
+
+**Subprocess / CLI seam — pin the INPUT contract on a shared seam, not just the
+return.** When container A invokes container B as a **process** (a CLI/shell it
+shells out to, no API between them), the contract has two directions and both
+must be pinned **on one shared seam** — otherwise the caller authors the return
+shape `(exit_code, stdout, stderr)` on its own side and the callee re-derives the
+call shape independently. The seam is the callee's **`entrypoint`** work_unit:
+
+- The **callee** exposes one `entrypoint` work_unit whose contract pins **both**
+  directions: `inputs` = the argv/mode-selector + parameterization it accepts;
+  `output` = the process result it returns (exit code, and stdout/stderr shape
+  when structured); `raises` = the failure exit conditions.
+- The **caller**'s external `calls` edge sets `via_unit` → that `entrypoint`
+  unit, and records **its own** binding (which mode + which resolved args it
+  invokes with) in the edge's `invocation`. The caller must **not** re-author the
+  return shape on its side — the entrypoint unit is the single source of truth.
+
+A cross-container `calls` edge with none of `via_operation_id` / `via_resource_id`
+/ `via_unit` set has an **unpinned** invocation seam — cross-check #27 warns, and
+downstream codegen has to guess the mode selector + parameterization.
 
 ## System-level derivation rules
 

@@ -226,6 +226,15 @@ the internal-edge graph is what makes every edge mechanically checkable against
 the project's import layering — see `references/edge-derivation.md` → "Edges vs
 imports".
 
+**Bind the concrete MVP variant of a parameterized placement.** If a placement
+is templated over a project-defined choice — `.../<stack>/...`, `.../<lang>/...` —
+do **not** leave the placeholder in `code_location`: it is resolvable from prose
+but forces codegen to re-derive the binding. List the **resolved MVP-variant
+path** (the concrete path for the chosen MVP stack) and model any further
+variants as their own components/work_units, or defer them with a `WRN-NNN`
+note. The arch validator warns (#20) on a `<...>` token in a `code_location`
+entry.
+
 When you persist a drafted component's placement to state, carry it on the
 `defined_components` entry (`code_location: [...]`) so resume doesn't re-draft it.
 
@@ -263,6 +272,7 @@ the user trim:**
 | `middleware` / `scheduler` / `event_handler` | the wrap / tick / handle entry point | — |
 | `schema_model` | model class / load-dump callable per shipped schema | `touches_entities` = the entities it types |
 | `dev_tool` | tool entry point (each shipped validator/generator/migration) | `implements_requirements` from the FR that names it |
+| `command-dispatcher` / single-file CLI/shell | the dispatch root (`kind: entrypoint`) + one unit per run-mode branch | `inputs` = argv/env; `output` = exit code / dispatched result; `raises` = usage/exit conditions |
 | `content_asset` | authoring unit per shipped pack/asset (`output:` = the shipped path) | `implements_requirements`; or a task-derivation rule in `work_units_waiver` |
 | `config_loader` / `observability_bootstrap` / `error_handler` | usually **none** (plumbing) | — |
 
@@ -283,10 +293,40 @@ Each work_unit carries:
     template). Typical for `content_asset` components.
   - `tooling` — a repo tool/validator/migration script. Typical for `dev_tool`
     components.
+  - `entrypoint` — the **composition/dispatch root** of a single-file or
+    multi-run-mode deliverable (a CLI/shell entrypoint, a `main`): it owns
+    arg/mode parsing, step-sequencing, setup/teardown and exit semantics. It is
+    **callable-dialect** (argv/env in, exit code out), so #23 DECLARE applies:
+    `inputs` = argv/env, `output` = the exit code or dispatched result, `raises`
+    = usage/exit conditions.
   The same 1:1 unit→task rule applies to every kind (downstream `task` copies it
   onto the task's `unit_kind`; codegen switches its rendering mode on it).
-  Non-callable kinds deliver a **file**, so the #23 interface-contract check
-  below does not apply to them — their contract is the deliverable itself.
+  Non-callable kinds (`module`/`content`/`tooling`) deliver a **file**, so the
+  #23 interface-contract check below does not apply to them — their contract is
+  the deliverable itself.
+
+**Single-file, multi-branch deliverable → emit one `entrypoint` unit.** When a
+component's `code_location` is **one executable file** with more than one
+run-mode branch (a shell/CLI entrypoint that dispatches on a mode selector),
+decompose the per-mode behaviours into their own work_units **AND** emit one
+`entrypoint` unit that owns the top-level dispatch + step-sequencing + setup —
+never leave the file's control flow unowned. Without it, the 1:1 unit→task rule
+produces one task per mode and *no* task whose deliverable is the orchestrator,
+so the generated file has no owner for its `main`/arg-parse/dispatch scaffold.
+The arch validator warns (#21) on a single-file component with ≥2 units and no
+`entrypoint` — but only in an **executable-deliverable container** (archetype
+`cli` / `other`) whose units aren't API-routed. A framework-routed
+service/controller with several handlers in one file is *not* flagged: its web
+framework owns dispatch, so it needs no `entrypoint` unit.
+
+**A work_unit must have code to emit — an externally-enforced policy is not
+one.** If a "responsibility" is a constraint honored **externally** (enforced by
+the platform, runtime, or deployment — not by code in this component) with
+nothing to build, do **not** model it as a work_unit: a unit with `output:
+"None"`, no `inputs`, and no `raises` becomes a downstream codegen task with
+nothing to emit. Record it instead as a container/component `security_concern`
+(with a `mitigation`) and/or an `acceptance_criterion`, and let `test` cover it.
+The arch validator warns (#23) on the empty-callable shape.
 - Optional traces: `traces_api_operation` (⊆ API operation_ids),
   `implements_requirements` (FR/NFR ⊆ the owning component's),
   `touches_entities` (⊆ the component's `traces_data_entities`),

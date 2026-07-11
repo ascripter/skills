@@ -1,0 +1,57 @@
+# 24 — consumer container that trips the four new advisory warnings.
+metadata:
+  arch_container_version: "1.1"
+  last_updated: "2026-07-11T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "24240000-bbbb-1111-1111-111111111112"
+  status: "draft"
+container_id: consumer
+archetype: cli
+overview: "Shells out to the build-sandbox container."
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+deployment:
+  shape: cli_binary
+  shape_confidence: confirmed
+observability:
+  logs: "stdout"
+failure_modes:
+  - id: subprocess-nonzero
+    description: "The build container exits non-zero."
+    likelihood: medium
+    impact: medium
+    mitigation: "Surface exit code + stderr to the caller."
+components:
+  - component_id: runner
+    archetype: controller
+    purpose: "One file with two run-modes; invokes the build container."
+    responsibilities:
+      - "Resolve the command and invoke the build container."
+    # #20: unresolved template placeholder in a single code_location entry.
+    code_location:
+      - "scripts/<stack>/run.sh"
+    work_units:
+      # Two callable units in one file, NONE of kind entrypoint -> #21 warn.
+      - name: dispatch
+        summary: "Pick a run-mode and resolve its command."
+        inputs: ["argv: list[str]"]
+        output: "int"
+        raises: ["UsageError -> exit 2"]
+        status: confirmed
+      # #23: no inputs, output "None", no raises -> nothing to emit; should be a
+      # security_concern/acceptance_criterion + a test, not a work_unit.
+      - name: enforce_sandbox_policy
+        summary: "The sandbox network-isolation policy (enforced by the runtime)."
+        inputs: []
+        output: "None"
+        raises: []
+        status: confirmed
+    # #27: cross-container calls edge with no via_operation_id/resource/unit.
+    status: confirmed
+internal_edges: []
+external_edges:
+  - from: runner
+    to: build-sandbox
+    type: calls
+arch_warnings: []

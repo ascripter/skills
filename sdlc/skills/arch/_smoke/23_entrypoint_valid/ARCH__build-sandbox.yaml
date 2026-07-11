@@ -1,0 +1,58 @@
+# 23 — container file: a single executable file (build_sandbox.sh) whose
+# dispatcher owns arg/mode dispatch via a `kind: entrypoint` unit, plus one
+# `callable` unit per run-mode. No single-file/no-entrypoint warning (#21).
+metadata:
+  arch_container_version: "1.1"
+  last_updated: "2026-07-11T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "23230000-bbbb-1111-1111-111111111112"
+  status: "complete"
+container_id: build-sandbox
+archetype: cli
+overview: "Shell entrypoint that dispatches bake and capture run-modes."
+tech_stack:
+  language: "Bash"
+  language_confidence: confirmed
+deployment:
+  shape: cli_binary
+  shape_confidence: confirmed
+observability:
+  logs: "stdout"
+failure_modes:
+  - id: bad-mode
+    description: "Unknown run-mode selector."
+    likelihood: low
+    impact: low
+    mitigation: "Usage error with exit 2."
+components:
+  - component_id: dispatcher
+    archetype: controller
+    purpose: "Owns the entrypoint dispatch and the two run-modes."
+    responsibilities:
+      - "Parse the mode selector and dispatch to a run-mode."
+    code_location:
+      - "scripts/build_sandbox.sh"
+    work_units:
+      - name: main
+        summary: "Entrypoint: parse mode + args, dispatch, sequence steps, exit."
+        kind: entrypoint
+        inputs: ["argv: list[str]", "env: Mapping[str,str]"]
+        output: "int  # exit code"
+        raises: ["UsageError -> exit 2"]
+        status: confirmed
+      - name: run_bake
+        summary: "The bake run-mode."
+        inputs: ["resolved_command: str"]
+        output: "int"
+        raises: ["BuildError -> exit 1"]
+        status: confirmed
+      - name: run_capture
+        summary: "The capture run-mode."
+        inputs: ["resolved_command: str"]
+        output: "int"
+        raises: ["CaptureError -> exit 1"]
+        status: confirmed
+    status: confirmed
+internal_edges: []
+external_edges: []
+arch_warnings: []

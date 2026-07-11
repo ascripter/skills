@@ -370,6 +370,37 @@ legitimate artifacts. (Surfaced this session — the gold DATA-MODEL left
 12 PRD process-FRs with neither an entity nor a deferral, and the
 validator had never implemented the defer half of its own contract.)
 
+#### 6a. Paired deferral: impl and test deferral sets stay symmetric
+
+§6 makes deferral honest *within* one artifact against *one* upstream
+family. It says nothing about consistency *between* two downstream
+artifacts that describe the same behaviour — and a behaviour has two:
+its **test** (`test` → a `TST-NNN`) and its **impl task** (`task` → one
+task per work_unit). Deferring one while keeping the other ships a lie:
+an untested branch under a "full coverage" claim, or a tested branch
+nobody builds. So the two deferral sets must be **symmetric**:
+
+- If `test` **defers the test** for a behaviour (its work_unit / FR /
+  component named in `TEST-STRATEGY*.test_strategy_warnings`, so no
+  `TST-NNN` exists) and `task` still emits the impl task, that impl task
+  MUST be **post-MVP** (`priority: could`) or itself **deferred** in
+  `task_warnings`. Otherwise the branch is built with no test.
+- The two honest resolutions are **defer both** or **claim partial
+  coverage** (restore the test). Never silently keep the impl.
+
+Because a test deferred in the `test` stage leaves **no `TST-NNN`** to
+key on, the reconciliation runs off the *test's deferral warnings*, not
+its test ids: `task`'s validator reads `test_strategy_warnings` for the
+behaviour token (work_unit name / FR / component) and **warns** on an
+asymmetric pair (its cross-check #23). It WARNS rather than blocks — the
+check spans two artifacts and two id-namespaces, so a hard block would be
+brittle — but the warning is the signal to make the deferral honest.
+When you defer a test that has real code, **name the behaviour** (the
+work_unit and/or FR), not just a `TST-NNN`, so the downstream check can
+see it. (Surfaced dogfooding the build-sandbox container: impl tasks were
+emitted for branches whose tests were deferred, then "full coverage" was
+claimed — nothing reconciled the two sets.)
+
 #### 7. Upstream-change re-invocation contract
 
 Re-invoking a skill whose output already exists means one of three

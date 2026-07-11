@@ -141,6 +141,24 @@ when a test would be noise.
 The user can trigger a deferral mid-interview by typing `defer <id>` — log the
 WRN-NNN with the reason they give.
 
+### Deferring a test obliges a matching impl deferral downstream (CLAUDE.md §6a)
+
+Deferring a behaviour's **test** here is not a local decision — it has a
+**downstream partner**. `task` emits one impl task per work_unit; if you defer
+the test for a behaviour but its impl task still ships as MVP, the branch is
+built with **no test** while both artifacts claim full coverage. That asymmetry
+is exactly what CLAUDE.md §6a ("paired deferral") forbids.
+
+So when you defer a test for a behaviour that has real code (a work_unit / an FR
+realized by a callable), **name the behaviour clearly** in the WRN — the
+work_unit name and/or the FR id, not just a `TST-NNN` — so the `task` skill's
+symmetry check (its cross-check #23) can see the deferral and force the matching
+impl task to `priority: could` (or its own deferral). A test deferred for a
+purely-structural reason (a process FR with no code, an NFR checked by an
+external tool) has no impl partner and needs no downstream pairing. Reserve test
+deferrals for genuine no-code / elsewhere-covered items — don't defer a test
+just because the code is hard to exercise, then let the code ship untested.
+
 ---
 
 ## The scope-completeness sweep (before closing each suite)

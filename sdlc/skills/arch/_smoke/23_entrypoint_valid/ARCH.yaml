@@ -1,0 +1,37 @@
+# 23 — WorkUnit.kind: entrypoint (Gap-1). A single-file CLI/shell deliverable
+# whose dispatcher component owns its top-level control flow via one
+# `kind: entrypoint` unit beside per-mode `callable` units.
+# Expectation: validator exits 0, file complete, and NO single-file/no-entrypoint
+# warning (#21) fires — the entrypoint unit owns the dispatch.
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-07-11T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "23230000-bbbb-1111-1111-111111111111"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Single-file build-sandbox shell entrypoint with multiple run-modes."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: build-sandbox
+    archetype: cli
+    purpose: "The build-sandbox shell entrypoint."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: batch_job
+    external: false
+    status: confirmed
+    file_path: ARCH__build-sandbox.yaml
+
+edges: []
+arch_warnings: []

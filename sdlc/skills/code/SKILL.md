@@ -282,7 +282,7 @@ Full rules with examples: `references/emit-rules.md`.
 | Kind | Emit |
 |---|---|
 | `scaffold` | Package/repo skeleton: the files in `target_files` (or path-shaped `outputs`) — manifest, entrypoint, workspace config. |
-| `implementation` | **One deliverable** (`target_symbol`) in **one file** (`target_files[0]`). `unit_kind: callable` (default) renders the callable from the task's embedded `interface_contract`; `module`/`content`/`tooling` emit the file itself. Pre-1.3 fallback: the ARCH work_unit (or the API operation it defers to). First task on a file creates it; later tasks Edit-insert. |
+| `implementation` | **One deliverable** (`target_symbol`) in **one file** (`target_files[0]`). `unit_kind: callable` (default) renders the callable from the task's embedded `interface_contract`; `module`/`content`/`tooling` emit the file itself; `entrypoint` renders the composition/dispatch root (arg/mode parse + step-sequencing + setup + exit codes) that dispatches into the per-mode callables. Pre-1.3 fallback: the ARCH work_unit (or the API operation it defers to). First task on a file creates it; later tasks Edit-insert. |
 | `test` | The runnable test(s) realizing each `implements_tests` TST — tier, directives and acceptance from the task's embedded `test_spec` (pre-1.3 fallback: the TST entry in `TEST-STRATEGY__<cid>.yaml`). |
 | `integration` | Wiring: route registration, DI, the consumer-side client against the provider's contract — from the task's embedded `operation_contract` (pre-1.4 fallback: resolve `touches_operations` in `API__*.yaml`). |
 | `migration` | Schema/DDL/persistence setup for `touches_entities`, per the task's embedded `entity_slice` (pre-1.4 fallback: the DATA-MODEL entity slice). |

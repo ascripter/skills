@@ -1,0 +1,50 @@
+# 24 — trips the four NEW advisory arch warnings on the consumer container:
+#   #20 parameterized code_location placeholder (Gap-6),
+#   #21 single-file component with >=2 units and no entrypoint (Gap-1),
+#   #23 no-code externally-enforced constraint unit (Gap-2),
+#   #27 cross-container calls edge with no pinned invocation seam (Gap-5).
+# Status draft so the advisory warnings print without exit-1 noise.
+metadata:
+  arch_version: "1.1"
+  last_updated: "2026-07-11T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "24240000-bbbb-1111-1111-111111111111"
+  status: "draft"
+
+architecture_pattern:
+  pattern: microservices
+  pattern_confidence: inferred
+  rationale: "A consumer shells out to a separate build container."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: consumer
+    archetype: cli
+    purpose: "Invokes the build container as a subprocess."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: batch_job
+    external: false
+    status: confirmed
+    file_path: ARCH__consumer.yaml
+  - container_id: build-sandbox
+    archetype: other
+    purpose: "The build container invoked as a subprocess."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    deployment_unit: batch_job
+    external: true
+    status: confirmed
+
+edges:
+  - from: consumer
+    to: build-sandbox
+    type: calls
+arch_warnings: []

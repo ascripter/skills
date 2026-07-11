@@ -83,7 +83,13 @@ v1.3), never from imagination:
      author the content the `description`/`unit_summary` specifies.
    - `tooling` — a standalone tool/validator script; `acceptance` usually
      names its exit-code contract.
-   All four keep the same invariants — one deliverable, one `target_files[0]`
+   - `entrypoint` — the file's **composition/dispatch root** (a CLI/shell
+     entrypoint, a `main`): render the arg/mode parsing, the dispatch table,
+     the step-sequencing, setup/teardown, and the exit-code contract from the
+     `interface_contract` (argv/env → exit code / dispatched result). It calls
+     into the per-mode `callable` units (their own tasks) — it OWNS the control
+     flow, it does not re-implement them. Marker above the entrypoint symbol.
+   All five keep the same invariants — one deliverable, one `target_files[0]`
    entry — only the rendering differs.
 4. Body: implement the task's `description` (+ `unit_summary`) against the
    task's `acceptance`. `touches_entities` names the DATA-MODEL entities whose

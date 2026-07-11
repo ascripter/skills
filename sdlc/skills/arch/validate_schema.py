@@ -360,6 +360,11 @@ class Edge(_Base):
     via_resource_id: Optional[str] = None
     via_channel_id: Optional[str] = None
     via_entity: Optional[str] = None
+    invocation: Optional[Any] = None     # caller-side INPUT binding for a process/
+                                         # subprocess seam: the mode selector + resolved
+                                         # args/params this caller invokes the callee with.
+                                         # The callee's entrypoint work_unit is the shared
+                                         # contract; this records how THIS caller binds it.
     note: Optional[str] = None
 
 
@@ -521,10 +526,13 @@ class WorkUnit(_Base):
     name: Optional[str] = None
     summary: Optional[str] = None
     kind: Optional[str] = None                          # callable (default) | module |
-                                                        # content | tooling — the deliverable
-                                                        # class (demo FR-013 v1.30). Checked
-                                                        # against _WORK_UNIT_KINDS in #21 so a
-                                                        # draft with a typo stays loadable.
+                                                        # content | tooling | entrypoint — the
+                                                        # deliverable class (demo FR-013 v1.30).
+                                                        # entrypoint = the composition/dispatch
+                                                        # root of a single-file/multi-mode
+                                                        # deliverable. Checked against
+                                                        # _WORK_UNIT_KINDS in #21 so a draft
+                                                        # with a typo stays loadable.
     traces_api_operation: Optional[str] = None          # operation_id in API__*.yaml
     implements_requirements: Optional[List[str]] = None  # FR-NNN/NFR-NNN ⊆ component
     touches_entities: Optional[List[str]] = None         # ⊆ component traces_data_entities
@@ -580,8 +588,13 @@ class ExternalEdge(_Base):
     via_unit: Optional[str] = None       # for `calls` into a sibling container with no
                                          # API between them: the work_units[].name on the
                                          # target "<container_id>/<component_id>" component
+                                         # (point it at the callee's `entrypoint` unit for a
+                                         # subprocess/CLI seam — that unit pins argv/mode ⇄
+                                         # exit-code/stdout/stderr for BOTH sides).
     via_channel_id: Optional[str] = None
     via_entity: Optional[str] = None
+    invocation: Optional[Any] = None     # caller-side INPUT binding: the mode selector +
+                                         # resolved args/params this caller invokes with.
     note: Optional[str] = None
 
 
@@ -1471,6 +1484,22 @@ def check_component_traces(
     return errs
 
 
+# A `<placeholder>` token inside a code_location path — an unresolved
+# parameterized/templated binding (`.../<stack>/...`) that codegen would have
+# to re-derive. Cross-check #20 warns on it (Gap-6).
+_TEMPLATE_TOKEN_RE = re.compile(r"<[^<>/\s]+>")
+
+
+def _looks_like_file(token: str) -> bool:
+    """A code_location token names a single FILE (not a directory) when it does
+    not end with '/' and its final segment carries an extension. Used by #21 to
+    spot a single-file, multi-callable component that needs an `entrypoint`
+    work_unit to own its top-level control flow (Gap-1)."""
+    token = token.strip()
+    if not token or token.endswith("/"):
+        return False
+    return "." in token.rsplit("/", 1)[-1]
+
 # Plumbing component archetypes that don't need an explicit code_location —
 # their placement is conventional and uninteresting to downstream codegen.
 _PLUMBING_COMPONENT_ARCHETYPES = {
@@ -1485,9 +1514,19 @@ _PLUMBING_COMPONENT_ARCHETYPES = {
 # non-callable kinds deliver a FILE (module = a source module whose definition
 # set is the interface; content = a shipped content file; tooling = a repo
 # tool/validator script) and are exempt from the #23 DEFER-OR-DECLARE
-# interface-contract check.
-_WORK_UNIT_KINDS = {"callable", "module", "content", "tooling"}
+# interface-contract check. `entrypoint` is the composition/dispatch root of a
+# single-file or multi-run-mode deliverable (a CLI/shell entrypoint) — it owns
+# arg/mode parsing, step-sequencing, setup/teardown and exit semantics. It is
+# CALLABLE-dialect (argv/env in, exit code out), so it is NOT in the
+# non-callable set and #23 requires it to DECLARE inputs/output/raises.
+_WORK_UNIT_KINDS = {"callable", "module", "content", "tooling", "entrypoint"}
 _NON_CALLABLE_WORK_UNIT_KINDS = {"module", "content", "tooling"}
+
+# Container archetypes whose DELIVERABLE is an invoked executable (a CLI/shell
+# tool, a build script). Only these get the Gap-1 "single-file needs an
+# entrypoint" nudge — a framework-routed service/controller dispatches through
+# its web framework, not a hand-written composition root, so it must NOT warn.
+_ENTRYPOINT_CONTAINER_ARCHETYPES = {"cli", "other"}
 
 
 def check_component_code_location(
@@ -1501,6 +1540,18 @@ def check_component_code_location(
     warnings: List[str] = []
     for i, comp in enumerate(container.components or []):
         archetype = comp.archetype.value if comp.archetype else None
+        # Gap-6 (advisory, any archetype): a parameterized/templated code_location
+        # (`.../<stack>/...`) forces codegen to re-derive the binding. Bind the
+        # concrete MVP variant and model further variants as their own tasks.
+        for loc in comp.code_location or []:
+            if _TEMPLATE_TOKEN_RE.search(str(loc)):
+                warnings.append(
+                    f"{file_label}: components[{i}]='{comp.component_id}'."
+                    f"code_location '{loc}' contains an unresolved template "
+                    f"placeholder — bind the concrete MVP-variant path and model "
+                    f"other variants as their own components/work_units (or defer "
+                    f"via WRN); don't leave codegen to re-derive the binding"
+                )
         if archetype in _PLUMBING_COMPONENT_ARCHETYPES:
             continue
         has_trace = any([
@@ -1555,6 +1606,7 @@ def check_component_work_units(
     """
     errs: List[str] = []
     warns: List[str] = []
+    container_archetype = container.archetype.value if container.archetype else None
     for i, comp in enumerate(container.components or []):
         cid = comp.component_id
         archetype = comp.archetype.value if comp.archetype else None
@@ -1635,6 +1687,49 @@ def check_component_work_units(
                         f"{where}.touches_entities '{e}' is not in the owning "
                         f"component '{cid}' traces_data_entities"
                     )
+            # Gap-2 (advisory): a DECLARE-dialect unit that declares nothing to
+            # emit (no inputs, output "None", raises nothing) is usually a policy
+            # honored externally, not a callable — model it as a security_concern /
+            # acceptance_criterion + a test, not a work_unit (which becomes a
+            # codegen task with no code).
+            out = op.output
+            if (
+                op.kind not in _NON_CALLABLE_WORK_UNIT_KINDS
+                and not op.traces_api_operation
+                and isinstance(out, str)
+                and out.strip().lower() == "none"
+                and not (op.inputs or [])
+                and not (op.raises or [])
+            ):
+                warns.append(
+                    f"{where}.name='{op.name}' declares no inputs, no return "
+                    f"(output: \"None\"), and raises nothing — nothing to emit. "
+                    f"If this captures a policy enforced externally (platform / "
+                    f"runtime / deploy), model it as a security_concern (+ "
+                    f"mitigation) and/or acceptance_criterion and cover it with a "
+                    f"test, not a work_unit"
+                )
+        # Gap-1 (advisory): in an EXECUTABLE-deliverable container (CLI/shell), a
+        # single-file component with >=2 work_units and no `entrypoint` unit
+        # leaves the file's top-level control flow unowned. Gated on the
+        # container archetype AND on the units not being API-routed handlers, so
+        # a framework-routed controller (whose web framework owns dispatch) never
+        # warns.
+        locs = comp.code_location or []
+        if (
+            container_archetype in _ENTRYPOINT_CONTAINER_ARCHETYPES
+            and len(units) >= 2
+            and len(locs) == 1
+            and _looks_like_file(str(locs[0]))
+            and not any((op.kind or "") == "entrypoint" for op in units)
+            and not any(op.traces_api_operation for op in units)
+        ):
+            warns.append(
+                f"{file_label}: components[{i}]='{cid}' is one file "
+                f"('{locs[0]}') with {len(units)} work_units but no `entrypoint` "
+                f"unit — add one to own arg/mode dispatch + step-sequencing + "
+                f"setup so downstream task/code build the composition root"
+            )
     return errs, warns
 
 
@@ -1871,6 +1966,45 @@ def check_external_via_units(
                     f"container '{target_cid}'"
                 )
     return errs
+
+
+def check_unpinned_call_seams(
+    containers: Dict[str, ArchContainer],
+) -> List[str]:
+    """Cross-check #27 (advisory, Gap-5) — a cross-container `calls` external
+    edge with no pinned invocation seam.
+
+    When container A calls container B and neither `via_operation_id` (an API
+    endpoint), `via_resource_id` (an API resource), nor `via_unit` (the callee's
+    work_unit) is set, the INPUT contract (mode selector + parameterization) is
+    unpinned and codegen must guess it — the exact gap where a subprocess/CLI
+    seam had only its (exit_code, stdout, stderr) return authored, on the caller
+    side. Point `via_unit` at the callee's `entrypoint` work_unit (which pins
+    argv/mode IN ⇄ exit-code/stdout/stderr OUT for BOTH sides) and record the
+    caller-side binding in `invocation`.
+    """
+    warns: List[str] = []
+    for name, container in containers.items():
+        cid = container.container_id
+        for i, e in enumerate(container.external_edges or []):
+            if not (e.type and e.type.value == "calls" and e.to):
+                continue
+            target_cid, _, _ = e.to.partition("/")
+            if target_cid == cid:
+                continue  # intra-container calls are internal_edges' job
+            if not (
+                e.via_operation_id
+                or e.via_resource_id
+                or getattr(e, "via_unit", None)
+            ):
+                warns.append(
+                    f"{name}: external_edges[{i}] ({e.from_} -> {e.to}, calls) "
+                    f"has no pinned invocation seam (no via_operation_id / "
+                    f"via_resource_id / via_unit) — point via_unit at the callee's "
+                    f"`entrypoint` work_unit and record the caller binding in "
+                    f"`invocation` so the INPUT contract is frozen for both sides"
+                )
+    return warns
 
 
 def check_api_consumer_mirror(
@@ -2420,6 +2554,7 @@ def validate_all(arch_path: Path) -> int:
     upstream_warnings = check_upstream_status_warnings(docs_dir)
     rollup_errs = check_external_edge_rollup(arch, containers)
     container_via_errs.extend(check_external_via_units(containers))
+    unpinned_seam_warns = check_unpinned_call_seams(containers)
     deliverable_path_warns = check_fr_deliverable_paths(arch, containers, prd_path)
 
     status = arch.metadata.status
@@ -2442,6 +2577,7 @@ def validate_all(arch_path: Path) -> int:
         ("undeclared work_unit contract(s) [waived]", contract_warns),
         ("FR-named deliverable path(s) outside every code_location (cross-check 25)", deliverable_path_warns),
         ("external calls edge(s) not mirrored in api_consumers (cross-check 26)", api_mirror_warns),
+        ("cross-container calls edge(s) with no pinned invocation seam (cross-check 27)", unpinned_seam_warns),
     ]
 
     # 6) Reporting — hard problems force draft / block complete.

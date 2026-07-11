@@ -191,6 +191,16 @@ edges:                                     # REQUIRED key (may be `[]`)
                                            #            primary DATA entity being accessed.
                                            #            Validated against DATA-MODEL.yaml
                                            #            entities when set.
+    invocation: <mode + resolved args>     # OPTIONAL — caller-side INPUT binding for a
+                                           #            process/subprocess `calls` seam: the
+                                           #            mode selector + resolved args/params
+                                           #            this caller invokes the callee with.
+                                           #            The callee's entrypoint work_unit (in
+                                           #            its ARCH__<container>.yaml) is the
+                                           #            shared contract; this records the
+                                           #            caller-side binding so a subprocess
+                                           #            seam pins the INPUT, not just the
+                                           #            (exit_code, stdout, stderr) return.
     note: <short string>                   # OPTIONAL — evidence or rationale
                                            #            (e.g. "API users → backend-api;
                                            #            backend-api writes primary-postgres")

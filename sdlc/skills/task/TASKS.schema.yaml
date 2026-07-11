@@ -99,7 +99,9 @@ tasks:                                      # REQUIRED — list[SystemTask], non
     depends_on:                             # OPTIONAL — TSK ids that must complete
       - TSK-001                             #   first. Same-file or cross-file
       - backend-api/TSK-009                 #   "<container>/TSK-NNN". Union graph
-                                            #   MUST be acyclic.
+                                            #   MUST be acyclic AND priority-
+                                            #   monotonic (no must→could edge —
+                                            #   check #7 blocks complete).
     inputs:                                 # OPTIONAL but encouraged
       - "ARCH.yaml#edges"
     target_files:                           # OPTIONAL but encouraged — the concrete
@@ -161,7 +163,12 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 # 7.  Dependency integrity — every depends_on entry resolves to a TSK id (this
 #     file or a cross-file "<container>/TSK-NNN" against an on-disk
 #     TASKS__<container>.json). The UNION task graph across the system file + all
-#     container files MUST be acyclic. Blocks complete.
+#     container files MUST be acyclic. Blocks complete. Edges must also be
+#     PRIORITY-MONOTONIC (Gap-3): a task must not depend on a strictly-lower-
+#     priority task (must > should > could) — a must→could edge makes the MVP
+#     slice unsequenceable and BLOCKS complete. Applies across the union graph
+#     (system + container tasks), so a system task depending on a lower-priority
+#     container task is caught too.
 # 8.  System test coverage (trace-or-defer) — every tests[].tst_id in the system
 #     TEST-STRATEGY.yaml is realized by some system task (implements_tests) OR
 #     deferred via a WRN-NNN. Blocks complete.

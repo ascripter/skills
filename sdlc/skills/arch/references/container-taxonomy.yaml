@@ -77,7 +77,10 @@ archetypes:
     aliases: [command-line, cli-app]
     description: Command-line tool.
     suggested_components:
-      - command-dispatcher
+      - command-dispatcher   # owns the dispatch root — model as a work_unit of
+                             # kind: entrypoint (argv/mode in, exit code out),
+                             # plus one unit per run-mode. A single-file CLI with
+                             # >1 mode and no entrypoint unit warns (#21).
       - argument-parser
       - config-loader
       - output-formatter

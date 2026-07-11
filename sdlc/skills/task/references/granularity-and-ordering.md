@@ -74,6 +74,28 @@ Default edges to propose (the user can override):
 - a consumer's task `depends_on` the provider's contract/implementation task —
   cross-container, expressed as `<provider-cid>/TSK-NNN`.
 
+### Three wiring invariants (edges are priority-monotonic, aggregators are lean)
+
+The default edges above are necessary but not sufficient — how you fan them in
+decides whether the priority-phased (MVP) slice is buildable:
+
+- **(a) Edges must be priority-monotonic.** A task must **not** `depends_on` a
+  strictly-lower-priority task (`must` > `should` > `could`). A `must` task
+  waiting on a `could` task makes the MVP slice unsequenceable — to ship the
+  must-set you'd need a deferred could-task. This is a **blocking** gate
+  (cross-check #22): if a must-task genuinely needs the dependency, **promote the
+  dependency** to `must` (it was mis-prioritized); don't lower the dependent.
+- **(b) An aggregator depends only on its REQUIRED predecessors.** A task that
+  captures/collects the results of sibling branches (a `capture_and_exit`, a
+  roll-up) must not fan-in *every* sibling — depend only on the predecessors it
+  actually consumes. Fanning in an optional (`could`) sibling drags a lower
+  priority into the aggregator and trips (a).
+- **(c) An integration/bake task depends on the MUST set, not the tail.** The
+  task that validates a container/seam depends on the set of must-priority tasks
+  it exercises — **not** on the last-scheduled ("tail") task as a proxy for "all
+  of them". Depending on the tail both hides the real predecessors and risks a
+  cross-priority edge when the tail happens to be a `could` task.
+
 ### Reference syntax
 
 | Form | Meaning |
@@ -120,3 +142,9 @@ the impl, never the reverse).
 `build_order` consistency with ARCH edges (provider before consumer) is a **soft**
 warning, not a block — the explicit `depends_on` edges are the source of truth;
 `build_order` is a convenience summary.
+
+Acyclicity is not the only hard edge gate: **priority-monotonicity** (invariant
+(a) above, cross-check #22) also blocks `complete`. A DAG can still be
+unbuildable as an MVP slice if a `must` task depends on a `could` one — the
+must-only subgraph then references a task outside itself. The validator catches
+this over the same union graph.

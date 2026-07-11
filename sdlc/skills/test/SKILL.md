@@ -575,6 +575,12 @@ tested only on its happy path.
   and `security_concerns[].id` is targeted by some test
   (`targets_failure_mode` / `targets_security_concern` / `covers`) OR deferred.
 
+**Paired deferral** (CLAUDE.md §6a) — deferring a behaviour's test that has real
+code obliges the matching impl-task deferral downstream: name the behaviour
+(work_unit / FR), not just a `TST-NNN`, in the WRN so `task`'s symmetry check can
+force the impl task post-MVP. Don't defer a test just because the code is hard to
+exercise and let it ship untested (see `references/coverage-and-defer.md`).
+
 **ID-prefix formats** (block complete):
 
 - `TST-NNN` on every test's `tst_id` — unique within the artifact AND

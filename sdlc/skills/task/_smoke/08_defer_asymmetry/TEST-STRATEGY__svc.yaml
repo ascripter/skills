@@ -1,0 +1,14 @@
+# Smoke fixture for the Gap-4 impl/test deferral-symmetry check.
+# The work_unit `run_export` has NO live test (tests: []) and is DEFERRED by a
+# WRN naming it — while TASKS__svc.json still builds it as priority: must. The
+# task validator's cross-check #23 must WARN on the asymmetry.
+metadata:
+  test_strategy_container_version: "1.0"
+  last_updated: "2026-07-11T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: "88888888-8888-8888-8888-888888888888"
+  status: draft
+container_id: svc
+tests: []
+test_strategy_warnings:
+  - "WRN-001: work_unit run_export is deferred to a post-MVP hardening pass; no unit test authored here."

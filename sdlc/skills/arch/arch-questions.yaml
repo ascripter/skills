@@ -1060,6 +1060,13 @@ questions:
       no callable of its own must record `work_units: []` + a `work_units_waiver`
       (one-sentence reason, e.g. "realized purely by decorator wiring") — else #21
       blocks complete. The same waiver also waives #22 for an FR realized by wiring.
+      For a SINGLE-FILE deliverable with >1 run-mode branch (a CLI/shell
+      entrypoint), also emit one unit of `kind: entrypoint` owning the top-level
+      arg/mode dispatch + step-sequencing + setup (argv/env in, exit code out) —
+      else the file's control flow is unowned (#21 warns). Do NOT model a policy
+      enforced EXTERNALLY (nothing to build) as a work_unit — it becomes a codegen
+      task with nothing to emit; record it as a security_concern/acceptance_criterion
+      + a test instead (#23 warns on the empty-callable shape).
     suggested_answers: []
     free_text_allowed: true
     required: false

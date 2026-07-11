@@ -320,11 +320,21 @@ components:                                # REQUIRED — non-empty
                                            #     question inventory, template).
                                            #   tooling  — a repo tool/validator/migration
                                            #     script.
+                                           #   entrypoint — the composition/dispatch root of a
+                                           #     single-file or multi-run-mode deliverable (a
+                                           #     CLI/shell entrypoint): owns arg/mode parsing,
+                                           #     step-sequencing, setup/teardown and exit
+                                           #     semantics. CALLABLE-dialect, so #23 DECLARE
+                                           #     applies (inputs = argv/env, output = exit code
+                                           #     or dispatched result, raises = usage/exit
+                                           #     conditions). Emit ONE per single-file component
+                                           #     that has >1 run-mode branch, so the file's
+                                           #     top-level control flow is owned by a task.
                                            #   The SAME 1:1 unit→task rule applies to every
                                            #   kind (downstream `task` copies it onto the
-                                           #   task's `unit_kind`); non-callable kinds deliver
-                                           #   a FILE, so the #23 DEFER-OR-DECLARE
-                                           #   interface-contract check does not apply to them.
+                                           #   task's `unit_kind`); non-callable kinds (module /
+                                           #   content / tooling) deliver a FILE, so the #23
+                                           #   DEFER-OR-DECLARE check does not apply to them.
         # --- traces: the contract this work_unit realizes (ALL OPTIONAL) ---
         traces_api_operation: create-task  # OPTIONAL — an operation_id from API__*.yaml
                                            #   (controllers / api_clients). Validated ⊆ the
@@ -357,7 +367,15 @@ components:                                # REQUIRED — non-empty
         inputs:                            # DECLARE-case REQUIRED — parameter contract
           - "payload: TaskCreate"          #   (named params / types / ENT refs). [] = no args.
         output: Task                       # DECLARE-case REQUIRED — return contract
-                                           #   (a type / entity / the string "None").
+                                           #   (a type / entity / the string "None"). A unit
+                                           #   with output "None" AND no inputs AND no raises
+                                           #   has nothing to emit — if it captures a policy
+                                           #   enforced EXTERNALLY (platform / runtime /
+                                           #   deploy), it is NOT a work_unit: model it as a
+                                           #   security_concern (+ mitigation) and/or an
+                                           #   acceptance_criterion and cover it with a test
+                                           #   (cross-check 23 warns on the empty-callable
+                                           #   shape).
         raises:                            # DECLARE-case REQUIRED — error / exception
           - "ValidationError -> 400"       #   contract. [] = nothing domain-specific.
         signature: <optional>              # OPTIONAL — concrete language-specific signature,
@@ -438,15 +456,30 @@ external_edges:                            # OPTIONAL
                                            #            form). The cross-container analogue
                                            #            of internal_edges' via_unit; backfill
                                            #            passes must sweep THESE edges too,
-                                           #            not just intra-container calls.
+                                           #            not just intra-container calls. For a
+                                           #            SUBPROCESS/CLI seam, point it at the
+                                           #            callee's `entrypoint` work_unit — that
+                                           #            unit's inputs/output pin argv+mode IN ⇄
+                                           #            exit-code/stdout/stderr OUT for BOTH
+                                           #            sides (the shared bilateral contract).
     via_channel_id: <event_channel_id>     # OPTIONAL — for `publishes`/`subscribes_to`,
                                            #            the API.events channel_id.
     via_entity: <PascalCaseEntityName>     # OPTIONAL — for `reads`/`writes` against an
                                            #            external store container.
+    invocation: <mode + resolved args>     # OPTIONAL — caller-side INPUT binding: the mode
+                                           #            selector + resolved args/params THIS
+                                           #            caller invokes the callee with. The
+                                           #            callee's entrypoint unit is the shared
+                                           #            contract; this records how this caller
+                                           #            binds it (a subprocess/CLI seam should
+                                           #            pin the INPUT, not just the return).
     note: <string>                         # OPTIONAL
 # EVERY external edge must also exist as a system-level ARCH.yaml.edges row
 # (from: this container, to: the target container, same type) — cross-check
 # #24 blocks `complete` on a container-sourced edge that never propagated up.
+# A cross-container `calls` edge with NONE of via_operation_id / via_resource_id
+# / via_unit set has an unpinned invocation seam — cross-check #27 warns and
+# codegen must guess the INPUT contract; pin via_unit (+ invocation).
 
 # ---------------------------------------------------------------------------
 # work_unit_family_contracts — OPTIONAL, meta-corpus dialect only.
@@ -535,7 +568,11 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     code_location emits a WARNING: downstream `task`/codegen will have to
 #     infer its file placement. Does NOT block status: complete (placement can
 #     legitimately be deferred), but filling it is what makes "mostly
-#     autonomous" downstream codegen actually hold.
+#     autonomous" downstream codegen actually hold. Also (Gap-6, any archetype):
+#     a code_location entry containing an unresolved template placeholder
+#     (`.../<stack>/...`) emits a WARNING — bind the concrete MVP-variant path
+#     and model other variants as their own components/work_units (or defer via
+#     WRN); a templated path forces codegen to re-derive the binding.
 # 21. Component work_units — for every work_units[] entry on every component:
 #       * name is non-empty and UNIQUE within its owning component (work_units are
 #         addressed as (component, name) — there is NO id family). It is the stable
@@ -555,6 +592,13 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     silently seeds no implementation task for a third of its components. The
 #     count is taken from a real YAML PARSE (block- and flow-style entries both
 #     count) — never a line-grep, which would miss flow-style units.
+#     Also (Gap-1, advisory): in an EXECUTABLE-deliverable container (archetype
+#     cli / other), a SINGLE-FILE component (one file-shaped code_location entry)
+#     with >1 work_units, NO `entrypoint`-kind unit, and no API-routed units
+#     emits a WARNING — its top-level control flow is unowned. Add one
+#     `entrypoint` unit owning arg/mode dispatch + step-sequencing + setup so
+#     downstream `task`/`code` build the composition root. A framework-routed
+#     service/controller is excluded (its web framework owns dispatch).
 # 22. Component FR → work_unit coverage — for every component that declares at
 #     least one work_unit: every FR-NNN in the component's implements_requirements
 #     must appear in at least one of that component's work_units[].implements_
@@ -581,7 +625,11 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     This is the lint that catches an emitter which fills only the trace
 #     fields (implements_requirements/touches_entities/…) and leaves every
 #     contract field empty — downstream atomic tasks then re-guess each
-#     signature. `kind` itself is vocabulary-checked in #21.
+#     signature. `kind` itself is vocabulary-checked in #21. Also (Gap-2,
+#     advisory): a DECLARE-dialect unit with output "None" AND no inputs AND no
+#     raises has nothing to emit — it usually captures a policy enforced
+#     EXTERNALLY; #23 WARNS to move it to a security_concern/acceptance_criterion
+#     + a test rather than a phantom codegen task.
 # 24. Container→system edge roll-up — every external_edges[] entry implies a
 #     system-level ARCH.yaml.edges row {from: this container, to: the target
 #     container, type: same}. Missing rows BLOCK `complete`: a container-sourced
@@ -604,4 +652,11 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     with via_resource_id should be mirrored in this container's
 #     api_consumers[], so the container header alone tells codegen which
 #     client SDKs it needs.
+# 27. Cross-container invocation seam (advisory, non-blocking, Gap-5) — a
+#     cross-container `calls` external_edge with NONE of via_operation_id /
+#     via_resource_id / via_unit set has an unpinned INPUT contract; codegen
+#     must guess the mode selector + parameterization. Point via_unit at the
+#     callee's `entrypoint` work_unit (which pins argv/mode IN ⇄ exit-code/
+#     stdout/stderr OUT for both sides) and record the caller-side binding in
+#     the edge's `invocation`.
 # =============================================================================

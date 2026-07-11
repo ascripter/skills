@@ -145,13 +145,15 @@ tasks:                                      # REQUIRED — list[Task], non-empty
     unit_kind: callable                     # OPTIONAL (implementation tasks; default callable) —
                                             #   the deliverable class copied from the ARCH
                                             #   work_unit's `kind`: callable | module | content |
-                                            #   tooling. A pure RENDERING-MODE switch for the
-                                            #   codegen agent (callable → render the method;
+                                            #   tooling | entrypoint. A pure RENDERING-MODE switch
+                                            #   for the codegen agent (callable → render the method;
                                             #   module/content/tooling → the FILE is the
-                                            #   deliverable). Every work_unit-derived task stays
-                                            #   kind: implementation regardless — the atomicity
+                                            #   deliverable; entrypoint → render the composition/
+                                            #   dispatch root — arg/mode parse + step-sequencing +
+                                            #   setup + exit codes). Every work_unit-derived task
+                                            #   stays kind: implementation regardless — the atomicity
                                             #   invariants (one target_symbol, exactly one
-                                            #   target_files) apply identically to all four.
+                                            #   target_files) apply identically to all five.
     unit_summary: <one line>                # OPTIONAL (implementation tasks) — the work_unit's
                                             #   one-line summary, copied so the codegen prompt is
                                             #   self-contained.
@@ -285,7 +287,14 @@ tasks:                                      # REQUIRED — list[Task], non-empty
       - TSK-000                             #   first. Same-file ("TSK-000"), or
       - shared-lib/TSK-004                  #   cross-file ("<container>/TSK-NNN" or
       - TASKS/TSK-002                       #   "TASKS/TSK-NNN" for a system task).
-                                            #   The union graph MUST be acyclic.
+                                            #   The union graph MUST be acyclic AND
+                                            #   PRIORITY-MONOTONIC: a task must not
+                                            #   depend on a STRICTLY-LOWER-priority
+                                            #   task (must > should > could) — a
+                                            #   must→could edge makes the MVP slice
+                                            #   unsequenceable and BLOCKS complete
+                                            #   (cross-check #22). Promote the
+                                            #   dependency or lower the dependent.
     inputs:                                 # OPTIONAL but encouraged — the upstream
       - "ARCH__backend-api.yaml#auth-service"  # artifacts / contracts / files this
                                             #   task consumes (FR-013 "explicit inputs").
@@ -370,6 +379,7 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     system file + all container files MUST be acyclic (topological sort exists).
 #     Blocks complete. (The acyclicity check is what validates FR-013's
 #     "deterministic stitch into one global dependency-ordered TaskGraph".)
+#     Edges must also be PRIORITY-MONOTONIC — see #22.
 #
 # Coverage gates — all trace-or-defer, all block complete (see
 # references/coverage-and-defer.md). "Realized transitively" = the item is traced
@@ -435,8 +445,8 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     with touches_entities carries an entity_slice entry per named entity;
 #     every kind:design task carries design_spec; every kind:config task
 #     carries config_keys. unit_kind is
-#     vocabulary-checked (callable | module | content | tooling); any embed on
-#     the wrong kind (interface_contract off implementation, test_spec off
+#     vocabulary-checked (callable | module | content | tooling | entrypoint); any
+#     embed on the wrong kind (interface_contract off implementation, test_spec off
 #     test, operation_contract off integration, entity_slice off migration,
 #     design_spec off design, config_keys off config) is an error at any
 #     version. Blocks complete.
@@ -453,4 +463,22 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     test / migration / config / design task with neither target_files nor a
 #     path-shaped outputs entry emits a WARNING: the codegen agent will have
 #     to derive the paths from code_location + stack conventions.
+# 22. Priority-monotonic edges (BLOCKING on complete, Gap-3) — a task must NOT
+#     depend_on a STRICTLY-LOWER-priority task (rank must > should > could). A
+#     must→could (or should→could) edge makes the priority-phased MVP slice
+#     unsequenceable: shipping the must-set would require a deferred could-task.
+#     Fires only when both endpoints carry a priority (required on complete).
+#     Fix by promoting the dependency or lowering the dependent. This also
+#     forbids wiring an aggregator/integration task to depend on a lower-priority
+#     tail — an aggregator depends only on its REQUIRED predecessors, and an
+#     integration/bake task on the MUST set it validates, not the last-scheduled
+#     task (see references/granularity-and-ordering.md).
+# 23. Impl/test deferral symmetry (advisory, Gap-4) — an impl task whose
+#     behaviour (target_symbol work_unit / implements FR / component_ref) has NO
+#     live test AND was deferred on the TEST side (its id named in
+#     TEST-STRATEGY__<cid>.test_strategy_warnings) must itself be post-MVP
+#     (priority: could) or deferred in task_warnings — else the branch ships with
+#     no test while "full coverage" is claimed. WARNS (cross-artifact, so not a
+#     hard block); resolve by paired deferral or by restoring the test. See
+#     CLAUDE.md §6a and references/coverage-and-defer.md.
 # =============================================================================
