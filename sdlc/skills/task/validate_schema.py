@@ -35,7 +35,10 @@ Validates:
        - implements entries are FR/NFR and resolve to PRD ids (⊆ the
          container's + targeted component's implements_requirements).
        - implements_tests entries are TST-NNN and resolve to the matching
-         TEST-STRATEGY(.__container).yaml; kind:test must set one.
+         TEST-STRATEGY(.__container).yaml; kind:test must set one. When the
+         system TEST-STRATEGY.yaml sets meta_corpus_dialect: true, the ref
+         format relaxes to the container-namespaced TST-<PREFIX>-NNN the test
+         shards emit; otherwise flat TST-NNN is enforced (the default).
        - touches_operations ⊆ API__*.yaml operation_ids (a bare resource_id is
          rejected); touches_entities ⊆ DATA-MODEL.yaml entities;
          implements_surfaces ⊆ UX.yaml SCR ids; implements_workflows ⊆ PRD WKF
@@ -308,6 +311,14 @@ class TasksContainer(BaseModel):
 _TSK_RE = re.compile(r"^TSK-\d{3,}$")
 _WRN_RE = re.compile(r"^WRN-\d{3,}:\s+.+")
 _TST_RE = re.compile(r"^TST-\d{3,}$", re.IGNORECASE)
+# Meta-corpus dialect: when the system TEST-STRATEGY.yaml opts in via
+# `meta_corpus_dialect: true`, per-container test shards namespace their TST ids
+# with a short uppercase container tag (TST-CLI-001, TST-SYS-014) so
+# independently authored shards share no id space. `task`'s implements_tests
+# refs must resolve to those ids, so the ref-format check relaxes to this
+# regex under the flag. A generated app OMITS the flag and keeps flat TST-NNN
+# (the intended default). Mirrors `test`'s _TST_SHARDED_RE.
+_TST_SHARDED_RE = re.compile(r"^TST-(?:[A-Z][A-Z0-9]*-)?\d{3,}$", re.IGNORECASE)
 _FR_RE = re.compile(r"^FR-\d+$", re.IGNORECASE)
 _NFR_RE = re.compile(r"^NFR-\d+$", re.IGNORECASE)
 _SCR_RE = re.compile(r"^SCR-\d{3,}$", re.IGNORECASE)
@@ -583,6 +594,15 @@ def load_test_tst_ids(path: Path) -> Set[str]:
         if isinstance(t, dict) and t.get("tst_id"):
             out.add(str(t["tst_id"]).upper())
     return out
+
+
+def load_meta_corpus_dialect(system_test_strategy: Path) -> bool:
+    """The `meta_corpus_dialect` opt-in lives at the top level of the *system*
+    TEST-STRATEGY.yaml (never on a container shard — mirrors `test`'s schema).
+    Container-mode TASKS validation reads it from the system file too, because
+    the sharded TST ids its shards reference are only sanctioned by that flag."""
+    raw = _safe_yaml(system_test_strategy)
+    return bool(raw.get("meta_corpus_dialect")) if isinstance(raw, dict) else False
 
 
 def load_test_specs(path: Path) -> Dict[str, dict]:
@@ -1160,6 +1180,9 @@ def check_system(
     warns: List[str] = []
     all_reqs = fams["FR"] | fams["NFR"]
     sys_tst = load_test_tst_ids(docs_dir / "TEST-STRATEGY.yaml")
+    meta_mode = load_meta_corpus_dialect(docs_dir / "TEST-STRATEGY.yaml")
+    tst_rx = _TST_SHARDED_RE if meta_mode else _TST_RE
+    tst_form = "TST-<PREFIX>-NNN" if meta_mode else "TST-NNN"
 
     # build_order integrity.
     for cid in m.build_order or []:
@@ -1187,8 +1210,8 @@ def check_system(
                 errs.append(f"tasks[{i}].implements '{ref}' does not resolve to a PRD id")
         for ref in t.implements_tests or []:
             up = str(ref).upper()
-            if not _TST_RE.match(up):
-                errs.append(f"tasks[{i}].implements_tests '{ref}' is not a TST-NNN id")
+            if not tst_rx.match(up):
+                errs.append(f"tasks[{i}].implements_tests '{ref}' is not a {tst_form} id")
             else:
                 covered_tst.add(up)
                 if sys_tst and up not in sys_tst:
@@ -1254,6 +1277,10 @@ def check_container(
     cont_tst = load_test_tst_ids(docs_dir / f"TEST-STRATEGY__{cid}.yaml") if cid else set()
     if cid and not cont_tst and not (docs_dir / f"TEST-STRATEGY__{cid}.yaml").exists():
         errs.append(f"{label} no docs/TEST-STRATEGY__{cid}.yaml found — run /sdlc:test {cid} first")
+    # The dialect flag lives on the system strategy, not the shard (see loader).
+    meta_mode = load_meta_corpus_dialect(docs_dir / "TEST-STRATEGY.yaml")
+    tst_rx = _TST_SHARDED_RE if meta_mode else _TST_RE
+    tst_form = "TST-<PREFIX>-NNN" if meta_mode else "TST-NNN"
 
     allowed_reqs = (arch.implements.get(cid, set()) if cid else set()) | ac.implements
 
@@ -1319,8 +1346,8 @@ def check_container(
                 errs.append(f"{label} tasks[{i}].implements '{ref}' is not in the container's or targeted component's implements_requirements")
         for ref in t.implements_tests or []:
             up = str(ref).upper()
-            if not _TST_RE.match(up):
-                errs.append(f"{label} tasks[{i}].implements_tests '{ref}' is not a TST-NNN id")
+            if not tst_rx.match(up):
+                errs.append(f"{label} tasks[{i}].implements_tests '{ref}' is not a {tst_form} id")
             else:
                 covered_tst.add(up)
                 if cont_tst and up not in cont_tst:

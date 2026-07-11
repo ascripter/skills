@@ -18,7 +18,8 @@ Checks (all cross-artifact):
       component_ref.
   X3. TASKS → TEST: every implements_tests TST-NNN resolves to a tests[].tst_id
       in some TEST-STRATEGY file; TST ids are globally unique across the
-      strategy set.
+      strategy set. Under meta_corpus_dialect the id form is the
+      container-namespaced TST-<PREFIX>-NNN instead.
   X4. TASKS → API/DATA/UX: touches_operations ⊆ API operation_ids,
       touches_entities ⊆ DATA-MODEL entities, implements_surfaces ⊆ UX SCR ids.
   X5. requirement refs → PRD: every FR/NFR/ACR/WKF referenced by TEST `covers`
@@ -57,6 +58,10 @@ except ImportError:  # pragma: no cover
 FR_RE = re.compile(r"^(FR|NFR|ACR|WKF)-\d+$", re.IGNORECASE)
 SCR_RE = re.compile(r"^SCR-\d+$", re.IGNORECASE)
 TST_RE = re.compile(r"^TST-\d{3,}$")
+# Meta-corpus dialect (system TEST-STRATEGY.yaml sets meta_corpus_dialect: true):
+# test shards namespace their TST ids as TST-<PREFIX>-NNN. X3 resolution honors
+# the same flag `test` and validate_schema.py do; default stays flat TST-NNN.
+TST_SHARDED_RE = re.compile(r"^TST-(?:[A-Z][A-Z0-9]*-)?\d{3,}$")
 OPN_RE = re.compile(r"^OPN-\d{3,}$", re.IGNORECASE)
 ID_TOKEN_RE = re.compile(r"\b(?:FR|NFR|ACR|WKF)-\d+\b", re.IGNORECASE)
 
@@ -188,11 +193,18 @@ def load_arch(docs: Path):
     return containers, comp_units, edges
 
 
+def meta_corpus_dialect(docs: Path) -> bool:
+    """The opt-in flag on the system TEST-STRATEGY.yaml top level (never a shard)."""
+    doc = _yaml(docs / "TEST-STRATEGY.yaml")
+    return bool(doc.get("meta_corpus_dialect")) if isinstance(doc, dict) else False
+
+
 def load_test_strategies(docs: Path):
-    """(global {TST-NNN: filename}, per-container test lists)."""
+    """(global {TST id: filename}, per-container test lists)."""
     tst_owner: Dict[str, str] = {}
     per_container: Dict[str, List[dict]] = {}
     dupes: List[str] = []
+    tst_rx = TST_SHARDED_RE if meta_corpus_dialect(docs) else TST_RE
     files = [docs / "TEST-STRATEGY.yaml"] + sorted(docs.glob("TEST-STRATEGY__*.yaml"))
     found = False
     for path in files:
@@ -205,7 +217,7 @@ def load_test_strategies(docs: Path):
             per_container[path.stem.split("__", 1)[1]] = tests
         for t in tests:
             tid = str(t.get("tst_id") or "")
-            if TST_RE.match(tid):
+            if tst_rx.match(tid):
                 if tid in tst_owner:
                     dupes.append(f"{tid} appears in both {tst_owner[tid]} and {path.name}")
                 else:
@@ -292,8 +304,9 @@ def run(docs: Path) -> Tuple[List[str], List[str], List[str]]:
                     if units and str(symbol).strip() not in units:
                         errors.append(f"X2 {where}: target_symbol '{symbol}' is not a work_units[].name of '{comp_ref}' in ARCH__{cid}.yaml")
             if tst_owner is not None:
+                ref_rx = TST_SHARDED_RE if meta_corpus_dialect(docs) else TST_RE
                 for ref in (t.get("implements_tests") or []):
-                    if TST_RE.match(str(ref)) and str(ref) not in tst_owner:
+                    if ref_rx.match(str(ref)) and str(ref) not in tst_owner:
                         errors.append(f"X3 {where}: implements_tests '{ref}' resolves to no TEST-STRATEGY tests[].tst_id")
             if api_operations:
                 for ref in (t.get("touches_operations") or []):
