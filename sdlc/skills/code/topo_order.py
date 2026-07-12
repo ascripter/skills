@@ -11,6 +11,15 @@ Run from the project root:
     python sdlc/skills/code/topo_order.py --scope backend-api --state .claude/skills-state/sdlc-code.state.yaml
     python sdlc/skills/code/topo_order.py --next
     python sdlc/skills/code/topo_order.py --fingerprints
+    python sdlc/skills/code/topo_order.py --emit build-sandbox/TSK-004 build-sandbox/TSK-006
+
+The `--emit` mode is the **worker-packet builder**: it prints the verbatim task
+object(s) for the requested qualified id(s), each joined with a
+`requirement_context` slice (the task's FR/NFR/WKF ids resolved to their one-line
+PRD statements). The manager builds a wave from the schedule, then calls `--emit`
+for exactly those ids and pipes the result into each worker's brief — so neither
+the manager nor a worker ever reads a whole (potentially hundreds-of-KB) TASKS
+shard or the whole PRD to assemble one task's context.
 
 Scheduling policy (see references/execution-loop.md):
     Among READY tasks (all depends_on satisfied), a ready `test` task always
@@ -49,6 +58,12 @@ except ImportError:
     sys.exit(2)
 
 TSK_RE = re.compile(r"^TSK-\d{3,}$")
+
+# A PRD requirement/workflow definition line: ``- "FR-015: <statement>"`` (also
+# NFR-### under non_functional_requirements and WKF-### under use_cases). The id
+# sits right after an opening quote and is followed by ``:`` — which is what
+# separates a definition line from a mere ``FR-091 (…)`` prose reference.
+_REQ_RE = re.compile(r'"(?P<id>(?:FR|NFR|WKF)-\d+):\s*(?P<text>.*)"\s*$')
 
 
 def fingerprint(task: Dict[str, Any]) -> str:
@@ -225,13 +240,115 @@ def resolve_next(g: Graph, state: Dict[str, str]) -> str:
     return "nothing pending — the graph is fully executed"
 
 
+def load_requirements(docs: Path) -> Dict[str, str]:
+    """Map every FR/NFR/WKF id to its one-line PRD statement.
+
+    PRD requirement families are single-line ``"<id>: <statement>"`` strings, so
+    this is a cheap grep — never a whole-PRD parse. Returns an empty map when
+    ``PRD.yaml`` is absent (the caller emits tasks without requirement context).
+    """
+    prd = docs / "PRD.yaml"
+    reqs: Dict[str, str] = {}
+    if not prd.is_file():
+        return reqs
+    try:
+        text = prd.read_text(encoding="utf-8")
+    except OSError:
+        return reqs
+    for line in text.splitlines():
+        m = _REQ_RE.search(line)
+        if m is not None:
+            # First definition wins; a later prose line can't overwrite it.
+            reqs.setdefault(m.group("id"), " ".join(m.group("text").split()))
+    return reqs
+
+
+def resolve_qid(g: Graph, raw: str) -> Optional[str]:
+    """Resolve a user-supplied id to a loaded qualified id, or None.
+
+    Accepts the canonical qualified form (``build-sandbox/TSK-004``,
+    ``TASKS/TSK-001``), tolerates a ``TASKS__``-prefixed file part
+    (``TASKS__build-sandbox/TSK-004``), and a bare ``TSK-004`` when it is unique
+    across the loaded graph.
+    """
+    if raw in g.tasks:
+        return raw
+    if raw.startswith("TASKS__"):
+        alt = raw.replace("TASKS__", "", 1)
+        if alt in g.tasks:
+            return alt
+    if TSK_RE.match(raw):
+        hits = [q for q in g.tasks if q.rsplit("/", 1)[-1] == raw]
+        if len(hits) == 1:
+            return hits[0]
+    return None
+
+
+def emit_packets(g: Graph, docs: Path, raw_ids: List[str]) -> int:
+    """Print a self-contained worker packet per requested task, as one JSON array.
+
+    Each packet is ``{qualified_id, task, requirement_context}`` where
+    ``requirement_context`` maps the task's ``implements`` (FR/NFR) and
+    ``implements_workflows`` (WKF) ids to their PRD statements — so a worker
+    builds from the packet alone, without reading the (large) TASKS shard or PRD.
+    """
+    reqs = load_requirements(docs)
+    packets: List[Dict[str, Any]] = []
+    missing: List[str] = []
+    for raw in raw_ids:
+        qid = resolve_qid(g, raw)
+        if qid is None:
+            missing.append(raw)
+            continue
+        task = g.tasks[qid]
+        req_ids: List[str] = []
+        for field in ("implements", "implements_workflows"):
+            for r in (task.get(field) or []):
+                if r not in req_ids:
+                    req_ids.append(r)
+        rc = {r: reqs[r] for r in req_ids if r in reqs}
+        packet: Dict[str, Any] = {
+            "qualified_id": qid,
+            "task": task,
+            "requirement_context": rc,
+        }
+        unresolved = [r for r in req_ids if r not in reqs]
+        if unresolved:
+            # Named but not found in PRD (stale ref / PRD absent) — flag so the
+            # worker can fall back to an on-demand PRD read for just these ids.
+            packet["requirement_context_unresolved"] = unresolved
+        packets.append(packet)
+    print(json.dumps(packets, indent=2, ensure_ascii=False))
+    if missing:
+        print(
+            f"[emit] unresolved task id(s): {', '.join(missing)} — "
+            f"not in the loaded graph (check the qualified id)",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
 def main() -> int:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        except Exception:
+            pass
     ap = argparse.ArgumentParser(description="Print the sdlc-code execution schedule.")
     ap.add_argument("--docs", default="docs", help="Directory holding TASKS*.json (default: docs).")
     ap.add_argument("--state", default=".claude/skills-state/sdlc-code.state.yaml", help="Execution ledger (optional).")
     ap.add_argument("--scope", default=None, help="all (default), TASKS, or a container_id.")
     ap.add_argument("--next", action="store_true", dest="next_", help="Print the --next unit resolution only.")
     ap.add_argument("--fingerprints", action="store_true", help="Print qualified id -> fingerprint and exit.")
+    ap.add_argument(
+        "--emit",
+        nargs="+",
+        metavar="QID",
+        help="Print the verbatim task object(s) for the given qualified id(s) "
+        "(e.g. build-sandbox/TSK-004), each with a requirement_context slice from "
+        "PRD — the worker packet builder. Never Read the TASKS file to slice a task.",
+    )
     args = ap.parse_args()
 
     scope = None if args.scope in (None, "all") else args.scope
@@ -241,6 +358,9 @@ def main() -> int:
         for q in sorted(g.tasks):
             print(f"{q}  {fingerprint(g.tasks[q])}")
         return 0
+
+    if args.emit:
+        return emit_packets(g, Path(args.docs), args.emit)
 
     if g.errors:
         for e in g.errors:

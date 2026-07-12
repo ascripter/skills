@@ -21,7 +21,7 @@ project from a structured chain of artifacts. Skills are invoked as
 | `arch`       | `sdlc/skills/arch`  | `docs/PRD.yaml` + `docs/UX.yaml` (+ `UX__*`) + `docs/DATA-MODEL.yaml` (+ `docs/API.yaml` (+ `API__*`)) + interview                              | `docs/ARCH.yaml`, `docs/ARCH__<container>.yaml`      |
 | `test`       | `sdlc/skills/test`  | `docs/PRD.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH.yaml` (+ `docs/ARCH__<container>.yaml` in container mode) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) + interview | `docs/TEST-STRATEGY.yaml` (system mode), `docs/TEST-STRATEGY__<container>.yaml` (container mode) |
 | `task`       | `sdlc/skills/task`  | **system:** `docs/ARCH.yaml` + `docs/TEST-STRATEGY.yaml` + interview; **container:** `docs/ARCH__<container>.yaml` + `docs/TEST-STRATEGY__<container>.yaml` (+ `docs/DATA-MODEL.yaml`) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) (+ `docs/DESIGN.yaml` (+ `DESIGN__*`)) + interview; both read `docs/PRD.yaml` for FR/NFR id resolution. UX/API/DATA/DESIGN drive the surface/operation/entity/design coverage gates | `docs/TASKS.json` (system mode), `docs/TASKS__<container>.json` (container mode) |
-| `code`       | `sdlc/skills/code`  | `docs/TASKS.json` + `docs/TASKS__<container>.json` (must be `complete` + task-validator-green; v1.4 tasks are self-contained) + `docs/ARCH__<container>.yaml` (tech-stack slice; full contract fallback for pre-1.4 artifacts) (+ `docs/TEST-STRATEGY__<container>.yaml` pre-1.3) (+ `docs/DATA-MODEL.yaml` entity slices pre-1.4) — **no interview** | generated source files at each task's `target_files`, `docs/CODE-MANIFEST.json`, execution ledger in `.claude/skills-state/sdlc-code.state.yaml` |
+| `code`       | `sdlc/skills/code`  | `docs/TASKS.json` + `docs/TASKS__<container>.json` (must be `complete` + task-validator-green; v1.4 tasks are self-contained) + `docs/ARCH__<container>.yaml` (tech-stack slice; full contract fallback for pre-1.4 artifacts) (+ `docs/PRD.yaml` for the `requirement_context` FR/NFR lines joined into each worker packet by `topo_order.py --emit`) (+ `docs/TEST-STRATEGY__<container>.yaml` pre-1.3) (+ `docs/DATA-MODEL.yaml` entity slices pre-1.4) — **no interview** | generated source files at each task's `target_files`, `docs/CODE-MANIFEST.json`, execution ledger in `.claude/skills-state/sdlc-code.state.yaml` |
 | `deploy`     | `sdlc/skills/deploy` *(planned — not yet implemented)* | `docs/ARCH.yaml` + interview                                                | `docs/DEPLOY.yaml`                                   |
 
 **Downstream consumers of every output are AI agents, not humans.** Optimize artifacts for unambiguous machine consumption (typed enums, no prose blobs, explicit `null` for unanswered fields).
@@ -40,8 +40,12 @@ waves. Tasks are **self-contained** as of task-artifact v1.4: implementation
 tasks embed their `interface_contract` (and `unit_kind` / `unit_summary`), test
 tasks their `test_spec`, and integration/migration/design/config tasks their
 `operation_contract` / `entity_slice` / `design_spec` / `config_keys` slices,
-so codegen needs no per-task ARCH/TEST-STRATEGY/API/DATA/DESIGN lookups — only
-the container's tech stack stays upstream. Three forms: `/sdlc:code`
+so codegen needs no per-task ARCH/TEST-STRATEGY/API/DATA/DESIGN lookups — the
+container's tech stack (one `ARCH__<cid>.yaml` header slice) and the PRD FR/NFR
+requirement statements are the only upstream facts, and the latter are joined
+into each worker packet by the `topo_order.py --emit` builder (pulled live from
+`docs/PRD.yaml` as one-line `requirement_context`, never embedded in the task
+graph nor read whole by a worker). Three forms: `/sdlc:code`
 (container-by-container through `build_order`, pausing at each container
 boundary with a continue/stop gate), `/sdlc:code <container>` (one subgraph,
 then stop), `/sdlc:code --next` (next incomplete unit in `build_order`). Its

@@ -65,7 +65,7 @@ during the run, and a report at the end.
 | `SKILL.md` | This file — dispatch, the execution flow, the gates. |
 | `CODE-MANIFEST.schema.yaml` | Human-readable canonical schema for `docs/CODE-MANIFEST.json`. |
 | `validate_schema.py` | Pydantic v2 validator for the manifest (+ advisory disk cross-checks). |
-| `topo_order.py` | Deterministic scheduler: loads all TASKS files + the ledger, topo-sorts with the test-first policy, prints ready/blocked/stale tasks and ring boundaries. Run it — never hand-compute the order. |
+| `topo_order.py` | Deterministic scheduler AND worker-packet builder: loads all TASKS files + the ledger, topo-sorts with the test-first policy, prints ready/blocked/stale tasks and ring boundaries; `--emit <qualified-id>…` prints the verbatim task object(s) + a `requirement_context` slice from PRD for the worker brief. Run it — never hand-compute the order or `Read` a TASKS shard to slice a task. |
 | `set_claude_md_pointer.py` | CLAUDE.md pointer injector, called at close. |
 | `references/execution-loop.md` | Scheduling policy, the four verification rings, the heal loop, opus escalation. Read on entering Phase 4. |
 | `references/emit-rules.md` | Kind → write behavior, provenance markers, same-file merging, the path ladder + path safety. Read on entering Phase 4. |
@@ -175,8 +175,12 @@ for what the task can't carry: the container's tech stack (one
 pre-1.4: the API operation, the DATA entity's field definitions, the DESIGN
 token/asset files). Use
 `docs/INDEX.yaml` line ranges (`.claude/rules/sdlc-docs-access.md`) for the
-big YAMLs; read whole files only when INDEX is absent or the doc is small.
-This is also what makes a task a complete **worker packet** (Phase 4).
+big **upstream YAMLs** (ARCH); read whole files only when INDEX is absent or
+the doc is small. Never `Read` a TASKS shard to slice a task — the per-task
+JSON is pulled by `topo_order.py --emit` (Phase 4), which also joins the
+`requirement_context` (FR/NFR/WKF statements) so the packet, not PRD, carries
+the requirement grounding. This is what makes a task a complete **worker
+packet** (Phase 4).
 
 ### Phase 3 — Plan & approval
 
@@ -205,9 +209,21 @@ subagents** and integrates their results. Per wave:
    exports, a config file another pending task also writes) run **solo** —
    a wave of one. Skip-check every candidate against the ledger first
    (idempotency matrix in `references/state-and-idempotency.md`).
-2. **Dispatch workers** (Agent tool, run in parallel, non-interactive). Each
-   worker's brief is self-contained: the task JSON object(s) verbatim (the
-   v1.4 embeds ARE the context), the container's tech-stack slice, the
+2. **Dispatch workers** (Agent tool, run in parallel, non-interactive). Build
+   each worker's brief from the **packet builder** — never by `Read`-ing the
+   TASKS file (a container shard can be hundreds of KB; slurping it wastes the
+   manager's whole context):
+
+   ```bash
+   python "${CLAUDE_SKILL_DIR}/topo_order.py" --emit <qualified-id> [<qualified-id> ...]
+   ```
+
+   It prints, per requested task, the **verbatim task JSON object** joined with a
+   `requirement_context` slice (the task's `implements`/`implements_workflows`
+   ids resolved to their one-line PRD statements) — so the worker has its FR/NFR
+   grounding in-packet without opening PRD. Each worker's brief is then
+   self-contained: its packet(s) (the v1.4 embeds + requirement_context ARE the
+   context), the container's tech-stack slice, the
    emit-rules digest (provenance marker + path safety), and the instruction
    set: emit per the kind table, run the **static ring** (compile / import /
    typecheck / format check of touched files), run the **unit ring** (the

@@ -465,8 +465,10 @@ _EXTRACTORS = {
 # JSON canonicals (TASKS.json, CODE-MANIFEST.json)
 # ---------------------------------------------------------------------------
 
-# A task's stable id inside a pretty-printed task object.
-_TSK_LINE_RE = re.compile(r'"task_id"\s*:\s*"(?P<id>[A-Z]+-\d+)"')
+# A task's stable id inside a pretty-printed task object. The SDLC task artifacts
+# key this field ``tsk_id`` (TASKS.json + every TASKS__<cid>.json); it is the
+# project-wide standard — do not look for ``task_id``.
+_TSK_LINE_RE = re.compile(r'"tsk_id"\s*:\s*"(?P<id>[A-Z]+-\d+)"')
 # A top-level JSON key line: ``  "key": ...`` (checked only at root depth).
 _JSON_KEY_RE = re.compile(r'^\s*"(?P<key>[^"]+)"\s*:')
 # A one-line title/name/summary member, used for the symbol summary.
@@ -476,10 +478,10 @@ _JSON_TITLE_RE = re.compile(r'"(?:title|name|summary)"\s*:\s*"(?P<val>[^"]*)"')
 def _scan_json(lines: "list[str]") -> "tuple[dict[str, tuple[int, int]], list[SymbolSlice]]":
     """Line-range map for a pretty-printed JSON canonical (stdlib, no parse).
 
-    Returns top-level-key sections plus one symbol per ``"task_id"`` object.
+    Returns top-level-key sections plus one symbol per ``"tsk_id"`` object.
     Assumes the machine-written ``json.dump(indent=…)`` shape the skills emit:
     strings never span lines, and a task object's ``{`` opens on or before the
-    line carrying its ``task_id`` member. Compact single-line objects are not
+    line carrying its ``tsk_id`` member. Compact single-line objects are not
     symbol-indexed (their enclosing section still is). Best-effort by design —
     a malformed file yields empty results, never an exception.
     """
@@ -599,9 +601,32 @@ def build_index(docs_dir: Path) -> DocIndex:
             for sym in extractor(lines, file_sections, filename):
                 symbols[sym.file + ":" + sym.path] = sym  # temp key; re-keyed below
 
+    # TASKS__<cid>.json shards are large enough (100+ tasks) that "load whole"
+    # is a lie. Per-task-symbol-index them so an agent can slice one task by its
+    # qualified id (``<cid>/TSK-NNN`` — see ``_symbol_name``). Only their task
+    # symbols are indexed, not their top-level sections; other shards
+    # (UX__/ARCH__/API__) stay inventory-only, listed in ``shards:``.
+    for p in sorted(docs_dir.glob("TASKS__*.json")):
+        if not _is_shard(p.name):
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        _shard_sections, json_symbols = _scan_json(text.splitlines())
+        for sym in json_symbols:
+            sym = sym._replace(file=p.name)
+            symbols[sym.file + ":" + sym.path] = sym
+
+    def _file_rank(fname: str) -> int:
+        try:
+            return files.index(fname)  # canonical files keep their index order
+        except ValueError:
+            return len(files)          # shard files sort after every canonical
+
     ordered = sorted(
         symbols.values(),
-        key=lambda s: (files.index(s.file), s.start),
+        key=lambda s: (_file_rank(s.file), s.file, s.start),
     )
     named: dict[str, SymbolSlice] = {}
     for sym in ordered:
@@ -615,10 +640,21 @@ def build_index(docs_dir: Path) -> DocIndex:
 
 
 def _symbol_name(sym: SymbolSlice) -> str:
-    """The lookup key an agent uses: entity/enum name, FR/TSK id, or dossier key."""
+    """The lookup key an agent uses: entity/enum name, FR/TSK id, or dossier key.
+
+    A task in a ``TASKS__<cid>.json`` shard is keyed by its **qualified** id
+    ``<cid>/TSK-NNN`` — matching how sdlc-code (``topo_order.py``) addresses
+    tasks and avoiding the cross-file ``TSK-001`` collision (every shard and the
+    canonical file restart their numbering). A task in the canonical
+    ``TASKS.json`` keeps its bare ``TSK-NNN``.
+    """
     bracketed = re.search(r"\[((?:FR|TSK)-\d+)\]$", sym.path)
     if bracketed is not None:
-        return bracketed.group(1)
+        sym_id = bracketed.group(1)
+        if sym_id.startswith("TSK-") and "__" in sym.file:
+            cid = sym.file.split("__", 1)[1].rsplit(".", 1)[0]
+            return f"{cid}/{sym_id}"
+        return sym_id
     return sym.path.rsplit(".", 1)[-1]
 
 
@@ -667,7 +703,8 @@ def render_index_yaml(index: DocIndex) -> str:
     if index.shards:
         out.append("")
         out.append("# shards: every docs/<PARENT>__<slug> sub-artifact present, keyed by")
-        out.append("# its parent canonical. Shards load cheaply whole — no line ranges.")
+        out.append("# its parent canonical. Most shards load cheaply whole; TASKS__<cid>.json")
+        out.append("# shards are additionally per-task indexed under symbols: (<cid>/TSK-NNN).")
         out.append("shards:")
         for parent, names in index.shards.items():
             out.append(f"  {parent}: [{', '.join(_flow(n) for n in names)}]")
@@ -681,7 +718,12 @@ def render_index_yaml(index: DocIndex) -> str:
     by_file: dict[str, list[tuple[str, SymbolSlice]]] = {}
     for name, sym in index.symbols.items():
         by_file.setdefault(sym.file, []).append((name, sym))
-    for fname in index.sections:  # canonical file order
+    # Canonical files first (in sections order), then any file that carries
+    # symbols but no sections — the TASKS__<cid>.json shards (by_file preserves
+    # the deterministic ordered() grouping for them).
+    render_order = list(index.sections)
+    render_order += [f for f in by_file if f not in index.sections]
+    for fname in render_order:
         rows = by_file.get(fname)
         if not rows:
             continue

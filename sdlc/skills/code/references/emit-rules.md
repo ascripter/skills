@@ -94,8 +94,10 @@ v1.3), never from imagination:
 4. Body: implement the task's `description` (+ `unit_summary`) against the
    task's `acceptance`. `touches_entities` names the DATA-MODEL entities whose
    field definitions you must respect — read their INDEX slices;
-   `implements` names the FR/NFRs — read their PRD lines only when the
-   description is not self-sufficient.
+   `implements` names the FR/NFRs — their statements ride in the packet's
+   `requirement_context` (joined by `topo_order.py --emit`), so consult it there
+   rather than opening PRD. Only fall back to an on-demand PRD read for an id
+   listed under `requirement_context_unresolved` (a stale ref / PRD-absent case).
 5. Real implementations only — no `TODO` stubs, no `NotImplementedError`
    placeholders. If the contract is too thin to implement honestly, that's a
    gate ("this work_unit's contract doesn't determine behaviour X"), not a

@@ -32,7 +32,7 @@ fills gaps and refreshes the index, never duplicates.
 
 | Target | Purpose |
 |---|---|
-| `.claude/sdlc/docs_index.py` | Stdlib-only index generator (zero deps; copied from this skill). Covers the canonical YAML docs **and** the JSON canonicals (`TASKS.json`, `CODE-MANIFEST.json`), and emits a `shards:` inventory of every `docs/*__*` sub-artifact. Also a `--show <symbol>` power tool. |
+| `.claude/sdlc/docs_index.py` | Stdlib-only index generator (zero deps; copied from this skill). Covers the canonical YAML docs **and** the JSON canonicals (`TASKS.json`, `CODE-MANIFEST.json`), per-task-indexes every large `TASKS__<cid>.json` shard (`<cid>/TSK-NNN` symbols), and emits a `shards:` inventory of every `docs/*__*` sub-artifact. Also a `--show <symbol>` power tool. |
 | `.claude/settings.json` | A `Write\|Edit\|MultiEdit` **PostToolUse hook** that regenerates the index after any canonical `docs/*.yaml` / `docs/TASKS*.json` edit (and after shard writes, to keep the `shards:` inventory current). Merged in — existing settings preserved. |
 | `.claude/rules/sdlc-docs-access.md` | The slice-don't-slurp retrieval protocol agents follow. |
 | `CLAUDE.md` (`## SDLC Documents`) | Slice-first access note + the `docs/INDEX.yaml` pointer. Coexists with the per-artifact bullets `prd`/`ux`/`data`/`arch` add to the same section. |

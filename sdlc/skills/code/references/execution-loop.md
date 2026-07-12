@@ -46,8 +46,13 @@ subagents** dispatched in parallel waves. The rules that make this safe:
   **pairwise disjoint** — a candidate overlapping another pending task's
   files waits or runs **solo** (scaffold tasks, barrel/exports files, shared
   config). When in doubt, solo: correctness beats parallelism.
-- **The worker brief is the task packet.** Verbatim task JSON (v1.4 embeds
-  included), the container tech-stack slice, the provenance-marker and
+- **The worker brief is the task packet.** Build the packet with
+  `python "${CLAUDE_SKILL_DIR}/topo_order.py" --emit <qualified-id> …` — never
+  by `Read`-ing the TASKS file (a shard can be hundreds of KB). It prints the
+  verbatim task JSON (v1.4 embeds included) joined with a `requirement_context`
+  slice (the task's FR/NFR/WKF ids → their PRD statements), so the worker's
+  requirement grounding rides in the packet, not a per-worker PRD read. Add the
+  container tech-stack slice, the provenance-marker and
   path-safety rules from `emit-rules.md`, the established test command, and
   the write boundary (its `target_files` + the test file, nothing else).
   Workers are **non-interactive**: no AskUserQuestion, no ledger writes, no
@@ -142,9 +147,10 @@ re-derive project context:
 ```
 You are healing one atomic codegen unit that failed its tests twice.
 
-TASK (verbatim JSON): <the task object, qualified id included — carries the
-  embedded interface_contract / test_spec (v1.3) and the per-kind grounding
-  slices (v1.4)>
+TASK PACKET (from `topo_order.py --emit <qualified-id>`): <the task object,
+  qualified id included — carries the embedded interface_contract / test_spec
+  (v1.3) and the per-kind grounding slices (v1.4) — plus its requirement_context
+  (the task's FR/NFR/WKF ids resolved to their PRD statements)>
 INTERFACE CONTRACT: <the task's interface_contract; pre-1.3: the ARCH
   work_unit slice or the API operation schema the unit defers to>
 ACCEPTANCE: <the task's acceptance list>

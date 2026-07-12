@@ -22,13 +22,19 @@ running `python .claude/sdlc/docs_index.py`). It contains four blocks:
 - `shards` — every `docs/<PARENT>__<slug>.yaml|json` sub-artifact present,
   keyed by its parent canonical (`UX.yaml: [UX__login.yaml, …]`). Use it to
   *discover* which per-surface/container/resource files exist — then load the
-  shard whole (they are small by design).
+  shard whole (most are small by design). **Exception:** a large
+  `TASKS__<cid>.json` (a container with many tasks) is NOT small — do not load it
+  whole; its tasks are per-task addressable in `symbols` (below), so slice one
+  task by id.
 - `symbols` — **grouped by file**; each addressable symbol is one positional row:
   `name: [start, end, kind, context, summary]` (`context` is `~` when none). The
   owning file is the group header the row sits under — read the first two numbers
   as the `[start, end]` line range. Symbols cover DATA-MODEL `entities` + `enums`,
-  PRD `FR-###` items + any `conventions.stage_dossiers` entries, and
-  TASKS.json `TSK-###` tasks.
+  PRD `FR-###` items + any `conventions.stage_dossiers` entries,
+  canonical `TASKS.json` `TSK-###` tasks (bare id), and every
+  `TASKS__<cid>.json` shard's tasks keyed by **qualified id** `<cid>/TSK-NNN`
+  (matching how sdlc-code addresses tasks — the canonical file and every shard
+  restart their numbering, so the `<cid>/` prefix disambiguates).
 
 `INDEX.yaml` duplicates no field bodies; `summary` is a ≤120-char hint only. The
 canonical truth always lives in the source file — resolve there before relying
@@ -59,19 +65,24 @@ on it.
 ## Power tool
 
 `python .claude/sdlc/docs_index.py --show <symbol>` prints exactly one symbol's
-slice (`<symbol>` = an entity/enum name, an `FR-###` id, a `TSK-###` id, or a
+slice (`<symbol>` = an entity/enum name, an `FR-###` id, a canonical `TSK-###`
+id, a shard task's qualified id `<cid>/TSK-NNN`, or a
 `conventions.stage_dossiers` map key). Equivalent to looking the symbol up in
-`INDEX.yaml` and reading its range.
+`INDEX.yaml` and reading its range — and the cheapest way to pull one task out of
+a large `TASKS__<cid>.json` shard.
 
 ## Maintaining the index
 
 - `INDEX.yaml` is a derived artifact — edit the canonical source; the hook refreshes it.
-- The generator (`.claude/sdlc/docs_index.py`) content-indexes the canonical
+- The generator (`.claude/sdlc/docs_index.py`) content-*sections* the canonical
   docs only. Per-surface / per-container sub-artifacts (`UX__*.yaml`,
   `ARCH__*.yaml`, `API__*.yaml`, `TASKS__*.json`), versioned snapshots, and
-  `*_draft` files are not sectioned — they are independent documents small
+  `*_draft` files are not sectioned — most are independent documents small
   enough to load whole — but present shards ARE enumerated in the `shards:`
-  block for discovery, and writing one refreshes the index.
+  block for discovery, and writing one refreshes the index. **The one content
+  exception:** `TASKS__<cid>.json` shards are additionally per-task
+  symbol-indexed (`<cid>/TSK-NNN` rows under `symbols:`) because a many-task
+  container is too large to load whole.
 - Do **not** split `PRD.yaml` / `DATA-MODEL.yaml` / `TASKS.json`: range-based
   slicing already gives
   free partial reads, and the `entities` graph (`composition`, `cross_references`)
