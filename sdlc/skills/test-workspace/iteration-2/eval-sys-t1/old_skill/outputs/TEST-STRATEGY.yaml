@@ -215,7 +215,7 @@ tests:
       Pins the response shape of POST /v1/tasks/{id}/comments so the
       comments-panel surface can evolve independently of the backend.
     directives:
-      - "Arrange: consumer contract for POST /v1/tasks/{id}/comments with a valid task_id."
+      - "Arrange: consumer contract for POST /v1/tasks/{id}/comments with a valid tsk_id."
       - "Provider side: replay the pact against backend-api; assert Comment shape is stable."
       - "Assert: Comment fields (id, body, created_at) present and typed correctly."
       - "Mock: identity-provider."

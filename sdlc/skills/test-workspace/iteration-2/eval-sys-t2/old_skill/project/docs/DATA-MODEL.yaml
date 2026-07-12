@@ -31,7 +31,7 @@ entities:
     primary_key: id
     fields:
       id: { type: uuid, primary_key: true, nullable: false }
-      task_id: { type: uuid, nullable: false, references: Task.id, on_delete: cascade }
+      tsk_id: { type: uuid, nullable: false, references: Task.id, on_delete: cascade }
       body: { type: text, nullable: false }
     traces_prd_features: ["FR-002"]
     traces_ux_surfaces: ["SCR-003"]
@@ -57,7 +57,7 @@ entities:
 
 relationships:
   - from_entity: Comment
-    from_field: task_id
+    from_field: tsk_id
     to_entity: Task
     to_field: id
     cardinality: "1:N"
@@ -75,7 +75,7 @@ indexes_and_queries:
       read_or_write: read
     - description: "List comments by task."
       entity: Comment
-      fields: [task_id]
+      fields: [tsk_id]
       read_or_write: read
 
 integrity_and_constraints:

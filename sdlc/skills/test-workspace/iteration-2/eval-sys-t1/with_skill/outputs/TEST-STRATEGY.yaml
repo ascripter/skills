@@ -157,9 +157,9 @@ tests:
       resources) → primary-postgres.
     directives:
       - "Arrange: seed an open task; obtain a JWT with read:tasks + write:tasks + write:comments."
-      - "Act: POST /v1/tasks/{task_id}/comments {body: 'Test comment'}."
-      - "Assert: 201 with {id, task_id, body}."
-      - "Act: PATCH /v1/tasks/{task_id} {status: done}."
+      - "Act: POST /v1/tasks/{tsk_id}/comments {body: 'Test comment'}."
+      - "Assert: 201 with {id, tsk_id, body}."
+      - "Act: PATCH /v1/tasks/{tsk_id} {status: done}."
       - "Assert: 200 with {status: done}."
     covers:
       - WKF-002
@@ -302,12 +302,12 @@ tests:
     tier: contract
     description: >
       Pins the comments resource shape. Consumer = web-frontend,
-      provider = backend-api. Verifies POST /v1/tasks/{task_id}/comments
+      provider = backend-api. Verifies POST /v1/tasks/{tsk_id}/comments
       response matches API__comments.yaml schema.
     directives:
-      - "Arrange: contract test with seeded task_id."
-      - "Assert: POST /v1/tasks/{task_id}/comments {body} returns 201 {id, task_id, body}."
-      - "Assert: 404 if task_id not found."
+      - "Arrange: contract test with seeded tsk_id."
+      - "Assert: POST /v1/tasks/{tsk_id}/comments {body} returns 201 {id, tsk_id, body}."
+      - "Assert: 404 if tsk_id not found."
       - "Assert: unauthenticated returns 401."
     covers:
       - FR-002

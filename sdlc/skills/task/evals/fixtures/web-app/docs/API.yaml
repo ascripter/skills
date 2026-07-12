@@ -75,7 +75,7 @@ resource_inventory:
     traces_ux_surfaces: ["SCR-001", "SCR-002"]
     traces_prd_workflows: ["WKF-001"]
   - resource_id: comments
-    base_path: /v1/tasks/{task_id}/comments
+    base_path: /v1/tasks/{tsk_id}/comments
     status: confirmed
     file_path: docs/API__comments.yaml
     primary_entity: Comment

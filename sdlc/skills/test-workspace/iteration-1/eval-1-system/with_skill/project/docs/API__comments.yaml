@@ -6,7 +6,7 @@ metadata:
   status: "complete"
 
 resource_id: comments
-base_path: /v1/tasks/{task_id}/comments
+base_path: /v1/tasks/{tsk_id}/comments
 primary_entity: Comment
 traces_prd_features: ["FR-002"]
 traces_ux_surfaces: ["SCR-003"]
@@ -16,10 +16,10 @@ endpoints:
   - id: OPR-004
     operation_id: list-comments
     method: GET
-    path: /v1/tasks/{task_id}/comments
+    path: /v1/tasks/{tsk_id}/comments
     summary: "List comments for a task"
     parameters:
-      - name: task_id
+      - name: tsk_id
         in: path
         required: true
         schema: { type: string, format: uuid }
@@ -35,10 +35,10 @@ endpoints:
   - id: OPR-005
     operation_id: create-comment
     method: POST
-    path: /v1/tasks/{task_id}/comments
+    path: /v1/tasks/{tsk_id}/comments
     summary: "Add a comment to a task"
     parameters:
-      - name: task_id
+      - name: tsk_id
         in: path
         required: true
         schema: { type: string, format: uuid }
@@ -61,10 +61,10 @@ schemas:
   Comment:
     projects_from: Comment
     type: object
-    required: [id, task_id, body]
+    required: [id, tsk_id, body]
     properties:
       id: { type: string, format: uuid }
-      task_id: { type: string, format: uuid }
+      tsk_id: { type: string, format: uuid }
       body: { type: string }
   CommentList:
     projects_from: null

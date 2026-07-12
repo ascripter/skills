@@ -262,8 +262,8 @@ tests:
       comments panel). Covers the POST and GET operations from API__comments.yaml.
     directives:
       - "Arrange: seed one task; start backend-api with test DB."
-      - "Act: POST /v1/tasks/{task_id}/comments {body: 'LGTM'} — assert 201, response has id (uuid), task_id, body (string)."
-      - "Act: GET /v1/tasks/{task_id}/comments — assert 200, response has items: Comment[]."
+      - "Act: POST /v1/tasks/{tsk_id}/comments {body: 'LGTM'} — assert 201, response has id (uuid), tsk_id, body (string)."
+      - "Act: GET /v1/tasks/{tsk_id}/comments — assert 200, response has items: Comment[]."
       - "Act: POST with missing body field — assert 400 RFC-7807 Problem."
     covers:
       - FR-002

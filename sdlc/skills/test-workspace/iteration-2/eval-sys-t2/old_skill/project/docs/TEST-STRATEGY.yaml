@@ -149,10 +149,10 @@ tests:
       backend-api.
     directives:
       - "Arrange: spin up stack; create a seeded open task via factory helper."
-      - "Act: POST /v1/tasks/{task_id}/comments with body='Closing note'."
-      - "Assert: GET /v1/tasks/{task_id}/comments returns the comment."
-      - "Act: PATCH /v1/tasks/{task_id} with status='done'."
-      - "Assert: GET /v1/tasks/{task_id} returns status='done'."
+      - "Act: POST /v1/tasks/{tsk_id}/comments with body='Closing note'."
+      - "Assert: GET /v1/tasks/{tsk_id}/comments returns the comment."
+      - "Act: PATCH /v1/tasks/{tsk_id} with status='done'."
+      - "Assert: GET /v1/tasks/{tsk_id} returns status='done'."
       - "Assert: the task-detail screen renders the comment and the 'done' badge."
     covers:
       - WKF-002
@@ -163,7 +163,7 @@ tests:
       - backend-api
     priority: must
     setup: "Seed one open task before the test run."
-    acceptance: "GET /v1/tasks/{task_id} returns status='done' and GET /v1/tasks/{task_id}/comments returns at least one comment with the expected body."
+    acceptance: "GET /v1/tasks/{tsk_id} returns status='done' and GET /v1/tasks/{tsk_id}/comments returns at least one comment with the expected body."
     status: confirmed
 
   # ---- e2e: WKF-003 Configure digest and review past runs ----
@@ -232,8 +232,8 @@ tests:
       runtime surprises.
     directives:
       - "Arrange: seed a task; authenticate with test JWT."
-      - "Act: POST /v1/tasks/{task_id}/comments with {body: 'test comment'} — assert 201 + Comment schema."
-      - "Act: GET /v1/tasks/{task_id}/comments — assert response schema matches {items: Comment[], cursor: string|null}."
+      - "Act: POST /v1/tasks/{tsk_id}/comments with {body: 'test comment'} — assert 201 + Comment schema."
+      - "Act: GET /v1/tasks/{tsk_id}/comments — assert response schema matches {items: Comment[], cursor: string|null}."
       - "Assert: 401 without Authorization header."
     covers:
       - WKF-002

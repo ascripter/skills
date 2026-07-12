@@ -252,9 +252,7 @@ def _find_child_value(
     return None
 
 
-def _named_range(
-    children: "list[tuple[str, int, int]]", key: str
-) -> "Optional[tuple[int, int]]":
+def _named_range(children: "list[tuple[str, int, int]]", key: str) -> "Optional[tuple[int, int]]":
     """Return the (start, end) range of the named child from ``_child_keys``."""
     for name, start, end in children:
         if name == key:
@@ -467,7 +465,7 @@ _EXTRACTORS = {
 
 # A task's stable id inside a pretty-printed task object. The SDLC task artifacts
 # key this field ``tsk_id`` (TASKS.json + every TASKS__<cid>.json); it is the
-# project-wide standard — do not look for ``task_id``.
+# project-wide standard — do not look for ``tsk_id``.
 _TSK_LINE_RE = re.compile(r'"tsk_id"\s*:\s*"(?P<id>[A-Z]+-\d+)"')
 # A top-level JSON key line: ``  "key": ...`` (checked only at root depth).
 _JSON_KEY_RE = re.compile(r'^\s*"(?P<key>[^"]+)"\s*:')
@@ -622,7 +620,7 @@ def build_index(docs_dir: Path) -> DocIndex:
         try:
             return files.index(fname)  # canonical files keep their index order
         except ValueError:
-            return len(files)          # shard files sort after every canonical
+            return len(files)  # shard files sort after every canonical
 
     ordered = sorted(
         symbols.values(),
@@ -746,9 +744,7 @@ def write_index(docs_dir: Path) -> Path:
     return target
 
 
-def find_symbol_slice(
-    docs_dir: Path, name: str
-) -> "Optional[tuple[Path, int, int]]":
+def find_symbol_slice(docs_dir: Path, name: str) -> "Optional[tuple[Path, int, int]]":
     """Resolve a symbol name to ``(file_path, start, end)`` via a fresh scan."""
     index = build_index(docs_dir)
     sym = index.symbols.get(name)
@@ -820,8 +816,14 @@ def main(argv: "Optional[list[str]]" = None) -> int:
     ap = argparse.ArgumentParser(description="SDLC docs/INDEX.yaml generator.")
     ap.add_argument("--docs-dir", help="Path to the docs directory (default: <root>/docs).")
     ap.add_argument("--project-root", help="Project root (default: $CLAUDE_PROJECT_DIR or cwd).")
-    ap.add_argument("--hook", action="store_true", help="PostToolUse mode: read the event from stdin and regenerate only when a canonical doc changed.")
-    ap.add_argument("--show", metavar="SYMBOL", help="Print one symbol's [start,end] line slice and exit.")
+    ap.add_argument(
+        "--hook",
+        action="store_true",
+        help="PostToolUse mode: read the event from stdin and regenerate only when a canonical doc changed.",
+    )
+    ap.add_argument(
+        "--show", metavar="SYMBOL", help="Print one symbol's [start,end] line slice and exit."
+    )
     args = ap.parse_args(argv)
 
     docs_dir = _resolve_docs_dir(args)

@@ -213,7 +213,7 @@ tests:
       and backend-api can evolve independently.
     directives:
       - "Arrange: run backend-api against a stub Postgres returning a Task with one Comment."
-      - "Act: GET /v1/tasks/{task_id}/comments."
+      - "Act: GET /v1/tasks/{tsk_id}/comments."
       - "Assert: response matches the Comment list schema (items: [{id, body, author}])."
     covers:
       - FR-002

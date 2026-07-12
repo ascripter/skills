@@ -148,9 +148,9 @@ tests:
       resources. Covers FR-002 (add comments) and FR-003 (mark done).
     directives:
       - "Arrange: seed one open task and one authenticated user."
-      - "Act 1: POST /v1/tasks/{task_id}/comments via the comments-panel UI."
+      - "Act 1: POST /v1/tasks/{tsk_id}/comments via the comments-panel UI."
       - "Assert 1: comment appears on the task-detail screen."
-      - "Act 2: PATCH /v1/tasks/{task_id} { status: done } via the UI."
+      - "Act 2: PATCH /v1/tasks/{tsk_id} { status: done } via the UI."
       - "Assert 2: task status is 'done' in the task-list and task-detail screens."
     covers:
       - WKF-002
@@ -161,7 +161,7 @@ tests:
       - backend-api
     priority: must
     setup: "Seed one open task and one authenticated user."
-    acceptance: "After the PATCH, GET /v1/tasks/{task_id} returns status 'done' and the comment is persisted."
+    acceptance: "After the PATCH, GET /v1/tasks/{tsk_id} returns status 'done' and the comment is persisted."
     status: confirmed
 
   # --- E2E: WKF-003 — Configure digest and review past runs ---

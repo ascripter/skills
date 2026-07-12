@@ -176,7 +176,7 @@ tests:
     directives:
       - "Arrange: seed a Postgres DB with one open task; obtain valid JWT."
       - "Act: drive browser to task-detail screen; open comments panel; type comment text; submit; click 'Mark done'."
-      - "Assert: GET /v1/tasks/{task_id}/comments returns new comment; GET /v1/tasks/{task_id} returns {status: 'done'}."
+      - "Assert: GET /v1/tasks/{tsk_id}/comments returns new comment; GET /v1/tasks/{tsk_id} returns {status: 'done'}."
       - "Teardown: truncate Task + Comment tables."
     covers:
       - WKF-002
@@ -333,7 +333,7 @@ tests:
     directives:
       - "Arrange: record Pact consumer interactions for GET and POST comments."
       - "Act: replay against backend-api provider."
-      - "Assert: all comment fields (id, task_id, body, author, created_at) present with correct types."
+      - "Assert: all comment fields (id, tsk_id, body, author, created_at) present with correct types."
     covers:
       - FR-002
       - WKF-002

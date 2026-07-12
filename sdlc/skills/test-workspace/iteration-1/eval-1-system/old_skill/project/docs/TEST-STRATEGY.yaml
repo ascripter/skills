@@ -143,7 +143,7 @@ tests:
     directives:
       - "Arrange: seed one open task; authenticate as a user."
       - "Act: POST /v1/tasks/{id}/comments with {body:'Looks good'}; then PATCH /v1/tasks/{id} with {status:'done'}."
-      - "Assert: comment creation returns HTTP 201 with correct task_id; PATCH returns HTTP 200 with status=done; GET /v1/tasks/{id} confirms status=done and GET /v1/tasks/{id}/comments returns the comment."
+      - "Assert: comment creation returns HTTP 201 with correct tsk_id; PATCH returns HTTP 200 with status=done; GET /v1/tasks/{id} confirms status=done and GET /v1/tasks/{id}/comments returns the comment."
       - "Edge: attempt to add a comment to a non-existent task; assert HTTP 404."
     covers:
       - FR-002
@@ -217,8 +217,8 @@ tests:
       Pin list-comments (GET /v1/tasks/{id}/comments) and create-comment
       (POST /v1/tasks/{id}/comments) response shapes.
     directives:
-      - "For list-comments (OPR-004): assert response is {items: Comment[]}; Comment must have id, task_id, body."
-      - "For create-comment (OPR-005): POST {body:'...'} to a valid task; assert HTTP 201 + Comment schema; POST to missing task_id; assert HTTP 404 + RFC 7807 Problem shape."
+      - "For list-comments (OPR-004): assert response is {items: Comment[]}; Comment must have id, tsk_id, body."
+      - "For create-comment (OPR-005): POST {body:'...'} to a valid task; assert HTTP 201 + Comment schema; POST to missing tsk_id; assert HTTP 404 + RFC 7807 Problem shape."
       - "Record as a snapshot contract; fail CI on drift."
     covers:
       - FR-002
