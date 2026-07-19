@@ -1,0 +1,24 @@
+# Upstream companion for the 09_v15_advisories smoke fixture. Minimal but
+# coherent: one component whose work_units back the tasks' target_symbols, and
+# one work_unit_family_contracts entry the TASKS file's family_contract embed
+# DRIFTS from (inputs differ) — the #20 family arm must WARN.
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-07-19T10:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "09090909-aaaa-0909-0909-090909090901"
+  status: draft
+container_id: svc
+components:
+  - component_id: exporter
+    code_location: ["src/svc/"]
+    work_units:
+      - {name: schema_models, kind: module, summary: "Row/report model definitions."}
+      - {name: process_rows, kind: callable, summary: "Transform parsed rows."}
+      - {name: run_export, kind: entrypoint, summary: "Export entrypoint: argv in, exit code out."}
+work_unit_family_contracts:
+  - family: gate-units
+    contract: "argv/env in, exit code out"
+    inputs: ["argv", "env"]
+    output: "int"
+    raises: []

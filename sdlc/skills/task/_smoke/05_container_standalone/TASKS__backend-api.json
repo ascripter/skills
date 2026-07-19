@@ -14,9 +14,13 @@
       "title": "Scaffold backend-api",
       "kind": "scaffold",
       "description": "Package skeleton + manifest + entrypoint.",
-      "outputs": ["pyproject.toml", "src/__init__.py"],
-      "acceptance": ["uv sync resolves the package"],
-      "priority": "must",
+      "outputs": [
+        "pyproject.toml",
+        "src/__init__.py"
+      ],
+      "acceptance": [
+        "uv sync resolves the package"
+      ],
       "status": "confirmed"
     },
     {
@@ -26,11 +30,18 @@
       "component_ref": "auth-service",
       "target_symbol": "AuthService.authenticate",
       "description": "Implement the authenticate() behaviour.",
-      "depends_on": ["TSK-001"],
-      "target_files": ["src/auth/service.py"],
-      "outputs": ["auth-service.authenticate() exported"],
-      "acceptance": ["src/auth/service.py exposes authenticate()"],
-      "priority": "must",
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "src/auth/service.py"
+      ],
+      "outputs": [
+        "auth-service.authenticate() exported"
+      ],
+      "acceptance": [
+        "src/auth/service.py exposes authenticate()"
+      ],
       "status": "draft"
     },
     {
@@ -38,12 +49,19 @@
       "title": "Author auth-service unit tests",
       "kind": "test",
       "component_ref": "auth-service",
-      "implements_tests": ["TST-003"],
+      "implements_tests": [
+        "TST-003"
+      ],
       "description": "Realize the auth-service unit tests.",
-      "depends_on": ["TSK-002"],
-      "outputs": ["tests/test_auth_service.py"],
-      "acceptance": ["the tests realizing TST-003 pass"],
-      "priority": "must",
+      "depends_on": [
+        "TSK-002"
+      ],
+      "outputs": [
+        "tests/test_auth_service.py"
+      ],
+      "acceptance": [
+        "the tests realizing TST-003 pass"
+      ],
       "status": "draft"
     }
   ],

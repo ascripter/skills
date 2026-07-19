@@ -108,9 +108,8 @@ silently guess.
   exception. Keep per-container files small and let the system file hold only the
   stitch + cross-container work. The union-graph check scales linearly; the
   interview is the bottleneck — lean hard on the Phase 3 draft (it is seeded one
-  task per ARCH work_unit) so the user edits rather than dictates, and use
-  `priority` (must/should/could) so the codegen orchestrator can stage the long
-  tail. If the graph is genuinely too large, trim scope upstream (fewer work_units
+  task per ARCH work_unit) so the user edits rather than dictates.
+  If the graph is genuinely too large, trim scope upstream (fewer work_units
   in ARCH, or defer components) rather than reaching for a coarser slice — there
   is none.
 - **Invalid JSON on disk (hand-edit gone wrong).** The validator returns exit 2

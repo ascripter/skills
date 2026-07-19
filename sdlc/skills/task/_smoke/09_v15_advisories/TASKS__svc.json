@@ -1,0 +1,83 @@
+{
+  "metadata": {
+    "tasks_container_version": "1.5",
+    "last_updated": "2026-07-19T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "09090909-aaaa-0909-0909-090909090902",
+    "status": "draft",
+    "changelog": ["1.5 (2026-07-19): v1.5 advisory smoke fixture (checks #24/#25/#26 + the #20 family_contract arm)."]
+  },
+  "container_id": "svc",
+  "overview": "Smoke fixture for the v1.5 advisories. Expectations (all WARNINGS; validator exits 0, draft): #24 fires on TSK-002 (module-kind implementation with zero dependents in this file); #25 fires on TSK-003 (description enumerates two backticked paths while target_files pins one file); #26 fires on TSK-004 (integration task naming callee process_rows without depending on TSK-003); the #20 family_contract arm fires on TSK-005 (embedded gate-units entry drifts from ARCH__svc.yaml on inputs). A pre-1.5 copy of this file would emit NONE of #24/#25/#26 (version-gated).",
+  "tasks": [
+    {
+      "tsk_id": "TSK-001",
+      "title": "Scaffold svc",
+      "kind": "scaffold",
+      "description": "Package skeleton + manifest.",
+      "outputs": ["pyproject.toml", "src/svc/__init__.py"],
+      "acceptance": ["uv sync resolves the package"],
+      "status": "draft"
+    },
+    {
+      "tsk_id": "TSK-002",
+      "title": "Define the export schema models",
+      "kind": "implementation",
+      "component_ref": "exporter",
+      "target_symbol": "schema_models",
+      "unit_kind": "module",
+      "unit_summary": "Row/report model definitions.",
+      "description": "Author the row/report model definitions the exporter consumes.",
+      "depends_on": ["TSK-001"],
+      "target_files": ["src/svc/models.py"],
+      "outputs": ["svc model definitions importable"],
+      "acceptance": ["src/svc/models.py defines the row/report models"],
+      "status": "draft"
+    },
+    {
+      "tsk_id": "TSK-003",
+      "title": "Implement row processing",
+      "kind": "implementation",
+      "component_ref": "exporter",
+      "target_symbol": "process_rows",
+      "unit_kind": "callable",
+      "unit_summary": "Transform parsed rows.",
+      "interface_contract": {"source": "work_unit", "inputs": ["rows: list"], "output": "list", "raises": []},
+      "description": "Implement row transformation across `src/svc/parse.py` and `src/svc/transform.py` (parser + transformer halves).",
+      "depends_on": ["TSK-001"],
+      "target_files": ["src/svc/parse.py"],
+      "outputs": ["process_rows() exported"],
+      "acceptance": ["process_rows() transforms a parsed row list"],
+      "status": "draft"
+    },
+    {
+      "tsk_id": "TSK-004",
+      "title": "Wire the export path",
+      "kind": "integration",
+      "description": "Wire the export seam: the entry path calls process_rows on the parsed batch before writing the report.",
+      "depends_on": ["TSK-001"],
+      "target_files": ["src/svc/wiring.py"],
+      "outputs": ["export path wired"],
+      "acceptance": ["the export wiring module connects parse and write"],
+      "status": "draft"
+    },
+    {
+      "tsk_id": "TSK-005",
+      "title": "Implement the export entrypoint",
+      "kind": "implementation",
+      "component_ref": "exporter",
+      "target_symbol": "run_export",
+      "unit_kind": "entrypoint",
+      "unit_summary": "Export entrypoint: argv in, exit code out.",
+      "interface_contract": {"source": "work_unit", "inputs": ["argv"], "output": "int", "raises": []},
+      "family_contract": {"family": "gate-units", "contract": "argv/env in, exit code out", "inputs": ["argv"], "output": "int", "raises": []},
+      "description": "Implement the export entrypoint owning arg parsing and exit semantics.",
+      "depends_on": ["TSK-001"],
+      "target_files": ["src/svc/run.py"],
+      "outputs": ["svc export entrypoint runnable"],
+      "acceptance": ["src/svc/run.py exposes the export entrypoint"],
+      "status": "draft"
+    }
+  ],
+  "task_warnings": []
+}

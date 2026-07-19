@@ -58,7 +58,7 @@ Validates:
          every component work_unit (ARCH work_units[].name) named by exactly one
          task's target_symbol (always blocking; no coarse fallback).
        - System: every system TST-NNN.
-       - Union: every PRD must-have FR is realized somewhere or deferred (hard
+       - Union: every PRD FR is realized somewhere or deferred (hard
          only once the whole graph is stitched; advisory before).
        Surface/operation gates soften to advisory when UX/API are absent.
     7. Embedded per-task specifics (v1.3/v1.4, container files):
@@ -74,10 +74,25 @@ Validates:
        - #19 (blocking, any version): a file claiming status complete has every
          task status: confirmed (the skill confirms via its drill-down flow).
        - #20 (advisory): embedded copies drifting from the current ARCH
-         work_unit / TST entry — suggest a /sdlc:task re-run.
+         work_unit / TST entry / work_unit_family_contracts entry (v1.5) —
+         suggest a /sdlc:task re-run.
        - #21 (advisory): a file-producing kind (scaffold/test/migration/config/
          design) naming no write target (no target_files, no path-shaped
          output).
+       - v1.5 advisories (version-gated, silent below 1.5): zero-dependent
+         module task (#24); implementation task whose description enumerates
+         multiple backticked paths while pinning one file (#25); integration
+         task naming a callee target_symbol it doesn't depend on (#26).
+
+VALIDATOR<->SCHEDULER CONTRACT (K1/SK-19): this validator and the code skill's
+topo_order.py must always AGREE on what makes a graph schedulable. The blocking
+graph rules here are exactly two — depends_on resolution against the union node
+set, and union-graph acyclicity — and topo_order.py enforces the same two (and
+nothing more) when it schedules. A new blocking graph rule lands in BOTH tools
+in the same change, or is version-gated on the artifact's declared
+tasks_container_version (new checks over existing fields start as warnings —
+the convention that check #22's ungated priority gate violated before D2
+deleted it).
 
 Exit codes:
     0 — schema valid; status='complete' (all checks passing) or status='draft'.
@@ -95,7 +110,7 @@ import re
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 try:
     import yaml
@@ -104,7 +119,7 @@ except ImportError:
     sys.exit(3)
 
 try:
-    from pydantic import BaseModel, ValidationError
+    from pydantic import BaseModel, ConfigDict, ValidationError
 except ImportError:
     print(
         "ERROR: pydantic v2 is required.\nInstall with:  pip install 'pydantic>=2'",
@@ -124,6 +139,12 @@ class Status(str, Enum):
 
 
 class Priority(str, Enum):
+    """DEPRECATED (D2, retired pipeline-wide): every consumer of this skillset
+    is built whole by /sdlc:code, so an economic must/should/could split has no
+    downstream consumer. The enum stays only so LEGACY artifacts carrying a
+    priority field still parse (accepted-and-ignored); new writes never emit
+    it and no check reads it."""
+
     must = "must"
     should = "should"
     could = "could"
@@ -186,7 +207,16 @@ def _version_tuple(v: Optional[str]) -> Tuple[int, int]:
 # =============================================================================
 
 
-class SystemMetadata(BaseModel):
+class _TaskModel(BaseModel):
+    """Shared base: every task model tolerates unknown keys (extra="allow", the
+    convention every other sdlc skill already follows) so dialect embeds and
+    forward-compatible fields SURVIVE a model round-trip instead of being
+    silently dropped by pydantic's default extra="ignore" (K8/SK-02)."""
+
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
+
+
+class SystemMetadata(_TaskModel):
     tasks_version: Optional[str] = None
     last_updated: Optional[str] = None
     generated_by: Optional[str] = None
@@ -196,7 +226,7 @@ class SystemMetadata(BaseModel):
     upstream_provenance: Optional[List[Dict[str, Any]]] = None
 
 
-class ContainerMetadata(BaseModel):
+class ContainerMetadata(_TaskModel):
     tasks_container_version: Optional[str] = None
     last_updated: Optional[str] = None
     generated_by: Optional[str] = None
@@ -206,7 +236,7 @@ class ContainerMetadata(BaseModel):
     upstream_provenance: Optional[List[Dict[str, Any]]] = None
 
 
-class InterfaceContract(BaseModel):
+class InterfaceContract(_TaskModel):
     """Embedded copy of the ARCH work_unit's interface contract (schema #18,
     artifact version >= 1.3) — or of the API operation's shape when the unit
     deferred. Written by the skill at write time so the codegen agent needs no
@@ -220,7 +250,7 @@ class InterfaceContract(BaseModel):
     operation_id: Optional[str] = None   # set when source == api_operation
 
 
-class TestSpec(BaseModel):
+class TestSpec(_TaskModel):
     """Embedded copy of the TST entry's per-task specifics (schema #18,
     artifact version >= 1.3)."""
 
@@ -230,7 +260,7 @@ class TestSpec(BaseModel):
     covers: Optional[List[str]] = None
 
 
-class ContainerTask(BaseModel):
+class ContainerTask(_TaskModel):
     tsk_id: Optional[str] = None
     title: Optional[str] = None
     kind: Optional[str] = None
@@ -248,6 +278,20 @@ class ContainerTask(BaseModel):
     entity_slice: Optional[List[Dict[str, Any]]] = None        # kind:migration
     design_spec: Optional[Dict[str, Any]] = None               # kind:design
     config_keys: Optional[List[Dict[str, Any]]] = None         # kind:config
+    # Dialect embed fields (v1.5, K8/SK-13) — also loosely-typed write-time
+    # copies; declared so a model round-trip preserves them:
+    cli_contract: Optional[Dict[str, Any]] = None       # CLI handler tasks — the
+                                                        # verbatim UX__<surface>
+                                                        # slice (cli_invocation +
+                                                        # cli_args + exit codes)
+    family_contract: Optional[Dict[str, Any]] = None    # the resolved ARCH
+                                                        # work_unit_family_contracts
+                                                        # entry the unit inherits
+    fixture_briefs: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None
+                                                        # scaffold/infra tasks —
+                                                        # per-fixture briefs; a
+                                                        # mapping (corpus dialect)
+                                                        # or list of mappings
     implements: Optional[List[str]] = None
     implements_tests: Optional[List[str]] = None
     implements_surfaces: Optional[List[str]] = None
@@ -256,17 +300,20 @@ class ContainerTask(BaseModel):
     touches_operations: Optional[List[str]] = None
     touches_assets: Optional[List[str]] = None
     depends_on: Optional[List[str]] = None
-    inputs: Optional[List[str]] = None
+    inputs: Optional[List[str]] = None   # DEPRECATED (⚠B, v1.5) — parse-and-
+                                         # ignore; nothing ever resolved it. The
+                                         # embedded slices are the channel.
     target_files: Optional[List[str]] = None  # codegen write targets; grounded
                                               # in the component's code_location.
     outputs: Optional[List[str]] = None
     acceptance: Optional[List[str]] = None
-    priority: Optional[Priority] = None
+    priority: Optional[Priority] = None  # DEPRECATED (D2) — parsed for legacy
+                                         # artifacts, ignored by every check.
     estimate: Optional[str] = None
     status: Optional[TaskStatus] = None
 
 
-class SystemTask(BaseModel):
+class SystemTask(_TaskModel):
     tsk_id: Optional[str] = None
     title: Optional[str] = None
     kind: Optional[str] = None
@@ -274,22 +321,25 @@ class SystemTask(BaseModel):
     involves_containers: Optional[List[str]] = None
     implements: Optional[List[str]] = None
     implements_tests: Optional[List[str]] = None
+    touches_entities: Optional[List[str]] = None  # v1.1 — system tests/tasks may
+                                                  # name DATA entities they exercise
     depends_on: Optional[List[str]] = None
-    inputs: Optional[List[str]] = None
+    inputs: Optional[List[str]] = None   # DEPRECATED (⚠B, v1.1) — parse-and-ignore.
     target_files: Optional[List[str]] = None
     outputs: Optional[List[str]] = None
     acceptance: Optional[List[str]] = None
-    priority: Optional[Priority] = None
+    priority: Optional[Priority] = None  # DEPRECATED (D2) — parsed for legacy
+                                         # artifacts, ignored by every check.
     estimate: Optional[str] = None
     status: Optional[TaskStatus] = None
 
 
-class ContainerTaskGraphRef(BaseModel):
+class ContainerTaskGraphRef(_TaskModel):
     container_id: Optional[str] = None
     file_path: Optional[str] = None
 
 
-class TasksSystem(BaseModel):
+class TasksSystem(_TaskModel):
     metadata: SystemMetadata
     overview: Optional[str] = None
     build_order: Optional[List[str]] = None
@@ -298,7 +348,7 @@ class TasksSystem(BaseModel):
     task_warnings: Optional[List[str]] = None
 
 
-class TasksContainer(BaseModel):
+class TasksContainer(_TaskModel):
     metadata: ContainerMetadata
     container_id: Optional[str] = None
     overview: Optional[str] = None
@@ -418,12 +468,20 @@ def _path_within_any(path: str, bases: List[str]) -> bool:
 
 def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
     """Return id sets declared in PRD.yaml (monorepo-aware):
-      FR       — every functional requirement (must + nice).
-      FR_MUST  — must_have_features only (the global-coverage target).
+      FR       — every functional requirement (the global-coverage target,
+                 post-D2: no must/nice split). Reads the flat `features` list
+                 when present and unions the legacy must_have_features +
+                 nice_to_have_features lists (tolerant back-compat reader, so
+                 old PRDs keep validating).
+      FR_GATE  — the subset the union coverage gate BLOCKS on (CLAUDE.md §10:
+                 a widened blocking scope must not hard-fail legacy artifacts).
+                 Post-D2 flat PRD (`features` present): every FR. Legacy split
+                 PRD: the declared must_have subset — its nice-to-have gaps
+                 surface as warnings instead of errors.
       NFR      — non-functional requirements.
       WKF      — use_cases.core_workflows ids.
     """
-    fams: Dict[str, Set[str]] = {"FR": set(), "FR_MUST": set(), "NFR": set(), "WKF": set()}
+    fams: Dict[str, Set[str]] = {"FR": set(), "FR_GATE": set(), "NFR": set(), "WKF": set()}
     raw = _safe_yaml(prd_path)
     if raw is None:
         return fams
@@ -432,14 +490,14 @@ def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
     def _pull(node: dict) -> None:
         freqs = node.get("functional_requirements") or {}
         if isinstance(freqs, dict):
-            for key in ("must_have_features", "nice_to_have_features"):
+            for key in ("features", "must_have_features", "nice_to_have_features"):
                 for item in freqs.get(key) or []:
                     mm = re.match(r"^FR-\d+", str(item).strip(), re.IGNORECASE)
                     if mm:
                         fid = mm.group(0).upper()
                         fams["FR"].add(fid)
-                        if key == "must_have_features":
-                            fams["FR_MUST"].add(fid)
+                        if key in ("features", "must_have_features"):
+                            fams["FR_GATE"].add(fid)
         nfreqs = node.get("non_functional_requirements") or {}
         if isinstance(nfreqs, dict):
             for key in ("performance_targets", "other"):
@@ -538,6 +596,9 @@ class ArchContainerInfo:
         # component -> unit name -> the unit's declared contract fields
         # (kind/inputs/output/raises/signature) — for the #20 drift advisory
         self.comp_unit_contracts: Dict[str, Dict[str, dict]] = {}
+        # family label -> the container's work_unit_family_contracts entry —
+        # for the #20 family_contract drift arm (v1.5)
+        self.family_contracts: Dict[str, dict] = {}
 
 
 def _strset(node: dict, key: str) -> Set[str]:
@@ -584,6 +645,9 @@ def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
                 }
         info.comp_units[coid] = units
         info.comp_unit_contracts[coid] = contracts
+    for fam in raw.get("work_unit_family_contracts") or []:
+        if isinstance(fam, dict) and fam.get("family"):
+            info.family_contracts[str(fam["family"]).strip()] = fam
     return info
 
 
@@ -634,7 +698,7 @@ def load_test_coverage(path: Path) -> Tuple[Set[str], Set[str], List[str]]:
       * defer_warnings — the test_strategy_warnings list (the deferral blob).
     A behaviour with NO live test whose id is named in defer_warnings was
     deferred on the TEST side; the matching impl task must then also be
-    post-MVP/deferred (or 'full coverage' is overclaimed)."""
+    deferred (or the test restored — else 'full coverage' is overclaimed)."""
     live_units: Set[str] = set()
     live_covers: Set[str] = set()
     defer_warnings: List[str] = []
@@ -836,7 +900,7 @@ def check_required_system(m: TasksSystem) -> List[str]:
     if not m.tasks:
         missing.append("tasks (non-empty)")
     for i, t in enumerate(m.tasks or []):
-        for fld in ("tsk_id", "title", "kind", "description", "priority", "status"):
+        for fld in ("tsk_id", "title", "kind", "description", "status"):
             if getattr(t, fld) in (None, ""):
                 missing.append(f"tasks[{i}].{fld}")
         if not t.outputs:
@@ -854,7 +918,7 @@ def check_required_container(m: TasksContainer) -> List[str]:
     if not m.tasks:
         missing.append("tasks (non-empty)")
     for i, t in enumerate(m.tasks or []):
-        for fld in ("tsk_id", "title", "kind", "description", "priority", "status"):
+        for fld in ("tsk_id", "title", "kind", "description", "status"):
             if getattr(t, fld) in (None, ""):
                 missing.append(f"tasks[{i}].{fld}")
         if not t.outputs:
@@ -1098,6 +1162,132 @@ def check_embedded_drift(
                         f"{where}.test_spec differs from the current TST entry on {diffs} — "
                         f"upstream moved; re-run /sdlc:task {cid} to reconcile (check 20)"
                     )
+        # family_contract arm (v1.5, advisory) — the embedded family entry vs
+        # the container's current ARCH work_unit_family_contracts entry. Like
+        # the other arms, only when the upstream is readable.
+        fc = t.family_contract
+        if arch_info.present and isinstance(fc, dict) and fc.get("family"):
+            current = arch_info.family_contracts.get(str(fc["family"]).strip())
+            if current is None:
+                warns.append(
+                    f"{where}.family_contract names family '{fc['family']}' but "
+                    f"ARCH__{cid}.yaml declares no such work_unit_family_contracts "
+                    f"entry — upstream moved; re-run /sdlc:task {cid} (check 20)"
+                )
+            else:
+                diffs = [
+                    f for f in ("contract", "inputs", "output", "raises")
+                    if norm(current.get(f)) is not None
+                    and norm(current.get(f)) != norm(fc.get(f))
+                ]
+                if diffs:
+                    warns.append(
+                        f"{where}.family_contract differs from the current ARCH "
+                        f"family '{fc['family']}' on {diffs} — upstream moved; "
+                        f"re-run /sdlc:task {cid} to reconcile (check 20)"
+                    )
+    return warns
+
+
+# =============================================================================
+# v1.5 generation-quality advisories (version-gated: silent on older artifacts)
+# =============================================================================
+
+# Backticked repo-relative path in a description (a token with a slash, e.g.
+# `src/auth/service.py`). Precedent for backtick-path extraction: the PRD→arch
+# deliverable-path seam (prd/PRD.schema.yaml, arch #25).
+_BACKTICK_PATH_RE = re.compile(r"`([^`\s]*/[^`\s]*)`")
+
+
+def _path_is_file(path: str) -> bool:
+    """A target_files entry names a single FILE (not a directory pin) when it
+    does not end with '/' and its final segment carries an extension."""
+    p = str(path).strip().replace("\\", "/")
+    if not p or p.endswith("/"):
+        return False
+    return "." in p.rsplit("/", 1)[-1]
+
+
+def check_v15_advisories(cm: TasksContainer, label: str) -> List[str]:
+    """Three advisories introduced at tasks_container_version 1.5 (never block;
+    skipped entirely on older artifacts — CLAUDE.md's version-gating rule):
+
+    * ZERO-DEPENDENT MODULE (F10/SK-15) — a module-kind implementation task no
+      other task in this file depends on. Schema-before-consumer is then
+      holding by tsk-id tie-break, not by edge; consumers naming its entities
+      in touches_entities should depend on it (the entity→owning-module rule,
+      references/granularity-and-ordering.md).
+    * MULTI-PATH SINGLE-FILE PIN (F4/SK-17) — an implementation task whose
+      description enumerates ≥2 distinct backticked paths while target_files
+      pins one FILE. A multi-file unit should use the directory-pin
+      convention instead.
+    * UNNAMED INTEGRATION CALLEE (F14b/SK-18) — an integration task whose
+      description names a sibling impl task's target_symbol that its
+      depends_on does not include. Naming a callable you don't depend on is
+      a scheduling lie.
+    """
+    warns: List[str] = []
+    if _version_tuple(cm.metadata.tasks_container_version) < (1, 5):
+        return warns
+    tasks = cm.tasks or []
+
+    dependents: Dict[str, int] = {}
+    for t in tasks:
+        for ref in t.depends_on or []:
+            r = str(ref).strip()
+            m = _XREF_RE.match(r)
+            if m and cm.container_id and m.group("scope") == cm.container_id:
+                r = m.group("tsk")  # self-file ref written with its own prefix
+            if _TSK_RE.match(r):
+                dependents[r] = dependents.get(r, 0) + 1
+
+    sym_to_tsk: Dict[str, str] = {
+        (t.target_symbol or "").strip(): t.tsk_id
+        for t in tasks
+        if t.kind == "implementation" and (t.target_symbol or "").strip() and t.tsk_id
+    }
+
+    for i, t in enumerate(tasks):
+        where = f"{label}.tasks[{i}] ({t.tsk_id or '?'})"
+        if t.kind == "implementation":
+            if (
+                (t.unit_kind or "").strip() == "module"
+                and t.tsk_id
+                and not dependents.get(t.tsk_id)
+            ):
+                warns.append(
+                    f"{where}: module-kind task has ZERO dependents in this file — "
+                    f"schema-before-consumer holds only by tsk-id tie-break; add "
+                    f"depends_on edges from the tasks consuming its definitions "
+                    f"(entity->owning-module rule)"
+                )
+            paths = set(_BACKTICK_PATH_RE.findall(t.description or ""))
+            tf = (t.target_files or [None])[0]
+            if len(paths) >= 2 and tf and _path_is_file(str(tf)):
+                warns.append(
+                    f"{where}: description enumerates {len(paths)} backticked paths "
+                    f"but target_files pins one file ('{tf}') — multi-file unit? "
+                    f"pin the common DIRECTORY and enumerate the file set in "
+                    f"description + acceptance (directory-pin convention)"
+                )
+        if t.kind == "integration":
+            deps = set()
+            for ref in t.depends_on or []:
+                r = str(ref).strip()
+                m = _XREF_RE.match(r)
+                if m and cm.container_id and m.group("scope") == cm.container_id:
+                    r = m.group("tsk")
+                deps.add(r)
+            desc = t.description or ""
+            for sym, tsk in sym_to_tsk.items():
+                if tsk == t.tsk_id or tsk in deps:
+                    continue
+                if re.search(rf"\b{re.escape(sym)}\b", desc):
+                    warns.append(
+                        f"{where}: description names callee work_unit '{sym}' but "
+                        f"depends_on lacks its impl task {tsk} — naming a callable "
+                        f"you don't depend on is a scheduling lie"
+                    )
     return warns
 
 
@@ -1138,74 +1328,13 @@ def resolve_dep(scope: str, ref: str) -> Optional[str]:
     return None
 
 
-# Priority importance ranks (must > should > could) for the monotonicity gate.
-_PRIORITY_RANK = {"must": 3, "should": 2, "could": 1}
-
-
-def _priority_str(p: Any) -> Optional[str]:
-    if p is None:
-        return None
-    return p.value if isinstance(p, Priority) else str(p)
-
-
-def check_priority_monotonic(
-    sysm: Optional[TasksSystem],
-    containers: List[Tuple[str, TasksContainer]],
-) -> List[str]:
-    """Gap-3 (BLOCKING on complete) — dependency edges must be PRIORITY-MONOTONIC:
-    a task must not depend on a STRICTLY-LOWER-priority task (rank must > should >
-    could). A must-task waiting on a could-task makes the priority-phased (MVP)
-    slice unsequenceable — the exact defect that wires an aggregator/integration
-    task to every sibling branch and produces must→could edges. Only fires when
-    BOTH endpoints carry a priority (required on `complete`); resolution/cycle
-    errors are check_dependencies_and_cycles' job. Returns blocking errors."""
-    errs: List[str] = []
-    nodes = collect_graph_nodes(sysm, containers)
-    prio: Dict[str, Optional[str]] = {}
-    label: Dict[str, str] = {}
-
-    def _register(scope: str, tasks: List[Any]) -> None:
-        for t in tasks or []:
-            if not t.tsk_id:
-                continue
-            n = _node(scope, t.tsk_id)
-            prio[n] = _priority_str(t.priority)
-            label[n] = t.tsk_id if scope == "TASKS" else f"{scope}/{t.tsk_id}"
-
-    if sysm is not None:
-        _register("TASKS", sysm.tasks or [])
-    for cid, cm in containers:
-        _register(cid, cm.tasks or [])
-
-    def _check(scope: str, tasks: List[Any]) -> None:
-        for t in tasks or []:
-            if not t.tsk_id:
-                continue
-            src = _node(scope, t.tsk_id)
-            src_p = prio.get(src)
-            if src_p not in _PRIORITY_RANK:
-                continue
-            for ref in t.depends_on or []:
-                dep = resolve_dep(scope, ref)
-                if dep is None or dep not in nodes:
-                    continue
-                dep_p = prio.get(dep)
-                if dep_p not in _PRIORITY_RANK:
-                    continue
-                if _PRIORITY_RANK[dep_p] < _PRIORITY_RANK[src_p]:
-                    errs.append(
-                        f"{label[src]} ({src_p}) depends_on {label[dep]} ({dep_p}): "
-                        f"a higher-priority task must not depend on a strictly-lower-"
-                        f"priority one — the priority-phased (MVP) slice would be "
-                        f"unsequenceable. Promote {label[dep]} to '{src_p}' or lower "
-                        f"{label[src]} to '{dep_p}'."
-                    )
-
-    if sysm is not None:
-        _check("TASKS", sysm.tasks or [])
-    for cid, cm in containers:
-        _check(cid, cm.tasks or [])
-    return errs
+# Cross-check #22 (priority-monotonic edges, Gap-3) was DELETED with decision
+# D2 (2026-07-16, executed 2026-07-19): the priority paradigm is retired
+# pipeline-wide, so no priority field exists for edges to invert. The number
+# #22 is tombstoned — do not reuse it. The surviving edge-shape rules ("an
+# aggregator depends only on the predecessors it actually consumes"; "an
+# integration/bake task depends on the SET of tasks it exercises, never the
+# scheduling tail") live in references/granularity-and-ordering.md.
 
 
 def check_dependencies_and_cycles(
@@ -1534,8 +1663,9 @@ def check_container(
     # Impl/test deferral SYMMETRY (Gap-4, advisory). An impl task whose behaviour
     # has NO live test AND was deferred on the TEST side (its work_unit / FR /
     # component named in TEST-STRATEGY's test_strategy_warnings) must itself be
-    # post-MVP (priority: could) or deferred here — else "full coverage" is
-    # overclaimed for a branch that ships with no test.
+    # deferred here — else "full coverage" is overclaimed for a branch that
+    # ships with no test. The two honest resolutions: defer both, or restore
+    # the test (CLAUDE.md §6a).
     if cid:
         live_units, live_covers, test_defer_warns = load_test_coverage(
             docs_dir / f"TEST-STRATEGY__{cid}.yaml"
@@ -1562,19 +1692,14 @@ def check_container(
                 self_keys = set(behaviour)
                 if t.tsk_id:
                     self_keys.add(t.tsk_id)
-                self_deferred = (
-                    _priority_str(t.priority) == "could"
-                    or bool(_deferred_literals(warnings, self_keys))
-                )
-                if self_deferred:
+                if _deferred_literals(warnings, self_keys):
                     continue
                 warns.append(
                     f"{label} tasks[{i}] '{t.tsk_id}' builds {sorted(behaviour)} but "
                     f"its test was deferred in TEST-STRATEGY__{cid} "
                     f"({sorted(test_deferred)}) — impl/test deferral is asymmetric. "
-                    f"Mark this task post-MVP (priority: could) or add a matching "
-                    f"WRN-NNN task_warnings deferral, or restore the test; otherwise "
-                    f"'full coverage' is overclaimed."
+                    f"Add a matching WRN-NNN task_warnings deferral, or restore the "
+                    f"test; otherwise 'full coverage' is overclaimed."
                 )
 
     # Surface coverage (trace-or-defer; soften when UX.yaml is absent).
@@ -1692,18 +1817,24 @@ def global_coverage(
     docs_dir: Path,
     data_ents: Set[str],
     data_present: bool,
-) -> Tuple[List[str], List[str], bool]:
-    """Returns (fr_gaps, entity_warnings, fully_stitched).
+) -> Tuple[List[str], List[str], List[str], bool]:
+    """Returns (fr_gaps, fr_gap_warns, entity_warnings, fully_stitched).
 
-    fr_gaps        — PRD must_have FRs realized by no task across the union and
-                     not deferred / non-container. Blocking only when the graph
-                     is fully stitched (caller decides).
+    fr_gaps        — PRD FRs realized by no task across the union and not
+                     deferred / non-container, restricted to the BLOCKING scope
+                     (fams["FR_GATE"]: every FR for a post-D2 flat PRD; the
+                     declared must_have subset for a legacy split PRD).
+                     Blocking only when the graph is fully stitched (caller
+                     decides).
+    fr_gap_warns   — the same gap class for FRs OUTSIDE the blocking scope
+                     (a legacy PRD's nice-to-have list) — always advisory.
     entity_warnings— DATA entities traced by no component in any present
                      container file (likely an ARCH gap) — always advisory.
     fully_stitched — system file complete AND every buildable ARCH container has
                      a TASKS__*.json present (so an all-FR gate is fair).
     """
-    must = set(fams["FR_MUST"])
+    frs = set(fams["FR"])
+    gate = set(fams.get("FR_GATE") or set())
     realized: Set[str] = set()
     deferred: Set[str] = set(arch.non_container_features)
     traced_entities: Set[str] = set()
@@ -1711,7 +1842,7 @@ def global_coverage(
     if sysm is not None:
         for t in sysm.tasks or []:
             realized |= {r.upper() for r in (t.implements or []) if _FR_RE.match(str(r).upper())}
-        deferred |= _deferred_literals(sysm.task_warnings or [], must)
+        deferred |= _deferred_literals(sysm.task_warnings or [], frs)
 
     present_cids: Set[str] = set()
     for cid, cm in containers:
@@ -1723,12 +1854,22 @@ def global_coverage(
             realized |= {r.upper() for r in (t.implements or []) if _FR_RE.match(str(r).upper())}
         for comp in covered_comps:
             realized |= {r for r in ac.comp_reqs.get(comp, set()) if _FR_RE.match(r)}
-        deferred |= _deferred_literals(cm.task_warnings or [], must)
+        deferred |= _deferred_literals(cm.task_warnings or [], frs)
 
-    fr_gaps = [
-        f"global requirement coverage: must-have {r} (PRD) is realized by no task in any file and is not deferred/non-container"
-        for r in sorted(must - realized - deferred)
-    ]
+    fr_gaps: List[str] = []
+    fr_gap_warns: List[str] = []
+    for r in sorted(frs - realized - deferred):
+        msg = (
+            f"global requirement coverage: {r} (PRD) is realized by no task "
+            f"in any file and is not deferred/non-container"
+        )
+        if r in gate:
+            fr_gaps.append(msg)
+        else:
+            fr_gap_warns.append(
+                msg + " (advisory: legacy PRD nice-to-have — blocks once the "
+                "PRD moves to the flat post-D2 `features` list)"
+            )
 
     ent_warns: List[str] = []
     if data_present and data_ents:
@@ -1739,7 +1880,7 @@ def global_coverage(
 
     sys_complete = sysm is not None and sysm.metadata.status == Status.complete
     fully_stitched = bool(sys_complete and arch.testable and arch.testable <= present_cids)
-    return fr_gaps, ent_warns, fully_stitched
+    return fr_gaps, fr_gap_warns, ent_warns, fully_stitched
 
 
 # =============================================================================
@@ -1844,6 +1985,7 @@ def validate_all(path: Path) -> int:
             blocking += [f"{cp.name}: {e}" for e in check_all_confirmed(cm.tasks or [], cp.stem)]
         warnings += [f"{cp.name}: {w}" for w in check_file_producing_targets(cm.tasks or [], cp.stem)]
         warnings += [f"{cp.name}: {w}" for w in check_embedded_drift(cm, cid, docs_dir)]
+        warnings += [f"{cp.name}: {w}" for w in check_v15_advisories(cm, cp.stem)]
         c_errs, c_warns = check_container(
             cm, fams, arch, docs_dir, ux, api, data_ents, data_present, design
         )
@@ -1853,15 +1995,17 @@ def validate_all(path: Path) -> int:
     if parse_failed:
         return 1
 
-    # Union-graph dependency resolution + acyclicity (the stitch).
+    # Union-graph dependency resolution + acyclicity (the stitch). These are
+    # the ONLY blocking graph rules — kept in lockstep with topo_order.py
+    # (see the validator↔scheduler contract in both module docstrings).
     blocking += [f"graph: {e}" for e in check_dependencies_and_cycles(sysm, containers)]
-    # Priority-monotonic edges — no must→could dependency (Gap-3). Blocks complete.
-    blocking += [f"graph: {e}" for e in check_priority_monotonic(sysm, containers)]
 
     # Global (union) requirement coverage + orphaned-entity advisory.
-    fr_gaps, ent_warns, fully_stitched = global_coverage(
+    fr_gaps, fr_gap_warns, ent_warns, fully_stitched = global_coverage(
         sysm, containers, fams, arch, docs_dir, data_ents, data_present
     )
+    # Out-of-gate gaps (a legacy PRD's nice-to-have FRs) are always advisory.
+    warnings += [f"union: {w}" for w in fr_gap_warns]
     # The all-FR gate is only fair once the whole graph is stitched (system file
     # complete AND every buildable container present). Before that it is advisory
     # — an FR owned by a not-yet-built container must not fail the early files.

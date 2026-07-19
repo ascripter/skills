@@ -38,9 +38,9 @@ Both themes are `critical synthesis: true`. Run each candidate task through:
    (`touches_operations`) and build exactly one work_unit (`target_symbol`) in one
    file (`target_files`) — push back on a task that tries to do two work_units /
    two components at once (split it) or a vague task with no scope.
-3. **detail** — fill `depends_on` (the ordering edges), `inputs`, `outputs`
-   (what the codegen agent emits), `acceptance` (machine-checkable done
-   conditions), and `priority`. For a `test` task, `acceptance` is usually "the
+3. **detail** — fill `depends_on` (the ordering edges), `outputs`
+   (what the codegen agent emits), and `acceptance` (machine-checkable done
+   conditions). For a `test` task, `acceptance` is usually "the
    tests realizing `TST-NNN` pass".
 4. **approve** — set the task's `status: confirmed`; persist state.
 5. **next** — move to the next candidate.
@@ -60,7 +60,7 @@ depends on the provider's contract/implementation task. See
 
 ## Batching the cheap fields
 
-Within one task's `detail` step you may batch `priority` + `inputs` + `outputs` +
+Within one task's `detail` step you may batch `depends_on` + `outputs` +
 `acceptance` into a single AskUserQuestion call (≤4 questions) to keep the
 interview brisk. Never batch across two different tasks — the per-item boundary is
 what makes EXIT/resume clean.

@@ -33,6 +33,15 @@ Task states (ledger overlay):
     failed / skipped — from the ledger; their dependents are BLOCKED.
     pending  — everything else (scheduled).
 
+SCHEDULER<->VALIDATOR CONTRACT (K1/SK-19): this scheduler and the task skill's
+validate_schema.py must always AGREE on what makes a graph schedulable. Both
+enforce exactly two blocking graph rules — depends_on resolution against the
+union node set, and union-graph acyclicity. A new blocking graph rule lands in
+BOTH tools in the same change, or is version-gated on the artifact's declared
+tasks_container_version. (Historical counter-example this contract exists to
+prevent: an ungated priority-monotonic gate once hard-failed graphs this
+scheduler ran fine; D2 deleted it.)
+
 Exit codes:
     0 — schedule printed (there may be blocked/stale items; read the output).
     1 — graph error: dangling depends_on ref or a dependency cycle (a validated

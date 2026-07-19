@@ -118,7 +118,7 @@ Some items genuinely warrant no task in *this* artifact:
 - a `TST-NNN` that is a system e2e test whose task belongs in `TASKS.json`, not
   the container file;
 - a component that is a pure interface/marker with no code to generate;
-- a test deferred to a post-MVP hardening pass by explicit user decision.
+- a test deferred to a later hardening pass by explicit user decision.
 
 Record the deferral by **naming the id in a `task_warnings` entry**:
 
@@ -144,14 +144,14 @@ branch nobody builds. Keep the two sets **symmetric**:
 
 - If `test` **deferred the test** for a behaviour (its work_unit / FR / component
   is named in `TEST-STRATEGY__<cid>.test_strategy_warnings`, so no `TST-NNN`
-  exists for it) and you still emit its impl task, that impl task must be
-  **post-MVP** (`priority: could`) or itself **deferred** in `task_warnings` —
-  else it builds a branch with no test while the artifact claims full coverage.
-  Cross-check #23 **warns** on this asymmetry (it can't hard-block across two
-  artifacts + two id-namespaces, but the warning is your signal to fix it).
-- The honest resolutions are exactly two: **defer both** (drop the impl task to
-  post-MVP / name it in a WRN too) or **claim partial coverage** (restore the
-  test so the pair is live again). Don't silently keep the impl.
+  exists for it) and you still emit its impl task, that impl task must itself be
+  **deferred** in `task_warnings` — else it builds a branch with no test while
+  the artifact claims full coverage. Cross-check #23 **warns** on this asymmetry
+  (it can't hard-block across two artifacts + two id-namespaces, but the warning
+  is your signal to fix it).
+- The honest resolutions are exactly two: **defer both** (name the impl task in
+  a WRN too) or **claim partial coverage** (restore the test so the pair is
+  live again). Don't silently keep the impl.
 
 Because a test deferred in the `test` stage leaves **no `TST-NNN`** to key on,
 this reconciliation is driven off the *test's deferral warnings*, not its test

@@ -40,7 +40,11 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  tasks_version: "1.0"                      # REQUIRED
+  tasks_version: "1.1"                      # REQUIRED — 1.1 (D2): `priority` RETIRED
+                                            #   (never emitted, never required again;
+                                            #   accepted-and-ignored on old artifacts),
+                                            #   `inputs` DEPRECATED (parse-and-ignore),
+                                            #   SystemTask gains touches_entities
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-task                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -96,14 +100,17 @@ tasks:                                      # REQUIRED — list[SystemTask], non
     implements_tests:                       # OPTIONAL (REQUIRED for kind:test) —
       - TST-014                             #   TST-NNN from the SYSTEM TEST-STRATEGY.yaml
                                             #   (e2e/contract) this task authors.
+    touches_entities:                       # OPTIONAL (v1.1) — DATA-MODEL entity names
+      - User                                #   a system test/migration task exercises
+                                            #   across containers.
     depends_on:                             # OPTIONAL — TSK ids that must complete
       - TSK-001                             #   first. Same-file or cross-file
       - backend-api/TSK-009                 #   "<container>/TSK-NNN". Union graph
-                                            #   MUST be acyclic AND priority-
-                                            #   monotonic (no must→could edge —
-                                            #   check #7 blocks complete).
-    inputs:                                 # OPTIONAL but encouraged
-      - "ARCH.yaml#edges"
+                                            #   MUST be acyclic (check #7 blocks
+                                            #   complete). Keep edges lean — see
+                                            #   references/granularity-and-ordering.md.
+    # inputs — DEPRECATED (⚠B, artifact version 1.1): parse-and-ignore; nothing
+    #   ever resolved it. Embedded slices on the task are the delivery channel.
     target_files:                           # OPTIONAL but encouraged — the concrete
       - "pnpm-workspace.yaml"               #   repo-relative file paths this task CREATES
       - ".github/workflows/ci.yml"          #   or MODIFIES (the codegen write targets).
@@ -119,7 +126,8 @@ tasks:                                      # REQUIRED — list[SystemTask], non
                                             #   file is itself the deliverable.
     acceptance:                             # REQUIRED — non-empty, machine-checkable
       - "pnpm install resolves the workspace"
-    priority: must | should | could          # REQUIRED
+    # priority — RETIRED (D2, artifact version 1.1): never emitted by new
+    #   writes; accepted-and-ignored on old artifacts.
     estimate: xs | s | m | l | xl            # OPTIONAL
     status: draft | confirmed                # REQUIRED — interview progress
 
@@ -138,7 +146,7 @@ container_task_graphs:                       # OPTIONAL — list of {container_i
 # Validator enforces `^WRN-\d{3,}:\s+.+`.
 # ---------------------------------------------------------------------------
 task_warnings:                              # OPTIONAL — list of "WRN-NNN: ..." strings
-  - "WRN-001: TST-020 (load test) is deferred to a post-MVP hardening pass."
+  - "WRN-001: TST-020 (load test) is deferred to a later hardening pass."
 
 # =============================================================================
 # Required cross-checks (run by validate_schema.py on every write)
@@ -163,12 +171,10 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 # 7.  Dependency integrity — every depends_on entry resolves to a TSK id (this
 #     file or a cross-file "<container>/TSK-NNN" against an on-disk
 #     TASKS__<container>.json). The UNION task graph across the system file + all
-#     container files MUST be acyclic. Blocks complete. Edges must also be
-#     PRIORITY-MONOTONIC (Gap-3): a task must not depend on a strictly-lower-
-#     priority task (must > should > could) — a must→could edge makes the MVP
-#     slice unsequenceable and BLOCKS complete. Applies across the union graph
-#     (system + container tasks), so a system task depending on a lower-priority
-#     container task is caught too.
+#     container files MUST be acyclic. Blocks complete. (The former
+#     priority-monotonic arm was deleted with D2 — the priority paradigm is
+#     retired pipeline-wide; keep edges lean per
+#     references/granularity-and-ordering.md.)
 # 8.  System test coverage (trace-or-defer) — every tests[].tst_id in the system
 #     TEST-STRATEGY.yaml is realized by some system task (implements_tests) OR
 #     deferred via a WRN-NNN. Blocks complete.
@@ -179,7 +185,9 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 # 10. container_task_graphs integrity (advisory) — each container_id resolves to
 #     ARCH.yaml; each file_path exists on disk. Mismatch ⇒ WARNING.
 # 11. Global requirement coverage (the union "convert all FRs" guarantee) — every
-#     PRD must_have_features FR-NNN is realized by some task across the union of
+#     PRD FR-NNN (ALL features, post-D2 — read from the flat `features` list,
+#     with the legacy must_have/nice_to_have lists unioned for old PRDs) is
+#     realized by some task across the union of
 #     docs/TASKS.json + every docs/TASKS__*.json (named in a task's `implements`,
 #     or transitively via a realized component declaring it), OR deferred via a
 #     WRN-NNN in any file, OR listed in ARCH.yaml non_container_features. This is

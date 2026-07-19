@@ -53,7 +53,8 @@ This is the SDLC factory's Stage-13 "Task Breakdown": per-container task
 subgraphs are produced one container at a time, then **deterministically
 stitched** into one global dependency-ordered graph via `build_order` and
 cross-file `depends_on` edges. Each task is **scoped to one component or one
-contract**, with explicit `inputs` / `outputs` / `acceptance` — and **test
+contract**, with explicit `outputs` / `acceptance` and its upstream contracts
+EMBEDDED on the task (the v1.3/v1.4 self-containment slices) — and **test
 tasks are first-class**, peers of implementation tasks, never an afterthought.
 
 The task graph is not prose. Every task is a typed `TSK-NNN` item with a `kind`,
@@ -465,8 +466,8 @@ Walk the themes in `task-questions.yaml` order. Themes are tagged
 2. `system_tasks` — `critical` per item, `synthesis: true`. For each task:
    `tsk_id`, `title`, `kind` (∈ scaffold / integration / test / config /
    migration / deploy-prep / docs / chore), `description`, `involves_containers`,
-   `implements`, `implements_tests`, `depends_on`, `inputs`, `target_files`,
-   `outputs`, `acceptance`, `priority`. After the per-item loop, run the
+   `implements`, `implements_tests`, `depends_on`, `target_files`,
+   `outputs`, `acceptance`. After the per-item loop, run the
    scope-completeness sweep. Every system `TST-NNN` must be realized by a `test`
    task or deferred — Phase 7's system-test-coverage check enforces this.
 
@@ -487,8 +488,8 @@ straight to the task graph.
    for integration / migration / design / config tasks),
    `implements_surfaces` (SCR),
    `implements_workflows` (WKF), `touches_entities`, `touches_operations`,
-   `touches_assets` (AST), `depends_on`, `inputs`, `target_files`, `outputs`,
-   `acceptance`, `priority`.
+   `touches_assets` (AST), `depends_on`, `target_files`, `outputs`,
+   `acceptance`.
    `target_files` (the codegen write targets) is drafted from the owning
    component's `code_location` in `ARCH__<container>.yaml` — an implementation task
    carries **exactly one** entry (the file housing `target_symbol`), which must sit
@@ -585,9 +586,10 @@ An item is covered if a task names it OR a task realizes a component that traces
   `implements_requirements` realized (`implements` / a realized component) OR deferred.
 - **Design coverage** — a token_based_ui frontend that owns surfaces has a `design`
   task wiring the tokens OR a defer (per-asset AST tasks advisory).
-- **Union FR coverage** — every PRD must-have `FR-NNN` realized somewhere or
-  deferred; hard only once the whole graph is stitched (system complete + every
-  container present), advisory before.
+- **Union FR coverage** — every PRD `FR-NNN` (all features, post-D2 — the flat
+  `features` list, with the legacy must-have/nice-to-have lists unioned for old
+  PRDs) realized somewhere or deferred; hard only once the whole graph is
+  stitched (system complete + every container present), advisory before.
 
 **The stitch** (block complete):
 

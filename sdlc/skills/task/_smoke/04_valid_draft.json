@@ -13,7 +13,6 @@
       "title": "Scaffold the repo",
       "kind": "scaffold",
       "description": "Partial task — outputs/acceptance still to fill.",
-      "priority": "must",
       "status": "draft"
     }
   ]

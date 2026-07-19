@@ -16,10 +16,16 @@
       "component_ref": "ingest-worker",
       "target_symbol": "processJob",
       "description": "Implement job ingestion + processing for the worker.",
-      "target_files": ["src/worker/ingest.py", "src/legacy/ingest.py"],
-      "outputs": ["ingest pipeline available to the scheduler"],
-      "acceptance": ["queued jobs are pulled and processed"],
-      "priority": "must",
+      "target_files": [
+        "src/worker/ingest.py",
+        "src/legacy/ingest.py"
+      ],
+      "outputs": [
+        "ingest pipeline available to the scheduler"
+      ],
+      "acceptance": [
+        "queued jobs are pulled and processed"
+      ],
       "status": "draft"
     }
   ],

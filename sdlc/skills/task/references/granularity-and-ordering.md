@@ -70,31 +70,48 @@ Default edges to propose (the user can override):
 - every container `scaffold` `depends_on` the system repo `scaffold`
   (`TASKS/TSK-NNN`) — cross-file;
 - a `test` task `depends_on` the `implementation` task whose code it exercises;
-- an `integration` task `depends_on` both components/containers it wires;
+- an `integration` task `depends_on` both components/containers it wires — AND
+  the impl task of every work_unit its description/`outputs` NAMES as a callee.
+  Naming a callable you don't depend on is a scheduling lie: the integration
+  task can be scheduled before the callee exists;
 - a consumer's task `depends_on` the provider's contract/implementation task —
   cross-container, expressed as `<provider-cid>/TSK-NNN`.
 
-### Three wiring invariants (edges are priority-monotonic, aggregators are lean)
+### Schema-module → consumer edges (data-shape dependencies)
 
-The default edges above are necessary but not sufficient — how you fan them in
-decides whether the priority-phased (MVP) slice is buildable:
+ARCH `calls`/`depends_on` edges never carry *data-shape* dependencies, so derive
+them explicitly when the container has module-kind work units that OWN
+entity/schema definitions:
 
-- **(a) Edges must be priority-monotonic.** A task must **not** `depends_on` a
-  strictly-lower-priority task (`must` > `should` > `could`). A `must` task
-  waiting on a `could` task makes the MVP slice unsequenceable — to ship the
-  must-set you'd need a deferred could-task. This is a **blocking** gate
-  (cross-check #22): if a must-task genuinely needs the dependency, **promote the
-  dependency** to `must` (it was mis-prioritized); don't lower the dependent.
-- **(b) An aggregator depends only on its REQUIRED predecessors.** A task that
-  captures/collects the results of sibling branches (a `capture_and_exit`, a
-  roll-up) must not fan-in *every* sibling — depend only on the predecessors it
-  actually consumes. Fanning in an optional (`could`) sibling drags a lower
-  priority into the aggregator and trips (a).
-- **(c) An integration/bake task depends on the MUST set, not the tail.** The
-  task that validates a container/seam depends on the set of must-priority tasks
-  it exercises — **not** on the last-scheduled ("tail") task as a proxy for "all
-  of them". Depending on the tail both hides the real predecessors and risks a
-  cross-priority edge when the tail happens to be a `could` task.
+1. Build an **entity→owning-module map**: each entity is owned by the module
+   task whose work_unit creates its definition file; when several modules
+   re-export it, the EARLIEST module in the file ladder owns it.
+2. Every implementation/integration task naming entity E in `touches_entities`
+   gains `depends_on` E's owning module task (skip self-edges). Module→module
+   edges follow the same ladder, so the result is acyclic by construction.
+
+Without this rule, schema modules land before their consumers only by tsk-id
+tie-break, not by edge (corpus instance: 24 of 26 schema-module tasks had ZERO
+dependents). The validator's zero-dependent-module advisory (artifact v1.5)
+flags the smell.
+
+### Wiring invariants (aggregators and integration tasks stay lean)
+
+(The former invariant (a) — priority-monotonic edges — was deleted with
+decision D2: the priority paradigm is retired pipeline-wide, so no priority
+exists for an edge to invert. The letters (b)/(c) are kept stable because
+downstream docs reference them.)
+
+- **(b) An aggregator depends only on the predecessors it actually consumes.**
+  A task that captures/collects the results of sibling branches (a
+  `capture_and_exit`, a roll-up) must not fan-in *every* sibling — depend only
+  on its REQUIRED predecessors. Blanket fan-in hides the real data flow and
+  needlessly serializes the codegen waves downstream.
+- **(c) An integration/bake task depends on the SET of tasks it exercises,
+  never the tail.** The task that validates a container/seam depends on the
+  tasks it actually exercises — **not** on the last-scheduled ("tail") task as
+  a proxy for "all of them". Depending on the tail hides the real predecessors
+  and silently breaks when the schedule reorders.
 
 ### Reference syntax
 
@@ -143,8 +160,7 @@ the impl, never the reverse).
 warning, not a block — the explicit `depends_on` edges are the source of truth;
 `build_order` is a convenience summary.
 
-Acyclicity is not the only hard edge gate: **priority-monotonicity** (invariant
-(a) above, cross-check #22) also blocks `complete`. A DAG can still be
-unbuildable as an MVP slice if a `must` task depends on a `could` one — the
-must-only subgraph then references a task outside itself. The validator catches
-this over the same union graph.
+Dependency resolution and acyclicity are the ONLY hard edge gates — exactly the
+rules `topo_order.py` enforces when it schedules (the validator↔scheduler
+contract: the two tools must always agree on what makes a graph schedulable).
+The lean-edge invariants (b)/(c) above are generation guidance, not blocks.

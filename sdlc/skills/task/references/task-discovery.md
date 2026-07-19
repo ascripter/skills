@@ -138,6 +138,15 @@ the downstream task/test agents. Seed each component-scoped task's `acceptance`
 from its component's `acceptance_criteria` rather than re-inventing them, so the
 ARCH-declared contract isn't silently lost.
 
+**Acceptance criteria are task-specific, not boilerplate.** Every entry must be
+machine-checkable AND name something only *this* task delivers (its symbol, its
+file, its TST id, its migration). N tasks sharing an identical acceptance line
+("the tests pass", "code compiles") is a generation smell — the criterion no
+longer distinguishes done-for-this-task from done-for-any-task (a corpus audit
+found 148 near-identical boilerplate lines). When a generic gate genuinely
+applies (suite green), append it AFTER the task-specific line, never instead
+of it. No validator check enforces this — it is generation quality.
+
 ### Ground `target_files` in the component's `code_location`
 
 `ARCH__<container>.yaml` gives every component a `code_location` — the
@@ -193,7 +202,7 @@ for headless / backend containers.
   requires_custom_assets`) → seed a `design`/`scaffold` task for the asset folder
   layout + manifest, and one generation-brief sidecar task per `AST-NNN` in
   `DESIGN__assets.yaml` (`touches_assets`). AICF does NOT generate the binary
-  assets (post-MVP); the brief sidecar is the actionable deliverable, so asset
+  assets (deferred); the brief sidecar is the actionable deliverable, so asset
   realization is **advisory** — surface it, don't block on it.
 - `surface_overrides` present → each entry is a per-surface deviation from the
   global system (a denser grid, a bespoke hero, an inverted modal) the user

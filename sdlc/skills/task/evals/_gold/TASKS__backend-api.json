@@ -6,6 +6,7 @@
     "session_id": "gold0002-back-back-back-taskbackendap",
     "status": "complete",
     "changelog": [
+      "1.3 (2026-07-19): D2 — retired per-task priority (fields stripped; version stays 1.3: this gold predates the v1.4 per-kind embeds, e.g. entity_slice).",
       "1.3 (2026-07-07): Embedded per-task specifics (schema v1.3) — interface_contract + unit_summary on every implementation task, test_spec on every test task; write targets moved into target_files (outputs stay contract-level).",
       "1.2 (2026-07-01): Re-sliced atomic on work_units — one impl task per component work_unit (target_symbol) with exactly one target_files each; dropped the granularity knob.",
       "1.1 (2026-06-26): Re-sliced atomic — one impl task per component operation, one test task per TST-NNN.",
@@ -46,7 +47,6 @@
         "pnpm --filter backend-api install resolves",
         "the app boots and serves a health route"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -76,7 +76,6 @@
         "prisma migrate deploy creates the Task, Comment and DigestRun tables",
         "the schema matches DATA-MODEL.yaml field types"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -112,7 +111,6 @@
         "a request with a valid token is routed",
         "a request with no/invalid token gets 401"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -150,7 +148,6 @@
       "acceptance": [
         "GET /v1/tasks returns 200 with the caller's tasks"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -195,7 +192,6 @@
       "acceptance": [
         "creating a task returns 201 with a persisted id"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -241,7 +237,6 @@
       "acceptance": [
         "marking a task done flips its status and is reflected on next read"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -279,7 +274,6 @@
       "acceptance": [
         "listing comments returns the task's comments"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -325,7 +319,6 @@
       "acceptance": [
         "adding a comment persists it and returns it on the task"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -362,7 +355,6 @@
       "acceptance": [
         "recent digest runs are listed newest-first"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -403,7 +395,6 @@
       "acceptance": [
         "enabling the digest and setting a send time persists and reads back"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -443,7 +434,6 @@
       "acceptance": [
         "Task, Comment and DigestRun rows can be written"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -484,7 +474,6 @@
       "acceptance": [
         "Task, Comment and DigestRun rows can be read back"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -518,7 +507,6 @@
       "acceptance": [
         "the test realizing TST-001 passes"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -552,7 +540,6 @@
       "acceptance": [
         "the test realizing TST-002 passes"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -586,7 +573,6 @@
       "acceptance": [
         "the test realizing TST-003 passes"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -621,7 +607,6 @@
       "acceptance": [
         "the test realizing TST-004 passes"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -656,7 +641,6 @@
       "acceptance": [
         "a written Task reads back identically"
       ],
-      "priority": "should",
       "status": "confirmed"
     },
     {
@@ -689,7 +673,6 @@
       "acceptance": [
         "a forged/expired token yields 401 and never reaches a controller"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -720,7 +703,6 @@
       "acceptance": [
         "no log line contains the raw email or comment body"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -752,7 +734,6 @@
       "acceptance": [
         "a DB outage surfaces as a retried then graceful 503"
       ],
-      "priority": "must",
       "status": "confirmed"
     }
   ],

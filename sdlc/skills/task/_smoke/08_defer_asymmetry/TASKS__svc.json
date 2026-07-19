@@ -7,16 +7,20 @@
     "status": "draft"
   },
   "container_id": "svc",
-  "overview": "Impl/test deferral-symmetry smoke (Gap-4). TSK-002 builds work_unit run_export whose TEST is deferred in TEST-STRATEGY__svc.yaml, yet TSK-002 stays priority: must and is not self-deferred. Expectation: cross-check #23 WARNS (asymmetric impl/test deferral); validator still exits 0 (draft). No ARCH__svc.yaml here, so ARCH-dependent gates surface as DRAFT items too — the assertion is the symmetry WARNING string.",
+  "overview": "Impl/test deferral-symmetry smoke (Gap-4). TSK-002 builds work_unit run_export whose TEST is deferred in TEST-STRATEGY__svc.yaml, yet TSK-002 is not itself deferred in task_warnings. Expectation: cross-check #23 WARNS (asymmetric impl/test deferral — add a matching WRN deferral or restore the test); validator still exits 0 (draft). No ARCH__svc.yaml here, so ARCH-dependent gates surface as DRAFT items too — the assertion is the symmetry WARNING string.",
   "tasks": [
     {
       "tsk_id": "TSK-001",
       "title": "Scaffold svc",
       "kind": "scaffold",
       "description": "Package skeleton + entrypoint.",
-      "outputs": ["pyproject.toml", "src/__init__.py"],
-      "acceptance": ["uv sync resolves the package"],
-      "priority": "must",
+      "outputs": [
+        "pyproject.toml",
+        "src/__init__.py"
+      ],
+      "acceptance": [
+        "uv sync resolves the package"
+      ],
       "status": "confirmed"
     },
     {
@@ -26,11 +30,18 @@
       "component_ref": "exporter",
       "target_symbol": "run_export",
       "description": "Implement the run_export() behaviour.",
-      "depends_on": ["TSK-001"],
-      "target_files": ["src/exporter/run.py"],
-      "outputs": ["exporter.run_export() exported"],
-      "acceptance": ["src/exporter/run.py exposes run_export()"],
-      "priority": "must",
+      "depends_on": [
+        "TSK-001"
+      ],
+      "target_files": [
+        "src/exporter/run.py"
+      ],
+      "outputs": [
+        "exporter.run_export() exported"
+      ],
+      "acceptance": [
+        "src/exporter/run.py exposes run_export()"
+      ],
       "status": "draft"
     }
   ],

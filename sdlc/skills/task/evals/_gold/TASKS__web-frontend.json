@@ -6,6 +6,7 @@
     "session_id": "gold0003-front-front-fr-taskwebfrontnd",
     "status": "complete",
     "changelog": [
+      "1.3 (2026-07-19): D2 — retired per-task priority (fields stripped; version stays 1.3: this gold predates the v1.4 per-kind embeds, e.g. design_spec).",
       "1.3 (2026-07-07): Embedded per-task specifics (schema v1.3) — interface_contract + unit_summary on every implementation task, test_spec on every test task.",
       "1.1 (2026-07-01): Atomic on work_units — each view/client impl task names its component work_unit via target_symbol; dropped the granularity knob.",
       "1.0 (2026-06-26): Initial web-frontend container task subgraph (gold reference output — exercises surface + design coverage)."
@@ -45,7 +46,6 @@
       "acceptance": [
         "pnpm --filter web-frontend dev boots the shell"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -70,7 +70,6 @@
       "acceptance": [
         "a sample component resolves the token colors/spacing from the theme"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -115,7 +114,6 @@
       "acceptance": [
         "the list renders tasks newest-first and a create action is reachable"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -161,7 +159,6 @@
       "acceptance": [
         "marking a task done updates the view without a full reload"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -206,7 +203,6 @@
       "acceptance": [
         "a new comment appears in the panel after submit"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -249,7 +245,6 @@
       "acceptance": [
         "saving the digest schedule reads back the same values"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -285,7 +280,6 @@
       "acceptance": [
         "the client issues authenticated requests and parses typed responses"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -319,7 +313,6 @@
       "acceptance": [
         "the test realizing TST-001 passes"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -353,7 +346,6 @@
       "acceptance": [
         "the test realizing TST-002 passes"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -387,7 +379,6 @@
       "acceptance": [
         "the test realizing TST-003 passes"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -421,7 +412,6 @@
       "acceptance": [
         "the test realizing TST-004 passes"
       ],
-      "priority": "must",
       "status": "confirmed"
     },
     {
@@ -452,7 +442,6 @@
       "acceptance": [
         "an unreachable backend surfaces as an inline error, not a crash"
       ],
-      "priority": "must",
       "status": "confirmed"
     }
   ],

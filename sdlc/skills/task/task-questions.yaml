@@ -102,7 +102,7 @@ questions:
   #   for each candidate system task (from Phase 3 + user-added):
   #     1. propose:   show kind, draft title, what it covers (edge / TST / FR)
   #     2. challenge: confirm scope (involves_containers) + kind choice
-  #     3. detail:    fill depends_on, inputs, outputs, acceptance, priority
+  #     3. detail:    fill depends_on, outputs, acceptance
   #     4. approve:   confirm the task; set status: confirmed
   #     5. next
   #   then: run the scope-completeness sweep (references/coverage-and-defer.md)
@@ -193,16 +193,9 @@ questions:
     confidence_field: false
     importance: critical
 
-  - theme: system_tasks
-    id: inputs
-    schema_path: task.inputs
-    question: "What does this task consume (upstream artifacts, contracts, files)?"
-    hint: "FR-013 'explicit inputs'. Optional but encouraged — grounds the codegen agent's context."
-    suggested_answers: []
-    free_text_allowed: true
-    required: false
-    confidence_field: false
-    importance: high
+  # (The `inputs` question was REMOVED — the field is deprecated (⚠B, v1.1):
+  # nothing ever resolved it. A task's inputs are delivered by the embedded
+  # per-kind slices ON the task, not by pointer.)
 
   - theme: system_tasks
     id: target_files
@@ -244,19 +237,8 @@ questions:
     confidence_field: false
     importance: critical
 
-  - theme: system_tasks
-    id: priority
-    schema_path: task.priority
-    question: "Priority — must, should, or could?"
-    hint: "`must` ⇒ part of the MVP exit gate; lets the codegen heal-loop order work."
-    suggested_answers:
-      - must
-      - should
-      - could
-    free_text_allowed: false
-    required: true
-    confidence_field: false
-    importance: critical
+  # (The per-task `priority` question was REMOVED with decision D2 — the
+  # priority paradigm is retired pipeline-wide; tasks carry no priority field.)
 
   # =========================================================================
   # CONTAINER MODE — container_tasks (critical per item, synthesis)
@@ -447,16 +429,8 @@ questions:
     confidence_field: false
     importance: critical
 
-  - theme: container_tasks
-    id: inputs
-    schema_path: task.inputs
-    question: "What does this task consume (contracts, upstream slices, files)?"
-    hint: "FR-013 'explicit inputs'. Optional but encouraged."
-    suggested_answers: []
-    free_text_allowed: true
-    required: false
-    confidence_field: false
-    importance: high
+  # (The `inputs` question was REMOVED — deprecated field, see the
+  # system_tasks note. The v1.3/v1.4 embeds are the delivery channel.)
 
   - theme: container_tasks
     id: target_files
@@ -505,16 +479,5 @@ questions:
     confidence_field: false
     importance: critical
 
-  - theme: container_tasks
-    id: priority
-    schema_path: task.priority
-    question: "Priority — must, should, or could?"
-    hint: "`must` tasks are part of the container's done-gate; `should`/`could` can land in a later pass."
-    suggested_answers:
-      - must
-      - should
-      - could
-    free_text_allowed: false
-    required: true
-    confidence_field: false
-    importance: critical
+  # (The per-task `priority` question was REMOVED with decision D2 — see the
+  # system_tasks note above.)

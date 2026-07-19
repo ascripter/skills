@@ -13,8 +13,8 @@
 # task SUBGRAPH — the dependency-ordered implementation + test work units
 # (TSK-NNN) that the Stage-14 code-generation agent fans out over, one container
 # at a time. Each task is scoped to one component (CMP) or one contract, with
-# explicit inputs / outputs / acceptance, mirroring the demo PRD's FR-013
-# "Task Breakdown" contract.
+# explicit outputs / acceptance and its upstream contracts EMBEDDED on the task,
+# mirroring the demo PRD's FR-013 "Task Breakdown" contract.
 #
 # This file is the source of truth for the agents that scaffold, implement, and
 # test this container. It is NEVER authored for a non-testable / non-buildable
@@ -56,13 +56,21 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  tasks_container_version: "1.4"           # REQUIRED — 1.3 introduced the embedded
+  tasks_container_version: "1.5"           # REQUIRED — 1.3 introduced the embedded
                                            #   per-task specifics (unit_kind, unit_summary,
                                            #   interface_contract, test_spec); 1.4 extends
                                            #   embedding to the remaining grounded kinds
                                            #   (integration → operation_contract, migration →
                                            #   entity_slice, design → design_spec, config →
                                            #   config_keys) so EVERY task is self-contained.
+                                           #   1.5 (D2): `priority` RETIRED (never emitted,
+                                           #   never required again; validators accept it on
+                                           #   old artifacts without warning), `inputs`
+                                           #   DEPRECATED (parse-and-ignore; the v1.4 embeds
+                                           #   are the delivery channel), and the dialect
+                                           #   embed fields (cli_contract, family_contract,
+                                           #   fixture_briefs) are DECLARED. New advisories
+                                           #   introduced by 1.5 fire at >= 1.5 only.
                                            #   The validator gates each presence check on the
                                            #   version that introduced it, so older artifacts
                                            #   warn instead of failing
@@ -248,6 +256,27 @@ tasks:                                      # REQUIRED — list[Task], non-empty
         default: null                       #   literal default, or null = required
         secret: true                        #   true ⇒ placeholder + deploy owns the value
         description: <one line>             #   what it configures
+    # --- v1.5 dialect embed fields (all OPTIONAL). Same framing as the v1.4
+    #     embeds: WRITE-TIME COPIES of upstream slices, loosely type-checked
+    #     (mapping / list-of-mappings) — deep-validating a copy would
+    #     over-validate; the #20 drift advisory catches divergence. Declared
+    #     so a model round-trip preserves them (the models allow unknown keys,
+    #     but these three are load-bearing enough to name). ---
+    cli_contract: {}                        # OPTIONAL — CLI handler tasks: the verbatim
+                                            #   UX__<command-surface>.yaml slice
+                                            #   (cli_invocation + cli_args + exit codes)
+                                            #   complete enough to code a parser from.
+                                            #   Source seam: UX__SURFACE cli_args block.
+    family_contract: {}                     # OPTIONAL — the resolved ARCH
+                                            #   work_unit_family_contracts entry this
+                                            #   task's unit inherits ({family, contract,
+                                            #   inputs, output, raises}). #20 compares it
+                                            #   against the current ARCH entry (advisory).
+    fixture_briefs: {}                      # OPTIONAL — scaffold/test-infrastructure
+                                            #   tasks: the shared-fixture briefs the
+                                            #   task builds. A mapping (the corpus
+                                            #   dialect shape) or a list of one
+                                            #   mapping per fixture.
     touches_entities:                       # OPTIONAL — DATA-MODEL entity names
       - User                                #   (PascalCase) this task reads/writes.
                                             #   VALIDATED ⊆ DATA-MODEL.yaml entities
@@ -287,17 +316,21 @@ tasks:                                      # REQUIRED — list[Task], non-empty
       - TSK-000                             #   first. Same-file ("TSK-000"), or
       - shared-lib/TSK-004                  #   cross-file ("<container>/TSK-NNN" or
       - TASKS/TSK-002                       #   "TASKS/TSK-NNN" for a system task).
-                                            #   The union graph MUST be acyclic AND
-                                            #   PRIORITY-MONOTONIC: a task must not
-                                            #   depend on a STRICTLY-LOWER-priority
-                                            #   task (must > should > could) — a
-                                            #   must→could edge makes the MVP slice
-                                            #   unsequenceable and BLOCKS complete
-                                            #   (cross-check #22). Promote the
-                                            #   dependency or lower the dependent.
-    inputs:                                 # OPTIONAL but encouraged — the upstream
-      - "ARCH__backend-api.yaml#auth-service"  # artifacts / contracts / files this
-                                            #   task consumes (FR-013 "explicit inputs").
+                                            #   The union graph MUST be acyclic
+                                            #   (cross-check #8). Keep edges LEAN:
+                                            #   an aggregator depends only on the
+                                            #   predecessors it actually consumes;
+                                            #   an integration/bake task on the SET
+                                            #   of tasks it exercises, never the
+                                            #   scheduling tail (see references/
+                                            #   granularity-and-ordering.md).
+    # inputs — DEPRECATED (⚠B, artifact version 1.5): parse-and-ignore. It
+    #   masqueraded as a delivery channel ("the upstream artifacts this task
+    #   consumes") but NOTHING resolved it — not the validator, not the packet
+    #   emitter, not codegen. A task's inputs are delivered by the embedded
+    #   per-kind slices ON the task (interface_contract / test_spec /
+    #   operation_contract / entity_slice / design_spec / config_keys /
+    #   cli_contract / family_contract), never by pointer.
     target_files:                           # REQUIRED for kind:implementation, encouraged
       - "src/auth/service.py"               #   for scaffold/test — the concrete repo-relative
                                             #   file path(s) this task CREATES or MODIFIES
@@ -314,6 +347,17 @@ tasks:                                      # REQUIRED — list[Task], non-empty
                                             #   (non-blocking) for a path outside the
                                             #   component's code_location. See
                                             #   references/task-discovery.md.
+                                            #   DIRECTORY-PIN convention (v1.5): a
+                                            #   multi-file deliverable (module scaffold,
+                                            #   config set, test infra) pins its common
+                                            #   DIRECTORY as the single entry (e.g.
+                                            #   "tests/") and enumerates the file set in
+                                            #   `description` + `acceptance` ("all N files
+                                            #   exist: ..."). An implementation task whose
+                                            #   description names ≥2 backticked paths while
+                                            #   target_files pins one FILE trips an
+                                            #   advisory (multi-file unit? use a
+                                            #   directory pin).
     outputs:                                # REQUIRED — non-empty. The CONTRACT-LEVEL
       - "auth-service.authenticate() exported"  # result this task makes available to
       - "TST-003 green"                     #   dependents: an exported symbol/API, an
@@ -327,7 +371,9 @@ tasks:                                      # REQUIRED — list[Task], non-empty
     acceptance:                             # REQUIRED — non-empty. Machine-checkable
       - "auth-service unit tests (TST-003) pass"  # done conditions (FR-013
       - "src/auth/service.py exposes authenticate()"  # "explicit acceptance").
-    priority: must | should | could          # REQUIRED — must ⇒ part of MVP exit gate
+    # priority — RETIRED (D2, artifact version 1.5): never emitted by new
+    #   writes, never required again; accepted-and-ignored on old artifacts
+    #   (validators must not warn about its presence there).
     estimate: xs | s | m | l | xl            # OPTIONAL — t-shirt size for sequencing
     status: draft | confirmed                # REQUIRED — interview progress
 
@@ -379,7 +425,6 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     system file + all container files MUST be acyclic (topological sort exists).
 #     Blocks complete. (The acyclicity check is what validates FR-013's
 #     "deterministic stitch into one global dependency-ordered TaskGraph".)
-#     Edges must also be PRIORITY-MONOTONIC — see #22.
 #
 # Coverage gates — all trace-or-defer, all block complete (see
 # references/coverage-and-defer.md). "Realized transitively" = the item is traced
@@ -456,29 +501,40 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     complete artifact means the interview didn't finish. Blocks complete.
 # 20. Embedded-copy drift (advisory, never blocks) — when the upstream is
 #     readable, an interface_contract differing from the current ARCH
-#     work_unit's declared fields, or a test_spec differing from the current
-#     TST entry, emits a WARNING suggesting a /sdlc:task re-run (the §7
-#     delta-review reconciles the copies).
+#     work_unit's declared fields, a test_spec differing from the current
+#     TST entry, or (v1.5) a family_contract differing from the current ARCH
+#     work_unit_family_contracts entry (or naming a family that no longer
+#     exists), emits a WARNING suggesting a /sdlc:task re-run (the §7
+#     delta-review reconciles the copies). cli_contract drift vs the UX shard
+#     is not checked (per-surface files; deferred as not-low-effort).
 # 21. File-producing kinds without write targets (advisory) — a scaffold /
 #     test / migration / config / design task with neither target_files nor a
 #     path-shaped outputs entry emits a WARNING: the codegen agent will have
 #     to derive the paths from code_location + stack conventions.
-# 22. Priority-monotonic edges (BLOCKING on complete, Gap-3) — a task must NOT
-#     depend_on a STRICTLY-LOWER-priority task (rank must > should > could). A
-#     must→could (or should→could) edge makes the priority-phased MVP slice
-#     unsequenceable: shipping the must-set would require a deferred could-task.
-#     Fires only when both endpoints carry a priority (required on complete).
-#     Fix by promoting the dependency or lowering the dependent. This also
-#     forbids wiring an aggregator/integration task to depend on a lower-priority
-#     tail — an aggregator depends only on its REQUIRED predecessors, and an
-#     integration/bake task on the MUST set it validates, not the last-scheduled
-#     task (see references/granularity-and-ordering.md).
+# 22. TOMBSTONED (was: priority-monotonic edges, Gap-3; BLOCKING). Deleted with
+#     decision D2 (priority paradigm retired pipeline-wide — no priority field
+#     exists for edges to invert). The number is retired; do not reuse it. The
+#     surviving edge-shape rules (lean aggregator deps; integration tasks depend
+#     on the set they exercise, never the scheduling tail) are generation
+#     guidance in references/granularity-and-ordering.md.
 # 23. Impl/test deferral symmetry (advisory, Gap-4) — an impl task whose
 #     behaviour (target_symbol work_unit / implements FR / component_ref) has NO
 #     live test AND was deferred on the TEST side (its id named in
-#     TEST-STRATEGY__<cid>.test_strategy_warnings) must itself be post-MVP
-#     (priority: could) or deferred in task_warnings — else the branch ships with
-#     no test while "full coverage" is claimed. WARNS (cross-artifact, so not a
-#     hard block); resolve by paired deferral or by restoring the test. See
-#     CLAUDE.md §6a and references/coverage-and-defer.md.
+#     TEST-STRATEGY__<cid>.test_strategy_warnings) must itself be deferred in
+#     task_warnings — else the branch ships with no test while "full coverage"
+#     is claimed. WARNS (cross-artifact, so not a hard block); the two honest
+#     resolutions are paired deferral or restoring the test. See CLAUDE.md §6a
+#     and references/coverage-and-defer.md.
+# 24. Zero-dependent module task (advisory, >= 1.5 only) — a module-kind
+#     implementation task no other task in this file depends on: schema-before-
+#     consumer is holding by tsk-id tie-break, not by edge. Fix by applying the
+#     entity→owning-module rule (references/granularity-and-ordering.md).
+# 25. Multi-path single-file pin (advisory, >= 1.5 only) — an implementation
+#     task whose description enumerates ≥2 distinct backticked repo-relative
+#     paths while target_files pins one FILE. A multi-file unit pins its common
+#     DIRECTORY instead (directory-pin convention, see target_files above).
+# 26. Unnamed integration callee (advisory, >= 1.5 only) — an integration task
+#     whose description names a sibling impl task's target_symbol that its
+#     depends_on does not include. Naming a callable you don't depend on is a
+#     scheduling lie.
 # =============================================================================
