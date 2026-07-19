@@ -1,0 +1,49 @@
+# VALID at 2.0: every unit test names its subject(s) — TST-002 single-subject,
+# TST-003 MULTI-subject (the gate-style shape: one behaviour spanning two
+# units) — and TST-004 uses the LEGACY singular alias (integration tier), which
+# resolves + counts but draws the migrate-to-plural WARNING at >= 2.0.
+# Expect: [OK] complete, exit 0, with exactly the legacy-alias warning.
+metadata:
+  test_strategy_container_version: "2.0"
+  last_updated: "2026-07-19T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 11111111-2222-1010-1010-101010101011
+  status: complete
+container_id: backend
+overview: "Unit + integration tests for the user-management backend."
+inherits_from: docs/TEST-STRATEGY.yaml
+coverage_target:
+  line_pct: 85.0
+tests:
+  - tst_id: TST-002
+    name: "users-service creates a user"
+    tier: unit
+    description: "Happy-path create on the users service."
+    component_ref: users-service
+    targets_work_units: [create_user]
+    directives: ["Arrange a valid payload; act create(); assert a persisted user with an id."]
+    covers: [FR-001]
+    acceptance: "create() returns the new user with a non-null id."
+    status: confirmed
+  - tst_id: TST-003
+    name: "create/read round-trip adequacy"
+    tier: unit
+    description: "One behaviour across two units: what create_user persists, read_user returns."
+    component_ref: users-service
+    targets_work_units: [create_user, read_user]
+    directives: ["Act create() then read(); assert field-level equality."]
+    covers: [FR-001]
+    acceptance: "read_user returns the exact record create_user persisted."
+    status: confirmed
+  - tst_id: TST-004
+    name: "service wiring smoke"
+    tier: integration
+    description: "Exercises the service through the composition root (legacy singular alias on purpose)."
+    component_ref: users-service
+    targets_work_unit: create_user
+    directives: ["Boot the app factory; call the create endpoint; assert 201."]
+    covers: [FR-001]
+    acceptance: "POST /users returns 201 via the real wiring."
+    status: confirmed
+test_strategy_warnings:
+  - "WRN-001: NFR-001 is verified by the system-level load probe; not re-tested here."

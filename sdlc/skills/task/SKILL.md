@@ -663,7 +663,8 @@ The `kind` is the most consequential field on a task: it tells the codegen agent
 |-----------------|--------------------------------------------------------------------------|
 | `scaffold`      | Container skeleton: package layout, manifest, entrypoint.                |
 | `implementation`| Implement one component's behaviour (the bulk). Scoped via `component_ref`.|
-| `test`          | Author the test(s) realizing one or more `TST-NNN`. First-class.         |
+| `test`          | Author the test(s) realizing one or more `TST-NNN`. First-class. `depends_on` = the impl task(s) of its TST's `targets_work_units` (direct — check #27) + the infra task. |
+| `test_infrastructure` | The container's ONE shared-test-infrastructure task: builds TEST-STRATEGY's `shared_infrastructure` deliverables (conftest, factories, fakes). Scaffold-like (no `component_ref`/`target_symbol`; directory `target_files`); every `test` task depends on it. See `granularity-and-ordering.md`. |
 | `integration`   | Wire two components / a within-container call.                           |
 | `migration`     | Schema / DDL / persistence setup — the DATA **entity realization** unit.  |
 | `config`        | Env / settings wiring (`config_loader`); deploy owns secrets backends.   |

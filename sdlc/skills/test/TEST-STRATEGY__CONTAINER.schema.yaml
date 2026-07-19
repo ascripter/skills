@@ -31,10 +31,23 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  test_strategy_container_version: "1.2"   # REQUIRED — 1.2 replaced
-                                           #   targets_operation (OPN-NNN, retired
-                                           #   with ARCH operations[]) with
-                                           #   targets_work_unit (work_units[].name)
+  test_strategy_container_version: "2.0"   # REQUIRED — 2.0 (2026-07-19, SPLAN1):
+                                           #   D2 per-test `priority` RETIRED;
+                                           #   targets_work_unit widened to the
+                                           #   PLURAL targets_work_units (SK-06,
+                                           #   singular parsed as legacy alias);
+                                           #   the test->subject seam BLOCKS at
+                                           #   >= 2.0 (check 12); + gating (SK-07)
+                                           #   + shared_infrastructure /
+                                           #   test_file_convention overrides.
+                                           #   2.0 (not 1.3) deliberately clears
+                                           #   the AICF corpus's self-stamped 1.9
+                                           #   — a gate the corpus already walked
+                                           #   past protects nothing.
+                                           #   (1.2 replaced targets_operation
+                                           #   (OPN-NNN, retired with ARCH
+                                           #   operations[]) with the work_unit
+                                           #   subject form.)
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-test                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -67,6 +80,12 @@ coverage_target:                           # REQUIRED (block may carry only null
 # ---------------------------------------------------------------------------
 mock_policy: <string>                       # OPTIONAL — null ⇒ inherit
 fixture_strategy: <string>                  # OPTIONAL — null ⇒ inherit
+shared_infrastructure:                      # OPTIONAL (v2.0, SK-08) — null ⇒ inherit
+  - path: tests/<container>/conftest.py     #   the system list. Same item shape as
+    purpose: <string>                       #   the system schema (path + purpose +
+    realizes: [fixture_strategy]            #   realizes ≥1 + contents_hint).
+test_file_convention: <string>              # OPTIONAL (v2.0, SK-09) — null ⇒ inherit
+                                            #   the system template
 test_environment: <string>                  # OPTIONAL — e.g. "testcontainers postgres",
                                             #   "in-memory sqlite", "localstack"
 
@@ -88,23 +107,32 @@ tests:                                      # REQUIRED — list[ContainerTest], 
     component_ref: <component_id>           # OPTIONAL (REQUIRED for unit tier) — a
                                             #   components[].component_id in the matching
                                             #   ARCH__<container>.yaml. Validated.
-    targets_work_unit: <work_unit name>     # OPTIONAL — the component work unit
+    targets_work_units:                     # v2.0 (SK-06) — THE SUBJECT SEAM. The
+      - <work_unit name>                    #   component work unit(s)
                                             #   (components[].work_units[].name in
                                             #   ARCH__<container>.yaml — name-addressed,
-                                            #   no id family) this test exercises. Slices
-                                            #   the suite to ONE test per callable (the
-                                            #   atomic test grain that mirrors the `task`
-                                            #   skill's per-work_unit tasks). VALIDATED ⊆
-                                            #   the component_ref's work_units[].name
-                                            #   (requires component_ref when set). Every
-                                            #   work unit SHOULD be exercised by a test
-                                            #   (advisory work-unit coverage) — see
-                                            #   cross-check 11.
+                                            #   no id family) this test exercises.
+                                            #   Usually ONE (the atomic test grain that
+                                            #   mirrors the `task` skill's per-work_unit
+                                            #   tasks); multi-subject is real (a gate
+                                            #   test verifying exit + entry adequacy).
+                                            #   VALIDATED ⊆ the component_ref's
+                                            #   work_units[].name (requires component_ref
+                                            #   when set). REQUIRE-OR-DEFER for unit-tier
+                                            #   tests at >= 2.0 (cross-check 12): name
+                                            #   the subject(s) or defer the tst_id via a
+                                            #   WRN-NNN. The task skill wires each test
+                                            #   task's depends_on from this list — the
+                                            #   seed rule writes it from birth
+                                            #   (references/test-discovery.md).
+    # targets_work_unit: <work_unit name>   # LEGACY singular alias (pre-2.0) — parsed
+                                            #   and validated identically; warns at
+                                            #   >= 2.0. New writes use the plural.
     # targets_operation: OPN-001            # DEPRECATED (pre-1.2 alias) — OPN-NNN of the
                                             #   retired ARCH operations[] family. Parsed
                                             #   for backward compatibility; emits a
                                             #   deprecation warning, never blocks. New
-                                            #   writes use targets_work_unit.
+                                            #   writes use targets_work_units.
     directives:                             # REQUIRED — non-empty. Arrange/act/assert,
       - <string>                            #   what to mock, edge cases. For property
                                             #   tests: the invariant + input space.
@@ -118,7 +146,16 @@ tests:                                      # REQUIRED — list[ContainerTest], 
     targets_security_concern: <kebab-id>    # OPTIONAL — a security_concerns[].id from the
                                             #   ARCH__<container>.yaml this abuse case
                                             #   exercises. Validated against the ARCH file.
-    priority: must | should | could          # REQUIRED
+    # priority: must | should | could       # RETIRED (D2, 2026-07-16) — the priority
+                                            #   paradigm is retired pipeline-wide. Old
+                                            #   artifacts carrying it still parse
+                                            #   (accepted-and-ignored).
+    gating: true | false                    # OPTIONAL (v2.0, SK-07) — absent/true ⇒
+                                            #   default suite; false ⇒ excluded (an
+                                            #   out-of-band eval). See the system
+                                            #   schema's consumption contract.
+    non_gating_marker: eval_nongating       # OPTIONAL — pytest marker for gating: false
+                                            #   (default shown)
     setup: <string>                         # OPTIONAL
     fixtures:                               # OPTIONAL — specific fixtures/builders used
       - <string>
@@ -171,18 +208,35 @@ test_strategy_warnings:                     # OPTIONAL — list of "WRN-NNN: ...
 #     security_concerns[].id (container + component level) in
 #     ARCH__<container>.yaml is targeted by some test (targets_failure_mode /
 #     targets_security_concern / covers) OR deferred via a WRN-NNN. Blocks complete.
-# 11. targets_work_unit integrity — every targets_work_unit resolves to a
+# 11. targets_work_units integrity — every entry (and the legacy singular
+#     targets_work_unit, parsed as an alias that warns at >= 2.0) resolves to a
 #     work_units[].name in ARCH__<container>.yaml; the test MUST also set
 #     component_ref, and the unit must belong to that component (work_unit names
 #     are unique only within their component). Blocks complete.
 #     PLUS work-unit coverage (ADVISORY, never blocks): a component work unit that
-#     no test exercises (targets_work_unit) and no WRN-NNN defers emits a WARNING —
+#     no test exercises (targets_work_units) and no WRN-NNN defers emits a WARNING —
 #     the suite isn't atomic for that callable. Advisory (not blocking) because a
 #     test strategy is risk-driven: a trivial work unit may legitimately have no
 #     dedicated test. No-op when no component declares work_units.
 #     LEGACY: a pre-1.2 `targets_operation` (OPN-NNN) emits a deprecation warning
 #     only — it resolves against nothing (ARCH no longer emits operations[]) and
 #     never blocks, so old artifacts stay loadable.
+# 12. Test->subject seam, require-or-defer (v2.0, SK-06) — at status: complete
+#     every tier: unit test names targets_work_units OR is deferred via a
+#     WRN-NNN naming its tst_id. BLOCKS at test_strategy_container_version
+#     >= 2.0; WARNS below 2.0; SILENT in meta_corpus_dialect mode (its coverage
+#     mechanism is covers-intersection, and check 11's advisory already carries
+#     the unexercised-unit signal). Integration/e2e/contract tiers: the field is
+#     optional (they target seams, not single units) but validated when present.
+#     System tests stay subject-free by design (involves_containers is their
+#     grain) — do NOT "fix" that.
+# 13. gating advisories (v2.0, SK-07; never block) — a gating: false test whose
+#     directives never mention its exclusion marker gets a reminder; a
+#     gating: false unit-tier test is suspicious (evals are usually e2e).
+# 14. shared_infrastructure (v2.0, SK-08) — item shape (path + purpose + valid
+#     realizes >= 1) blocks when the override is used; the emptiness advisory
+#     fires only against this container's OWN policy overrides when neither it
+#     nor the system file declares infrastructure.
 # 10. Coverage failures force metadata.status: draft (they do not crash the
 #     validator) so partial strategies remain saveable as drafts.
 # =============================================================================

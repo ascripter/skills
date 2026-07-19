@@ -461,12 +461,17 @@ Walk the themes in `test-questions.yaml` order. Themes are tagged
 2. `coverage_threshold` — `high` (global line/branch floor + per-container
    overrides + rationale).
 3. `global_policy` — `high` (`mock_policy`, `fixture_strategy`,
-   `test_data_strategy`, optional `ci_integration` + `environments`).
+   `test_data_strategy`, `shared_infrastructure` — the named deliverables the
+   policy prose implies (conftest/factories; the `task` skill builds them as
+   one test-infrastructure task per container), `test_file_convention` — the
+   path template test-task `target_files` derive from, optional
+   `ci_integration` + `environments`).
 4. `system_suite` — `critical` per item, `synthesis: true`. For each test:
    `tst_id`, `name`, `tier` (∈ e2e / contract / load / security /
    accessibility), `description`, `directives`, `covers` (FR/NFR/ACR/WKF),
-   `involves_containers`, `priority`, `setup`, `acceptance`. Each test's
-   status walks `draft → confirmed`. After the per-item loop, run the
+   `involves_containers`, `setup`, `acceptance` (+ `gating: false` with its
+   marker directive for an out-of-band eval; `priority` is retired — D2).
+   Each test's status walks `draft → confirmed`. After the per-item loop, run the
    scope-completeness sweep. Every cross-container PRD `WKF-NNN` must be
    exercised by some e2e test or deferred — Phase 7's workflow-coverage check
    enforces this.
@@ -481,14 +486,16 @@ Walk the themes in `test-questions.yaml` order. Themes are tagged
    `tst_id`, `name`, `tier` (∈ unit / integration / property / contract /
    load / security / accessibility), `description`, `component_ref` (a
    `components[].component_id` from `ARCH__<container>.yaml`, when the test
-   targets one), `targets_work_unit` (the component `work_units[].name` this
-   test exercises — the atomic test grain; work units are name-addressed and
-   unique only within their component, so `component_ref` is required alongside;
-   seed one unit test per work unit, mirroring `task`'s per-work_unit slicing),
-   `directives`, `covers`
+   targets one), `targets_work_units` (the component `work_units[].name`
+   entries this test exercises — THE SUBJECT SEAM, usually one; work units are
+   name-addressed and unique only within their component, so `component_ref` is
+   required alongside; seed one unit test per work unit, mirroring `task`'s
+   per-work_unit slicing, and carry the subject from birth — for unit-tier
+   tests it is require-or-defer at `complete`), `directives`, `covers`
    (FR/NFR/ACR), `targets_failure_mode` / `targets_security_concern` (the ARCH
-   risk id this negative case exercises), `priority`, `setup`, `fixtures`,
-   `mocks`, `acceptance`. Run the scope-completeness sweep after the per-item
+   risk id this negative case exercises), `setup`, `fixtures`,
+   `mocks`, `acceptance` (+ `gating: false` for an out-of-band eval;
+   `priority` is retired — D2). Run the scope-completeness sweep after the per-item
    loop. The coverage gate (Phase 7) requires every container/component
    requirement, acceptance criterion, failure mode, and security concern to be
    covered or deferred; component work units are an **advisory** coverage layer

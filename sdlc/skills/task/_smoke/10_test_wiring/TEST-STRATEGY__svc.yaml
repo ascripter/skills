@@ -1,0 +1,35 @@
+# Container strategy for the test-wiring fixture: TST-101 carries the v2.0
+# subject seam (targets_work_units); TST-102 is a non-gating eval whose marker
+# directive the TASK side forgets (check #30 material).
+metadata:
+  test_strategy_container_version: "2.0"
+  last_updated: "2026-07-19T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: "10101010-bbbb-1010-1010-101010101004"
+  status: "complete"
+container_id: svc
+overview: "Unit + eval tests for the ingest worker."
+inherits_from: docs/TEST-STRATEGY.yaml
+coverage_target:
+  line_pct: 85.0
+tests:
+  - tst_id: TST-101
+    name: "do_work processes a job"
+    tier: unit
+    description: "Happy-path processing of one queued job."
+    component_ref: ingest-worker
+    targets_work_units: [do_work]
+    directives: ["Arrange a queued job; act do_work(); assert the result record."]
+    acceptance: "do_work returns a completed result for a valid job."
+    status: confirmed
+  - tst_id: TST-102
+    name: "aggregation quality eval"
+    tier: integration
+    description: "Out-of-band eval of aggregate output quality; non-gating."
+    component_ref: ingest-worker
+    targets_work_units: [aggregate_results]
+    gating: false
+    directives: ["Run the aggregator on the golden batch; grade the summary."]
+    acceptance: "Golden-batch aggregate matches the rubric."
+    status: confirmed
+test_strategy_warnings: []

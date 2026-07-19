@@ -118,12 +118,17 @@ For each `components[]`:
 - **Seed one `unit` test per component `work_units[]` entry** (name-addressed —
   work units carry no id family) — the atomic test grain, mirroring how the
   `task` skill slices one task per work_unit. Set
-  `component_ref: <component_id>` AND `targets_work_unit: <work_units[].name>`
+  `component_ref: <component_id>` AND `targets_work_units: [<work_units[].name>]`
   (both are needed — unit names are unique only within their component), and
   pull the unit's traces into the test: `covers` ← the unit's
   `implements_requirements`, plus a happy-path assertion from its `summary` /
   `satisfies_acceptance`; its `interface_contract` (inputs/output/raises) names
-  the argument/return/error shapes to assert. Every component work unit SHOULD
+  the argument/return/error shapes to assert. **The seeded test carries its
+  subject from birth; a hand-added test names its subject(s) or defers** — at
+  `status: complete` a unit-tier test with neither blocks (v2.0 check 12; the
+  `task` skill wires each test task's `depends_on` from this list). A test that
+  exercises two units as one behaviour (a gate's exit + entry adequacy) lists
+  both. Every component work unit SHOULD
   get a test (the advisory work-unit-coverage warning flags any that don't);
   defer a genuinely trivial unit (a plain getter) with a `WRN-NNN` naming the
   unit.

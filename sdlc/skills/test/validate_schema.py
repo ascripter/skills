@@ -43,6 +43,29 @@ Validates:
          declares acceptance_criteria, and every failure_modes[].id /
          security_concerns[].id in the ARCH container file is covered by some
          test OR deferred via a WRN-NNN.
+    7. Test->subject seam (v2.0, SK-06): every unit-tier container test names
+       its subject work unit(s) in targets_work_units (plural; the legacy
+       singular targets_work_unit is parsed as an alias) OR is deferred via a
+       WRN-NNN naming its tst_id. BLOCKING at
+       test_strategy_container_version >= 2.0; below 2.0 a warning; SILENT in
+       the meta-corpus dialect (its coverage mechanism is covers-intersection
+       and check 11's work-unit-coverage advisory already carries the
+       unexercised-unit signal). The seam is what lets the task skill wire
+       each test task's depends_on to the impl task(s) it exercises.
+    8. Non-gating flag (v2.0, SK-07; warn-level): a test with gating: false is
+       excluded from the default suite via a pytest marker
+       (non_gating_marker, default 'eval_nongating'); warn when its directives
+       never mention the marker, and warn when a unit-tier test is non-gating
+       (evals are usually e2e/llm-judge).
+    9. Shared test infrastructure (v2.0, SK-08; warn-level): when
+       mock_policy/fixture_strategy prose names mocks/stubs/fixtures/factories
+       but shared_infrastructure declares no deliverable, warn — downstream
+       codegen workers will each reinvent the helper. shared_infrastructure
+       item shape (path, purpose, realizes) is format-checked when present.
+
+    D2 (2026-07-16, pipeline-wide): the per-test `priority` field is RETIRED.
+    It is no longer required at status: complete; old artifacts carrying it
+    still parse (accepted-and-ignored).
 
 Exit codes:
     0 — schema valid; status='complete' (all checks passing) or status='draft'.
@@ -105,6 +128,10 @@ class TestTier(str, Enum):
 
 
 class Priority(str, Enum):
+    """DEPRECATED (D2, 2026-07-16): the priority paradigm is retired
+    pipeline-wide. Kept so old artifacts carrying `priority` still parse;
+    no check reads it."""
+
     must = "must"
     should = "should"
     could = "could"
@@ -177,7 +204,11 @@ class SystemTest(BaseModel):
     directives: Optional[List[str]] = None
     covers: Optional[List[str]] = None
     involves_containers: Optional[List[str]] = None
-    priority: Optional[Priority] = None
+    priority: Optional[Priority] = None          # DEPRECATED (D2) — accepted, ignored
+    gating: Optional[bool] = None                # None/true = gating; false = excluded
+                                                 #   from the default suite (SK-07)
+    non_gating_marker: Optional[str] = None      # pytest marker for gating: false
+                                                 #   (default 'eval_nongating')
     setup: Optional[str] = None
     acceptance: Optional[str] = None
     status: Optional[TestStatus] = None
@@ -186,6 +217,20 @@ class SystemTest(BaseModel):
 class ContainerStrategyRef(BaseModel):
     container_id: Optional[str] = None
     file_path: Optional[str] = None
+
+
+class SharedInfraItem(BaseModel):
+    """One shared test deliverable the mock/fixture/data policy implies
+    (SK-08) — e.g. tests/conftest.py, a factory module, a fake-LLM helper.
+    The task skill turns the list into ONE test-infrastructure task per
+    container; codegen workers import instead of reinventing."""
+
+    path: Optional[str] = None            # REQUIRED when present — repo-relative
+    purpose: Optional[str] = None         # REQUIRED when present — what it provides
+    realizes: Optional[List[str]] = None  # REQUIRED when present — >=1 of
+                                          #   mock_policy | fixture_strategy |
+                                          #   test_data_strategy
+    contents_hint: Optional[str] = None   # OPTIONAL — for the codegen worker
 
 
 class TestStrategySystem(BaseModel):
@@ -199,6 +244,12 @@ class TestStrategySystem(BaseModel):
     fixture_strategy_confidence: Optional[Confidence] = None
     fixture_strategy_rationale: Optional[str] = None
     test_data_strategy: Optional[str] = None
+    shared_infrastructure: Optional[List[SharedInfraItem]] = None  # v2.0 (SK-08)
+    test_file_convention: Optional[str] = None  # v2.0 (SK-09) — path template the
+                                                #   task skill derives test-task
+                                                #   target_files from; default
+                                                #   tests/<container>/<component_snake>/
+                                                #   test_<tst_id_snake>.py
     ci_integration: Optional[str] = None
     environments: Optional[List[Environment]] = None
     tests: Optional[List[SystemTest]] = None
@@ -224,7 +275,13 @@ class ContainerTest(BaseModel):
     tier: Optional[TestTier] = None
     description: Optional[str] = None
     component_ref: Optional[str] = None
-    targets_work_unit: Optional[str] = None   # work_units[].name of component_ref
+    targets_work_units: Optional[List[str]] = None  # v2.0 — the subject seam: the
+                                              # work_units[].name entries (of
+                                              # component_ref) this test exercises.
+                                              # Multi-subject is real (a gate test
+                                              # verifying exit + entry adequacy).
+    targets_work_unit: Optional[str] = None   # LEGACY singular alias (pre-2.0) —
+                                              # parsed and validated; warns at >= 2.0
     targets_operation: Optional[str] = None   # DEPRECATED pre-1.2 alias (OPN-NNN of the
                                               # retired ARCH operations[] family); parsed
                                               # for backward compat, warns, never blocks
@@ -232,7 +289,11 @@ class ContainerTest(BaseModel):
     covers: Optional[List[str]] = None
     targets_failure_mode: Optional[str] = None
     targets_security_concern: Optional[str] = None
-    priority: Optional[Priority] = None
+    priority: Optional[Priority] = None       # DEPRECATED (D2) — accepted, ignored
+    gating: Optional[bool] = None             # None/true = gating; false = excluded
+                                              #   from the default suite (SK-07)
+    non_gating_marker: Optional[str] = None   # pytest marker for gating: false
+                                              #   (default 'eval_nongating')
     setup: Optional[str] = None
     fixtures: Optional[List[str]] = None
     mocks: Optional[List[str]] = None
@@ -248,6 +309,9 @@ class TestStrategyContainer(BaseModel):
     coverage_target: Optional[ContainerCoverageTarget] = None
     mock_policy: Optional[str] = None
     fixture_strategy: Optional[str] = None
+    shared_infrastructure: Optional[List[SharedInfraItem]] = None  # v2.0 override —
+                                                #   null => inherit the system list
+    test_file_convention: Optional[str] = None  # v2.0 override — null => inherit
     test_environment: Optional[str] = None
     tests: Optional[List[ContainerTest]] = None
     test_strategy_warnings: Optional[List[str]] = None
@@ -270,6 +334,28 @@ _ACR_RE = re.compile(r"^ACR-\d+$", re.IGNORECASE)
 _WKF_RE = re.compile(r"^WKF-\d+$", re.IGNORECASE)
 
 _REQ_TOKEN_RE = re.compile(r"\b(?:FR|NFR|ACR|WKF)-\d+\b", re.IGNORECASE)
+
+# SK-08 emptiness advisory: prose that names shared deliverables.
+_MOCK_PROSE_RE = re.compile(r"\b(mock|stub|fake)", re.IGNORECASE)
+_FIXTURE_PROSE_RE = re.compile(r"\b(fixture|factor)", re.IGNORECASE)
+_SHARED_INFRA_REALIZES = {"mock_policy", "fixture_strategy", "test_data_strategy"}
+DEFAULT_NON_GATING_MARKER = "eval_nongating"
+
+# The test->subject seam (check 12) BLOCKS only at container artifact
+# version >= this floor AND meta_corpus_dialect false; otherwise it warns.
+# 2.0 deliberately clears the AICF corpus's self-stamped 1.9 (see the
+# SKILLS-PLANS-OVERVIEW convention-3 amendment): a version gate the corpus
+# has already walked past protects nothing.
+SUBJECT_SEAM_MIN_VERSION = (2, 0)
+
+
+def _version_tuple(v: Optional[str]) -> Tuple[int, int]:
+    """Parse 'MAJOR.MINOR[...]' leniently; unparseable -> (0, 0)."""
+    try:
+        parts = str(v).strip().split(".")
+        return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
+    except (ValueError, AttributeError, IndexError):
+        return (0, 0)
 
 INFRA_ARCHETYPES = {
     "primary-database",
@@ -466,6 +552,79 @@ def load_arch_container(docs_dir: Path, cid: str) -> ArchContainerInfo:
 # =============================================================================
 
 
+def check_shared_infrastructure(items: Optional[List[SharedInfraItem]], label: str) -> List[str]:
+    """Format-check shared_infrastructure items (blocking — the field is new, so
+    this only ever fires on artifacts that opted into it)."""
+    errs: List[str] = []
+    for i, it in enumerate(items or []):
+        if not it.path:
+            errs.append(f"{label}.shared_infrastructure[{i}].path is required")
+        if not it.purpose:
+            errs.append(f"{label}.shared_infrastructure[{i}].purpose is required")
+        rz = it.realizes or []
+        if not rz:
+            errs.append(
+                f"{label}.shared_infrastructure[{i}].realizes must name >=1 of "
+                f"{sorted(_SHARED_INFRA_REALIZES)}"
+            )
+        else:
+            for r in rz:
+                if r not in _SHARED_INFRA_REALIZES:
+                    errs.append(
+                        f"{label}.shared_infrastructure[{i}].realizes '{r}' is not one of "
+                        f"{sorted(_SHARED_INFRA_REALIZES)}"
+                    )
+    return errs
+
+
+def _infra_emptiness_warns(
+    mock_policy: Optional[str],
+    fixture_strategy: Optional[str],
+    has_infra: bool,
+    label: str,
+) -> List[str]:
+    """SK-08 advisory: policy prose names shared deliverables but
+    shared_infrastructure declares none — every codegen worker will reinvent
+    the helper (the F22 lesson: the corpus hand-authored TSK-414 for this)."""
+    if has_infra:
+        return []
+    hits = []
+    if mock_policy and _MOCK_PROSE_RE.search(mock_policy):
+        hits.append("mock_policy")
+    if fixture_strategy and _FIXTURE_PROSE_RE.search(fixture_strategy):
+        hits.append("fixture_strategy")
+    if not hits:
+        return []
+    prefix = f"{label} " if label else ""
+    return [
+        f"{prefix}{'/'.join(hits)} names shared test deliverables (mocks/stubs/"
+        f"fixtures/factories) but shared_infrastructure lists none - a policy "
+        f"with no named deliverable means downstream workers each reinvent it; "
+        f"declare the conftest/factory/helper files (or inherit them)"
+    ]
+
+
+def _gating_warns(t: Any, i: int, label: str) -> List[str]:
+    """SK-07 advisories for a gating: false test."""
+    if t.gating is not False:
+        return []
+    warns: List[str] = []
+    where = (f"{label} " if label else "") + f"tests[{i}] ({t.tst_id})"
+    marker = (t.non_gating_marker or DEFAULT_NON_GATING_MARKER).strip()
+    if t.tier == TestTier.unit:
+        warns.append(
+            f"{where} is unit-tier but gating: false - non-gating tests are "
+            f"usually e2e/llm-judge evals; confirm the tier"
+        )
+    if not any(marker in d for d in (t.directives or []) if isinstance(d, str)):
+        warns.append(
+            f"{where} is gating: false but no directive mentions the exclusion "
+            f"marker '{marker}' - the codegen worker needs an apply-the-marker "
+            f"directive to keep it out of the default suite"
+        )
+    return warns
+
+
 def check_warning_ids(warnings: Optional[List[str]], label: str) -> List[str]:
     errs: List[str] = []
     for i, w in enumerate(warnings or []):
@@ -505,7 +664,8 @@ def check_required_system(m: TestStrategySystem) -> List[str]:
     if m.tests is None:
         missing.append("tests")
     for i, t in enumerate(m.tests or []):
-        for fld in ("tst_id", "name", "tier", "description", "priority", "acceptance", "status"):
+        # D2: "priority" removed from the required tuple (retired field).
+        for fld in ("tst_id", "name", "tier", "description", "acceptance", "status"):
             if getattr(t, fld) in (None, ""):
                 missing.append(f"tests[{i}].{fld}")
         if not t.directives:
@@ -525,7 +685,8 @@ def check_required_container(m: TestStrategyContainer) -> List[str]:
     if not m.tests:
         missing.append("tests (non-empty)")
     for i, t in enumerate(m.tests or []):
-        for fld in ("tst_id", "name", "tier", "description", "priority", "acceptance", "status"):
+        # D2: "priority" removed from the required tuple (retired field).
+        for fld in ("tst_id", "name", "tier", "description", "acceptance", "status"):
             if getattr(t, fld) in (None, ""):
                 missing.append(f"tests[{i}].{fld}")
         if not t.directives:
@@ -562,6 +723,7 @@ def check_system(
         for cid in t.involves_containers or []:
             if arch.present and cid not in arch.container_ids:
                 errs.append(f"tests[{i}].involves_containers '{cid}' is not an ARCH container_id")
+        warns += _gating_warns(t, i, "")
 
     # Workflow coverage (trace-or-defer): every cross-container WKF must be
     # covered by a system test or deferred via a warning.
@@ -579,6 +741,14 @@ def check_system(
                     f"test covers it and no WRN-NNN defers it"
                 )
 
+    # shared_infrastructure format (blocking when used) + SK-08 emptiness
+    # advisory (only at complete — a draft may not have decided yet).
+    errs += check_shared_infrastructure(m.shared_infrastructure, "")
+    if m.metadata.status == Status.complete:
+        warns += _infra_emptiness_warns(
+            m.mock_policy, m.fixture_strategy, bool(m.shared_infrastructure), ""
+        )
+
     # container_strategies integrity (non-blocking).
     for ref in m.container_strategies or []:
         if ref.container_id and arch.present and ref.container_id not in arch.container_ids:
@@ -594,6 +764,7 @@ def check_container(
     arch: ArchInfo,
     docs_dir: Path,
     meta_mode: bool = False,
+    sys_has_infra: bool = False,
 ) -> Tuple[List[str], List[str]]:
     """Return (blocking_errors, non_blocking_warnings) for one container file.
 
@@ -628,6 +799,9 @@ def check_container(
     targeted_fmodes: Set[str] = set()
     targeted_concerns: Set[str] = set()
     targeted_units: Set[str] = set()          # qualified "<component_id>/<unit name>"
+    version = _version_tuple(m.metadata.test_strategy_container_version)
+    # Check 12 (SK-06): unit-tier tests whose subject seam is unpinned.
+    subjectless_unit_tests: List[Tuple[int, str]] = []   # (index, tst_id)
 
     for i, t in enumerate(m.tests or []):
         # component_ref integrity
@@ -637,18 +811,32 @@ def check_container(
                 errs.append(f"{label} tests[{i}].component_ref '{t.component_ref}' is not a component in ARCH__{cid}.yaml")
         if t.tier == TestTier.unit and not t.component_ref:
             errs.append(f"{label} tests[{i}] is unit-tier but has no component_ref")
-        # targets_work_unit integrity — the atomic test grain (work_units[].name
-        # of the targeted component; names are unique only within a component,
-        # so component_ref is required alongside).
+        # targets_work_units integrity — the atomic test grain (work_units[].name
+        # entries of the targeted component; names are unique only within a
+        # component, so component_ref is required alongside). The legacy
+        # singular targets_work_unit is folded in as an alias (warns at >= 2.0).
+        subjects: List[str] = []
+        for u in t.targets_work_units or []:
+            u = str(u).strip()
+            if u and u not in subjects:
+                subjects.append(u)
         if t.targets_work_unit:
-            unit = str(t.targets_work_unit).strip()
+            legacy = str(t.targets_work_unit).strip()
+            if legacy and legacy not in subjects:
+                subjects.append(legacy)
+            if version >= SUBJECT_SEAM_MIN_VERSION:
+                warns.append(f"{label} tests[{i}].targets_work_unit is the legacy singular alias - migrate to targets_work_units: [...] at version >= 2.0")
+        for unit in subjects:
             if not t.component_ref:
-                errs.append(f"{label} tests[{i}].targets_work_unit '{unit}' set without component_ref — work_unit names only resolve within a component")
+                errs.append(f"{label} tests[{i}].targets_work_units '{unit}' set without component_ref — work_unit names only resolve within a component")
             else:
                 targeted_units.add(f"{t.component_ref}/{unit}")
                 comp_units = ac.comp_units.get(t.component_ref, set())
                 if ac.present and comp_units and unit not in comp_units:
-                    errs.append(f"{label} tests[{i}].targets_work_unit '{unit}' is not a work_units[].name of component '{t.component_ref}' in ARCH__{cid}.yaml")
+                    errs.append(f"{label} tests[{i}].targets_work_units '{unit}' is not a work_units[].name of component '{t.component_ref}' in ARCH__{cid}.yaml")
+        if t.tier == TestTier.unit and not subjects and t.tst_id:
+            subjectless_unit_tests.append((i, str(t.tst_id)))
+        warns += _gating_warns(t, i, label)
         # Legacy pre-1.2 alias: parsed, warned about, never blocks (ARCH no
         # longer emits operations[], so OPN ids resolve against nothing).
         if t.targets_operation:
@@ -699,6 +887,45 @@ def check_container(
     deferred_components = _deferred_literals(warnings, ac.components_with_acceptance)
     deferred_fmodes = _deferred_literals(warnings, ac.failure_mode_ids)
     deferred_concerns = _deferred_literals(warnings, ac.security_concern_ids)
+
+    # Check 12 (SK-06) — the test->subject seam is require-or-defer: at
+    # status: complete every unit-tier test names targets_work_units OR a
+    # WRN-NNN defers it by tst_id. BLOCKING at container version >= 2.0
+    # (the floor deliberately clears the corpus's self-stamped 1.9 — see
+    # SUBJECT_SEAM_MIN_VERSION); below 2.0 it warns. In the meta-corpus
+    # dialect it is SILENT: the dialect's coverage mechanism is
+    # covers-intersection, and the per-unit work-unit-coverage advisory
+    # (check 11) already surfaces the unexercised-unit signal from the ARCH
+    # side — a second, per-test warning family would restate it N times.
+    # Without the seam the task skill cannot derive a test task's depends_on —
+    # the corpus's 191-test absorber rewire (PLAN4) is what this prevents.
+    if subjectless_unit_tests and m.metadata.status == Status.complete and not meta_mode:
+        deferred_tsts = _deferred_literals(
+            warnings, {tid for _, tid in subjectless_unit_tests}
+        )
+        seam_blocks = version >= SUBJECT_SEAM_MIN_VERSION
+        for i, tid in subjectless_unit_tests:
+            if tid in deferred_tsts:
+                continue
+            msg = (
+                f"{label} tests[{i}] ({tid}) is unit-tier but names no "
+                f"targets_work_units and no WRN-NNN defers it - the "
+                f"test->subject seam is unpinned (the task skill cannot wire "
+                f"this test's depends_on to the impl task it exercises)"
+            )
+            if seam_blocks:
+                errs.append(msg)
+            else:
+                warns.append(msg)
+
+    # shared_infrastructure (v2.0): format when used (blocking) + SK-08
+    # emptiness advisory — only against the container's OWN policy overrides
+    # (null inherits the system policy, which the system-file check covers).
+    errs += check_shared_infrastructure(m.shared_infrastructure, label)
+    if m.metadata.status == Status.complete and not sys_has_infra:
+        warns += _infra_emptiness_warns(
+            m.mock_policy, m.fixture_strategy, bool(m.shared_infrastructure), label
+        )
 
     # Requirement coverage (trace-or-defer).
     for r in sorted(allowed_reqs):
@@ -770,6 +997,7 @@ def validate_all(path: Path) -> int:
     statuses: List[Tuple[str, Optional[Status]]] = []
     tst_registry: Dict[str, List[str]] = {}   # tst_id -> files declaring it
     meta_mode = False                  # system strategy's meta_corpus_dialect flag
+    sys_has_infra = False              # system strategy declares shared_infrastructure
 
     def _register_tsts(tests: List[Any], file_name: str) -> None:
         seen_here: Set[str] = set()
@@ -795,6 +1023,7 @@ def validate_all(path: Path) -> int:
             sysm = None
         if sysm is not None:
             meta_mode = bool(sysm.meta_corpus_dialect)
+            sys_has_infra = bool(sysm.shared_infrastructure)
             statuses.append((system_path.name, sysm.metadata.status))
             _register_tsts(sysm.tests or [], system_path.name)
             blocking += [f"{system_path.name}: {e}" for e in check_required_system(sysm)]
@@ -823,7 +1052,7 @@ def validate_all(path: Path) -> int:
         blocking += [f"{cp.name}: {e}" for e in check_required_container(cm)]
         blocking += [f"{cp.name}: {e}" for e in check_tst_ids(cm.tests or [], cp.stem, meta_mode)]
         blocking += [f"{cp.name}: {e}" for e in check_warning_ids(cm.test_strategy_warnings, cp.stem)]
-        c_errs, c_warns = check_container(cm, fams, arch, docs_dir, meta_mode)
+        c_errs, c_warns = check_container(cm, fams, arch, docs_dir, meta_mode, sys_has_infra)
         blocking += [f"{cp.name}: {e}" for e in c_errs]
         warnings += [f"{cp.name}: {w}" for w in c_warns]
 

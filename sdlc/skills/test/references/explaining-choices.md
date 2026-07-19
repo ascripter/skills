@@ -43,7 +43,7 @@ set is:
 | Per-test tier | `system_suite.tier`, `container_suite.tier` | Verifying a rule with a slow e2e instead of a fast unit. |
 
 Everything else in the interview is fine to ask plainly. **Don't** wrap a
-straightforward enum (`priority: must/should/could`) in a paragraph of theory —
+straightforward enum (`status: draft/confirmed`) in a paragraph of theory —
 reserve the explain-the-why machinery for the loaded set, or it becomes noise.
 
 ## 2. The explain-the-why contract (four parts)

@@ -359,6 +359,46 @@ questions:
     importance: med
 
   - theme: global_policy
+    id: shared_infrastructure
+    schema_path: shared_infrastructure
+    question: "Which SHARED test deliverables does the mock/fixture policy imply (conftest, factories, fake helpers)?"
+    hint: >
+      v2.0, SK-08. The mock_policy/fixture_strategy prose usually names shared
+      deliverables — a central fake-LLM helper, a factory module,
+      tests/conftest.py. NAME THEM here as {path, purpose, realizes} items so
+      the `task` skill can emit ONE test-infrastructure task per container that
+      builds them and every test task depends on; a policy with no named
+      deliverable means every codegen worker reinvents it (the validator warns).
+      Draft the list from the policy prose the user just confirmed; each item's
+      realizes names which policy field(s) it implements (mock_policy /
+      fixture_strategy / test_data_strategy).
+    suggested_answers:
+      - "tests/conftest.py (fixtures) + tests/factories.py (builders)"
+      - "tests/conftest.py only"
+      - "No shared deliverables — inline per test"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: high
+
+  - theme: global_policy
+    id: test_file_convention
+    schema_path: test_file_convention
+    question: "Where do generated test files live? (path template)"
+    hint: >
+      v2.0, SK-09. A path TEMPLATE, not per-test data — the `task` skill derives
+      each test task's target_files[0] from it. The default (one file per TST,
+      grouped by container and component) is the corpus-blessed layout; only
+      override for an existing repo with its own convention.
+    suggested_answers:
+      - "tests/<container>/<component_snake>/test_<tst_id_snake>.py"
+      - "tests/test_<component_snake>.py (one file per component)"
+    free_text_allowed: true
+    required: false
+    confidence_field: false
+    importance: med
+
+  - theme: global_policy
     id: ci_integration
     schema_path: ci_integration
     question: "How do the tiers run in CI, and which tiers gate a merge?"
@@ -399,7 +439,8 @@ questions:
   #   for each candidate system test (from Phase 3 + user-added):
   #     1. propose:   show tier, draft name, what it covers (WKF/FR/NFR/ACR)
   #     2. challenge: confirm scope (involves_containers) + tier choice
-  #     3. detail:    fill directives, setup, acceptance, priority
+  #     3. detail:    fill directives, setup, acceptance (+ gating for an
+  #                   out-of-band eval; priority is retired — D2)
   #     4. approve:   confirm the test; set status: confirmed
   #     5. next
   #   then: run the scope-completeness sweep + per-feature sufficiency check
@@ -495,19 +536,10 @@ questions:
     confidence_field: false
     importance: critical
 
-  - theme: system_suite
-    id: priority
-    schema_path: test.priority
-    question: "Priority — must, should, or could?"
-    hint: "Lets `task` and the codegen heal-loop order test work. `must` ⇒ part of the MVP exit gate."
-    suggested_answers:
-      - must
-      - should
-      - could
-    free_text_allowed: false
-    required: true
-    confidence_field: false
-    importance: critical
+  # RETIRED (D2, 2026-07-16): the per-test `priority` question. The priority
+  # paradigm is retired pipeline-wide — every consumer is built whole by
+  # /sdlc:code, so a must/should/could split has no downstream reader. Old
+  # artifacts carrying `priority` still parse (accepted-and-ignored).
 
   - theme: system_suite
     id: setup
@@ -717,21 +749,24 @@ questions:
     importance: critical
 
   - theme: container_suite
-    id: targets_work_unit
-    schema_path: test.targets_work_unit
-    question: "Which component work unit does this test exercise (work_units[].name)?"
+    id: targets_work_units
+    schema_path: test.targets_work_units
+    question: "Which component work unit(s) does this test exercise (work_units[].name list)?"
     hint: >
-      The ATOMIC test grain. A unit test targets one work unit (work_units[].name
-      — name-addressed, no id family) of its component_ref in
-      ARCH__<container>.yaml — mirroring how the `task` skill slices one task per
-      work_unit. Seed ONE unit test per component work unit so the suite is
-      callable-granular. Every component work unit SHOULD be exercised by a test
-      (advisory work-unit-coverage warning otherwise) or deferred via a WRN-NNN.
-      Validated ⊆ the component_ref's work_units[].name (component_ref required
-      when set — names are unique only within a component).
+      THE SUBJECT SEAM (v2.0, SK-06). A unit test names the work unit(s)
+      (work_units[].name — name-addressed, no id family) of its component_ref in
+      ARCH__<container>.yaml that it exercises — usually ONE (mirroring how the
+      `task` skill slices one task per work_unit); a gate-style test may
+      legitimately name two. The `task` skill wires each test task's depends_on
+      from this list, so for unit-tier tests it is REQUIRE-OR-DEFER at
+      status: complete (>= 2.0): name the subject(s), or defer this tst_id via a
+      WRN-NNN. Seeded tests carry it from birth (one unit test per component
+      work unit); a hand-added test must answer here or defer. Validated ⊆ the
+      component_ref's work_units[].name (component_ref required when set — names
+      are unique only within a component).
     suggested_answers: []
     free_text_allowed: true
-    required: false
+    required: true
     confidence_field: false
     importance: high
 
@@ -793,19 +828,8 @@ questions:
     confidence_field: false
     importance: critical
 
-  - theme: container_suite
-    id: priority
-    schema_path: test.priority
-    question: "Priority — must, should, or could?"
-    hint: "`must` tests are part of the container's done-gate; `should`/`could` can land in a later pass."
-    suggested_answers:
-      - must
-      - should
-      - could
-    free_text_allowed: false
-    required: true
-    confidence_field: false
-    importance: critical
+  # RETIRED (D2, 2026-07-16): the per-test `priority` question — see the
+  # system_suite note above.
 
   - theme: container_suite
     id: fixtures

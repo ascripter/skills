@@ -3,7 +3,38 @@
 Skills touched: **test**, **task**. Findings: SK-06, SK-07, SK-08, SK-09, SK-10 (note),
 SK-11, SK-16. Corpus lineage: **F21** (the audit BLOCKER), **F22**, **F23(ii-edge)(iv)**,
 the 191+8 placement-advisory baseline.
-Status: **open**. Line numbers = 0.3.6; re-locate at HEAD.
+Status: **EXECUTED 2026-07-19** (see execution ledger; deviations recorded there
+and in the reconciliation note below).
+
+> **Reconciliation note (2026-07-19, pre-execution re-baseline against the refreshed
+> AICF corpus):**
+> - **Corpus versions are self-stamped above the stock schemas** — TEST-STRATEGY
+>   system 1.6, `__aicf-cli` **1.9** (191 tests; 163 unit-tier; ZERO
+>   `targets_work_unit` fields), `__build-sandbox` 1.3; TASKS containers 1.8/1.9.
+>   Step 1b's gate "next test_strategy_container_version" (= 1.3 stock) would
+>   hard-fail the corpus with ~163 errors. **Redesigned gate: blocking at
+>   version >= 2.0 AND `meta_corpus_dialect` false** (dialect keeps
+>   covers∩implements as its coverage mechanism — SK-10/step 1e); below 2.0 or in
+>   dialect mode the rule is a warning. See overview convention #3 amendment.
+> - **The stock test validator currently FAILS the corpus** — exit 1 with exactly
+>   224 missing-`priority` errors (the corpus deleted per-TST priority at its
+>   v1.8, PLAN1-D1) + 222 work-unit-coverage advisories. Step 3c (D2 test-side)
+>   flips the corpus baseline **red → green**; verification below updated.
+> - **Step 5b's four cross-checks land as UNGATED warnings** (convention #3:
+>   warn-level needs no version gate; a "next tasks_container_version" gate = 1.6
+>   would be already-open on the 1.8/1.9 corpus anyway). All four are no-ops on
+>   the corpus: no `targets_work_units`, no `test_infrastructure` kind (its
+>   TSK-414 is `kind: implementation` with `target_files: ["tests/"]`), no
+>   `gating:` fields, and the scaffolds already carry the cross-file edge
+>   (`depends_on: ["TASKS/TSK-001"]`, PLAN4-repaired).
+> - **Placement collapse mechanics (step 5c):** the corpus's 199 advisories =
+>   191 `kind: test` (targets under `tests/`) + **8 `kind: integration`** whose
+>   targets legitimately sit in ANOTHER component's `code_location` (seam files,
+>   e.g. TSK-215→`src/aicf/core/graphs/pipeline.py`). The test root fixes the
+>   191; the 8 need the integration kind to accept the union of ALL components'
+>   code_locations.
+> - SPLAN2 took `tasks_container_version` 1.5; the task side of this plan adds no
+>   new blocking gate, so 1.5 stays (the new kind is additive vocabulary).
 
 ## Why (the one-paragraph story)
 
@@ -166,9 +197,43 @@ c. **Placement check learns the test root** (SK-09): in the check-16 block
 
 ## Execution ledger
 
-- [ ] 1 test subject seam (schema+validator+questions+discovery)
-- [ ] 2 test gating flag + marker contract
-- [ ] 3 test shared_infrastructure + D2 per-TST priority removal
-- [ ] 4 test placement convention
-- [ ] 5 task consumption (⚠A resolved: **(i) new `kind: test_infrastructure`**, owner 2026-07-19) + 4 new checks + placement test-root
-- [ ] 6 fixtures/evals/versions · verification suite green
+- [x] 1 test subject seam · plural `targets_work_units` + singular alias (warns at
+      >= 2.0); check 12 require-or-defer BLOCKS at >= 2.0, WARNS below.
+      **Deviation:** in `meta_corpus_dialect` mode check 12 is SILENT (not
+      advisory) — the per-unit work-unit-coverage advisory (check 11, 222 corpus
+      warnings) already carries the wiring signal; a per-test twin would restate
+      it 163×. Discovery seed + question updated to plural require-or-defer.
+- [x] 2 test gating flag · `gating`/`non_gating_marker` on both test shapes; two
+      warn-advisories; consumption contract in schema comment +
+      `coverage-and-defer.md` ("Non-gating tests: the marker contract").
+- [x] 3 shared_infrastructure (system + container override) + emptiness advisory
+      + item-shape check; D2 per-TST priority removal — **corpus test validator
+      flipped exit 1 (224 missing-priority errors) → exit 0**; new
+      `global_policy` interview questions for both new fields.
+- [x] 4 test_file_convention carrier (system + container override; type-check
+      only) · both test schemas bumped to **2.0**.
+- [x] 5 task consumption · new `kind: test_infrastructure` (⚠A) in
+      CONTAINER_KINDS + FILE_PRODUCING_KINDS, scaffold-like exemptions,
+      schedules cleanly through topo_order; checks #27/#28/#29/#30 as **ungated
+      warnings** (deviation from the "version-gated" parenthetical — see
+      reconciliation note); placement advisory kind-aware (test root for
+      test/test_infrastructure, any-component union for integration) — **corpus
+      placement advisories 199 → 0 (task warnings 207 → 8)**;
+      `tasks_container_version` stays 1.5; generation rules in
+      `granularity-and-ordering.md` + `task-discovery.md` + SKILL.md kind table.
+- [x] 6 fixtures/evals · test `_smoke/10_seam_v2_block` (exit 1) +
+      `11_v2_valid` (exit 0, multi-subject + legacy-alias warn + gating:false +
+      shared_infrastructure); fixture 05 (v1.0) doubles as the sub-2.0
+      warn-only proof; task `_smoke/10_test_wiring` fires all five #27-#30
+      warnings at exit 0; test evals: prompt canaries + S13 flipped to
+      no-priority, new C29 seam assertion; gold `TEST-STRATEGY__backend-api`
+      migrated to 2.0 (priority stripped, plural subjects) and **TST ids
+      renumbered 006-013 — pre-existing defect: the gold's 001-008 collided
+      with the staged system file's 001-005 under the global-uniqueness gate**
+      (grader self-test combo now exit 0). Verification: 11 test + 9 task
+      smoke fixtures at documented codes (bare $?); task evals SELFTEST PASS;
+      corpus test exit 0 (225 warnings = 222 work-unit-coverage + 3 true-positive
+      shared-infra), corpus task exit 0 (8 known warnings); topo_order
+      --scope all exit 0 + --emit packet unchanged.
+      (`work_units_style_selftest.py` still fails on its ARCH fixture-19 arm —
+      pre-existing, owned by SPLAN3 step 6; task-side arms pass.)

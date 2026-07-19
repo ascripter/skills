@@ -1,0 +1,38 @@
+# INVALID pair (with the sibling container file): stock mode at container
+# version 2.0 — the unit-tier TST-002 names no targets_work_units and no
+# WRN-NNN defers its tst_id, so check 12 (test->subject seam) BLOCKS.
+# Expect: [FAIL], exit 1.
+metadata:
+  test_strategy_version: "2.0"
+  last_updated: "2026-07-19T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 10101010-1010-1010-1010-101010101010
+  status: complete
+test_approach:
+  pyramid_targets: {unit: "~70%", integration: "~20%", e2e: "~10%"}
+coverage_threshold:
+  line_pct: 80.0
+mock_policy: "Mock at process/network boundaries; real in-process deps otherwise."
+fixture_strategy: "Data factories."
+shared_infrastructure:
+  - path: tests/conftest.py
+    purpose: "Boundary mocks + app fixture."
+    realizes: [mock_policy]
+  - path: tests/factories.py
+    purpose: "Data factories for every persisted entity."
+    realizes: [fixture_strategy]
+tests:
+  - tst_id: TST-001
+    name: "Sign-up lands on dashboard (e2e)"
+    tier: e2e
+    description: "Drives the full sign-up workflow across web + backend."
+    directives:
+      - "Arrange: fresh DB; web and backend running."
+      - "Act: submit the sign-up form."
+      - "Assert: the dashboard renders with the new user."
+    covers: [WKF-001]
+    involves_containers: [web, backend]
+    acceptance: "After sign-up, the dashboard shows the authenticated user's name."
+    status: confirmed
+container_strategies:
+  - {container_id: backend, file_path: docs/TEST-STRATEGY__backend.yaml}

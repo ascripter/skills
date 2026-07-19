@@ -68,8 +68,35 @@ Default edges to propose (the user can override):
 
 - every container task `depends_on` that container's `scaffold` task;
 - every container `scaffold` `depends_on` the system repo `scaffold`
-  (`TASKS/TSK-NNN`) — cross-file;
-- a `test` task `depends_on` the `implementation` task whose code it exercises;
+  (`TASKS/TSK-NNN`) — cross-file (validator check #29 warns when missing);
+- a `test` task `depends_on` the impl task(s) whose `target_symbol` appears in
+  its TST's `targets_work_units` — the test→subject seam, read STRUCTURALLY
+  from TEST-STRATEGY (v2.0 carries it per unit-tier test), never guessed from
+  prose. These must be DIRECT edges: the code skill pairs each impl task with
+  "the test task(s) whose depends_on reaches it" in one worker, so routing the
+  edge through a per-component absorber validates green but pairs every test
+  with the wrong worker (the corpus needed a 191-row hand rewire — PLAN4).
+  Validator check #27 warns on the miss. Plus the container's
+  `test_infrastructure` task (below);
+- when TEST-STRATEGY declares `shared_infrastructure`, emit **ONE
+  `kind: test_infrastructure` task per container**: `target_files` = the
+  common directory pin (e.g. `["tests/"]`), description embeds the
+  mock_policy + fixture_strategy texts **verbatim** (both levels: system +
+  container override) and enumerates the declared file set; `depends_on` = the
+  container scaffold + every schema/module-kind impl task (factories construct
+  every artifact type — corpus worked example TSK-414: deps = scaffold + all
+  26 schema modules, giving every test transitive schema reach); every
+  `kind: test` task depends on it (check #28 warns otherwise). No
+  component_ref/target_symbol — the kind is scaffold-like;
+- a `test` (and `test_infrastructure`) task's `target_files` derive from the
+  TEST-STRATEGY `test_file_convention` template (default
+  `tests/<container>/<component_snake>/test_<tst_id_snake>.py`; the placement
+  advisory validates against its root, not the component's code_location);
+- for each `gating: false` TST, the test task carries the apply-the-marker
+  directive (via its embedded test_spec) and the SYSTEM scaffold task owns
+  marker registration + `addopts` exclusion in the repo-root test config —
+  single-homed; the conftest registers nothing (check #30 warns on either
+  half missing);
 - an `integration` task `depends_on` both components/containers it wires — AND
   the impl task of every work_unit its description/`outputs` NAMES as a callee.
   Naming a callable you don't depend on is a scheduling lie: the integration

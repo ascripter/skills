@@ -58,8 +58,9 @@ Both suites are `critical synthesis: true`. Run each candidate test through:
    in the whole interview for a user who isn't a test engineer. Full contract:
    `references/explaining-choices.md` §7.
 3. **detail** — fill `directives` (the arrange/act/assert sketch the codegen
-   agent follows), `setup`, `priority`, `acceptance`, plus `fixtures`/`mocks`
-   for container tests.
+   agent follows), `setup`, `acceptance`, plus `fixtures`/`mocks` for
+   container tests, and `gating: false` + its marker directive for an
+   out-of-band eval. (`priority` is retired — D2.)
 4. **approve** — set the test's `status: confirmed`; persist state.
 5. **next** — move to the next candidate.
 
@@ -68,10 +69,10 @@ the **coverage check** — both described in `coverage-and-defer.md`.
 
 ## Batching the cheap fields
 
-Within one test's `detail` step you may batch `priority` + `setup` +
-`acceptance` into a single AskUserQuestion call (3 questions) to keep the
-interview brisk. Never batch across two different tests — the per-item
-boundary is what makes EXIT/resume clean.
+Within one test's `detail` step you may batch `setup` + `acceptance` (+
+`fixtures`/`mocks`) into a single AskUserQuestion call to keep the interview
+brisk. Never batch across two different tests — the per-item boundary is what
+makes EXIT/resume clean.
 
 ## State after every step
 

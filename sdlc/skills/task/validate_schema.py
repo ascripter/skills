@@ -83,6 +83,26 @@ Validates:
          module task (#24); implementation task whose description enumerates
          multiple backticked paths while pinning one file (#25); integration
          task naming a callee target_symbol it doesn't depend on (#26).
+    8. Test-wiring checks (SPLAN1; all WARN-level, ungated — they never flip
+       an exit code):
+       - #27 test-subject reachability: a kind:test task's DIRECT depends_on
+         reaches an impl task for each work unit its TST names in
+         targets_work_units (the code skill pairs test+impl workers through
+         that edge; fires only when the TST carries subjects).
+       - #28 infra wiring: when the container declares a kind:
+         test_infrastructure task (the ONE builder of TEST-STRATEGY's
+         shared_infrastructure deliverables; scaffold-like exemptions,
+         directory target_files allowed), every kind:test task depends on it.
+       - #29 scaffold cross-file edge: the container scaffold depends on the
+         system scaffold (TASKS/TSK-NNN) when TASKS.json exists.
+       - #30 eval-marker ownership: a gating: false TST's test task carries
+         the exclusion-marker directive, and a system scaffold task owns
+         marker registration + addopts exclusion (single-homed).
+       Placement (#21-adjacent, SK-09): kind test/test_infrastructure
+       target_files validate against the TEST-STRATEGY test_file_convention
+       root (default tests/), not the component's code_location; a
+       kind:integration seam task may write within ANY component's
+       code_location.
 
 VALIDATOR<->SCHEDULER CONTRACT (K1/SK-19): this validator and the code skill's
 topo_order.py must always AGREE on what makes a graph schedulable. The blocking
@@ -161,6 +181,12 @@ class TaskStatus(str, Enum):
 CONTAINER_KINDS = {
     "scaffold", "implementation", "test", "integration", "migration", "config",
     "design", "chore",
+    # v1.5+ (SPLAN1, SK-08/⚠A): the container's ONE shared-test-infrastructure
+    # task — builds the TEST-STRATEGY `shared_infrastructure` deliverables
+    # (conftest, factories, fake helpers). Scaffold-like exemptions: no
+    # component_ref/target_symbol pin, directory target_files allowed
+    # (["tests/"]); every kind:test task depends on it (check #28).
+    "test_infrastructure",
 }
 SYSTEM_KINDS = {
     "scaffold", "integration", "test", "config", "migration", "design",
@@ -179,7 +205,8 @@ CONTRACT_SOURCES = {"work_unit", "api_operation"}
 
 # Kinds whose deliverable is (usually) files — schema #21 advisory: they should
 # name their write targets (target_files, or path-shaped outputs).
-FILE_PRODUCING_KINDS = {"scaffold", "test", "migration", "config", "design"}
+FILE_PRODUCING_KINDS = {"scaffold", "test", "migration", "config", "design",
+                        "test_infrastructure"}
 
 # Embedded per-task specifics (interface_contract / test_spec) became REQUIRED
 # at this artifact version; older artifacts get warnings instead of errors.
@@ -708,17 +735,72 @@ def load_test_coverage(path: Path) -> Tuple[Set[str], Set[str], List[str]]:
     for t in raw.get("tests") or []:
         if not isinstance(t, dict):
             continue
-        wu = t.get("targets_work_unit")
-        if isinstance(wu, str) and wu.strip():
-            live_units.add(wu.strip())
-        elif isinstance(wu, list):
-            live_units |= {str(x).strip() for x in wu if str(x).strip()}
+        # v2.0 plural + legacy singular alias — read both, union.
+        for key in ("targets_work_units", "targets_work_unit"):
+            wu = t.get(key)
+            if isinstance(wu, str) and wu.strip():
+                live_units.add(wu.strip())
+            elif isinstance(wu, list):
+                live_units |= {str(x).strip() for x in wu if str(x).strip()}
         for c in t.get("covers") or []:
             live_covers.add(str(c).strip().upper())
     for w in raw.get("test_strategy_warnings") or []:
         if isinstance(w, str):
             defer_warnings.append(w)
     return live_units, live_covers, defer_warnings
+
+
+def load_test_wiring(path: Path) -> Dict[str, dict]:
+    """tst_id -> {subjects, gating, marker} from a TEST-STRATEGY(.__cid).yaml.
+
+    * subjects — the TST's targets_work_units (plural, v2.0) unioned with the
+      legacy singular targets_work_unit: the test->subject seam checks #27
+      (reachability) key on.
+    * gating / marker — the SK-07 non-gating flag + its pytest marker, for the
+      eval-marker ownership check #30.
+    """
+    out: Dict[str, dict] = {}
+    raw = _safe_yaml(path)
+    if raw is None:
+        return out
+    for t in raw.get("tests") or []:
+        if not isinstance(t, dict) or not t.get("tst_id"):
+            continue
+        subjects: List[str] = []
+        for key in ("targets_work_units", "targets_work_unit"):
+            wu = t.get(key)
+            vals = [wu] if isinstance(wu, str) else (wu if isinstance(wu, list) else [])
+            for v in vals:
+                v = str(v).strip()
+                if v and v not in subjects:
+                    subjects.append(v)
+        out[str(t["tst_id"]).upper()] = {
+            "subjects": subjects,
+            "gating": t.get("gating"),
+            "marker": t.get("non_gating_marker") or "eval_nongating",
+        }
+    return out
+
+
+def load_test_file_root(docs_dir: Path, cid: Optional[str]) -> str:
+    """The directory test-task target_files live under, derived from the
+    TEST-STRATEGY `test_file_convention` template (container override first,
+    then system, then the default `tests/`). The root is the literal prefix
+    before the first `<placeholder>`, cut back to a whole path segment."""
+    tmpl: Optional[str] = None
+    if cid:
+        raw = _safe_yaml(docs_dir / f"TEST-STRATEGY__{cid}.yaml")
+        if isinstance(raw, dict) and isinstance(raw.get("test_file_convention"), str):
+            tmpl = raw["test_file_convention"]
+    if tmpl is None:
+        raw = _safe_yaml(docs_dir / "TEST-STRATEGY.yaml")
+        if isinstance(raw, dict) and isinstance(raw.get("test_file_convention"), str):
+            tmpl = raw["test_file_convention"]
+    if not tmpl or not tmpl.strip():
+        return "tests/"
+    head = tmpl.strip().split("<", 1)[0]
+    root = head.rsplit("/", 1)[0] if "/" in head else ""
+    return (root.rstrip("/") + "/") if root else "tests/"
 
 
 class UxInfo:
@@ -1291,6 +1373,113 @@ def check_v15_advisories(cm: TasksContainer, label: str) -> List[str]:
     return warns
 
 
+def check_test_wiring(
+    m: TasksContainer, label: str, docs_dir: Path, cid: Optional[str]
+) -> List[str]:
+    """Checks #27-#30 (SPLAN1, all WARN-level and ungated — they can never flip
+    an exit code, so no version gate is needed; convention #3).
+
+    #27 test-subject reachability — a kind:test task whose TST names its
+        subject(s) in targets_work_units must carry a DIRECT depends_on edge to
+        an impl task building each subject (the code skill's worker pairing
+        reads direct deps). Only fires when the TST carries subjects.
+    #28 infra wiring — when the container has a test_infrastructure task,
+        every kind:test task depends on it (shared fixtures first).
+    #29 scaffold cross-file edge — when the system TASKS.json exists, the
+        container scaffold depends on the system scaffold (TASKS/TSK-NNN).
+    #30 eval-marker ownership — a gating: false TST's test task mentions the
+        exclusion marker (description/acceptance/test_spec), and some system
+        scaffold task owns marker registration + addopts exclusion.
+    """
+    warns: List[str] = []
+    wiring = load_test_wiring(docs_dir / f"TEST-STRATEGY__{cid}.yaml") if cid else {}
+    impl_by_symbol: Dict[str, Set[str]] = {}
+    infra_ids: Set[str] = set()
+    for t in m.tasks or []:
+        if t.kind == "implementation" and (t.target_symbol or "").strip() and t.tsk_id:
+            impl_by_symbol.setdefault(t.target_symbol.strip(), set()).add(str(t.tsk_id))
+        if t.kind == "test_infrastructure" and t.tsk_id:
+            infra_ids.add(str(t.tsk_id))
+
+    sys_tasks_present = (docs_dir / "TASKS.json").exists()
+    for i, t in enumerate(m.tasks or []):
+        # 29 — container scaffold's cross-file edge to the system scaffold.
+        if t.kind == "scaffold" and sys_tasks_present:
+            if not any(str(d).strip().upper().startswith("TASKS/") for d in (t.depends_on or [])):
+                warns.append(
+                    f"{label} tasks[{i}] ({t.tsk_id}) is the container scaffold but "
+                    f"depends_on has no cross-file edge to the system scaffold "
+                    f"(TASKS/TSK-NNN) - the repo skeleton must exist first (check 29)"
+                )
+        if t.kind != "test":
+            continue
+        deps = {str(d).strip().split("/")[-1] for d in (t.depends_on or [])}
+        # 28 — every test task depends on the container's infra task.
+        if infra_ids and not (infra_ids & deps):
+            warns.append(
+                f"{label} tasks[{i}] ({t.tsk_id}) is kind:test but does not depend "
+                f"on the test-infrastructure task ({', '.join(sorted(infra_ids))}) - "
+                f"the shared fixtures/mocks it imports must be built first (check 28)"
+            )
+        for ref in t.implements_tests or []:
+            w = wiring.get(str(ref).strip().upper())
+            if not w:
+                continue
+            # 27 — direct edge to each subject's impl task.
+            for unit in w["subjects"]:
+                expected = impl_by_symbol.get(unit, set())
+                if expected and not (expected & deps):
+                    warns.append(
+                        f"{label} tasks[{i}] ({t.tsk_id}) implements {ref} whose "
+                        f"subject work unit '{unit}' is built by "
+                        f"{', '.join(sorted(expected))}, but depends_on has no "
+                        f"direct edge to it - the code skill pairs test+impl "
+                        f"workers through that edge (check 27)"
+                    )
+            # 30 (test-task side) — the marker directive travelled along.
+            if w["gating"] is False:
+                marker = str(w["marker"])
+                parts: List[str] = [t.description or ""] + [str(x) for x in (t.acceptance or [])]
+                if t.test_spec is not None:
+                    parts += [str(x) for x in (t.test_spec.directives or [])]
+                    parts.append(str(t.test_spec.acceptance or ""))
+                if marker not in " ".join(parts):
+                    warns.append(
+                        f"{label} tasks[{i}] ({t.tsk_id}) implements non-gating "
+                        f"{ref} but never mentions its exclusion marker "
+                        f"'{marker}' - the codegen worker needs the "
+                        f"apply-the-marker directive (check 30)"
+                    )
+
+    # 30 (scaffold side) — marker registration/exclusion is single-homed in a
+    # system scaffold task (pytest markers + addopts in the repo-root config).
+    nongating_markers = sorted(
+        {str(w["marker"]) for w in wiring.values() if w["gating"] is False}
+    )
+    if nongating_markers and sys_tasks_present:
+        sysraw = _safe_json(docs_dir / "TASKS.json") or {}
+        for mk in nongating_markers:
+            owned = False
+            for st in sysraw.get("tasks") or []:
+                if isinstance(st, dict) and st.get("kind") == "scaffold":
+                    blob = " ".join(
+                        [str(st.get("description") or "")]
+                        + [str(x) for x in st.get("acceptance") or []]
+                        + [str(x) for x in st.get("outputs") or []]
+                    )
+                    if mk in blob:
+                        owned = True
+                        break
+            if not owned:
+                warns.append(
+                    f"{label} non-gating tests use marker '{mk}' but no system "
+                    f"scaffold task mentions its registration/exclusion - the "
+                    f"system scaffold owns [tool.pytest.ini_options] markers + "
+                    f"addopts = -m \"not {mk}\" (check 30)"
+                )
+    return warns
+
+
 # =============================================================================
 # Union dependency-graph helpers (the "stitch")
 # =============================================================================
@@ -1514,6 +1703,12 @@ def check_container(
     meta_mode = load_meta_corpus_dialect(docs_dir / "TEST-STRATEGY.yaml")
     tst_rx = _TST_SHARDED_RE if meta_mode else _TST_RE
     tst_form = "TST-<PREFIX>-NNN" if meta_mode else "TST-NNN"
+    # SK-09 placement inputs: the test root + the union of every component's
+    # code_location bases (for kind:integration seam tasks).
+    test_root = load_test_file_root(docs_dir, cid)
+    all_code_bases = [
+        b for cl in ac.component_code_location.values() for b in _code_location_bases(cl)
+    ]
 
     allowed_reqs = (arch.implements.get(cid, set()) if cid else set()) | ac.implements
 
@@ -1552,18 +1747,41 @@ def check_container(
                 realized_units.add((t.component_ref, sym))
             key = (t.component_ref or "", sym)
             symbol_task_count[key] = symbol_task_count.get(key, 0) + 1
-        # target_files grounding (advisory) — a component-scoped task's write
-        # targets should sit within the owning component's code_location.
-        if t.component_ref and t.target_files:
-            bases = _code_location_bases(ac.component_code_location.get(t.component_ref, []))
-            if bases:
+        # target_files grounding (advisory) — write targets should sit where
+        # the task's kind says they belong (SPLAN1/SK-09 rework):
+        #   * kind test / test_infrastructure -> under the test root derived
+        #     from TEST-STRATEGY's test_file_convention (default tests/) —
+        #     NOT the component's code_location (a test never lives there);
+        #   * kind integration -> within ANY component's code_location (a seam
+        #     task legitimately writes into the other component's files);
+        #   * everything else component-scoped -> the owning component's
+        #     code_location, as before.
+        if t.target_files and t.kind in ("test", "test_infrastructure"):
+            for tf in t.target_files:
+                if not _path_within_any(tf, [test_root.rstrip("/")]):
+                    warns.append(
+                        f"{label} tasks[{i}] target_file '{tf}' is outside the "
+                        f"test root '{test_root}' (test_file_convention) — "
+                        f"confirm placement"
+                    )
+        elif t.component_ref and t.target_files:
+            if t.kind == "integration" and all_code_bases:
                 for tf in t.target_files:
-                    if not _path_within_any(tf, bases):
+                    if not _path_within_any(tf, all_code_bases):
                         warns.append(
                             f"{label} tasks[{i}] target_file '{tf}' is outside "
-                            f"component '{t.component_ref}' code_location "
-                            f"({sorted(set(bases))}) — confirm placement"
+                            f"every component's code_location — confirm placement"
                         )
+            elif t.kind != "integration":
+                bases = _code_location_bases(ac.component_code_location.get(t.component_ref, []))
+                if bases:
+                    for tf in t.target_files:
+                        if not _path_within_any(tf, bases):
+                            warns.append(
+                                f"{label} tasks[{i}] target_file '{tf}' is outside "
+                                f"component '{t.component_ref}' code_location "
+                                f"({sorted(set(bases))}) — confirm placement"
+                            )
         # Scope integrity: an implementation task targets a component or a contract.
         if t.kind == "implementation" and not t.component_ref and not t.touches_operations:
             errs.append(f"{label} tasks[{i}] is kind:implementation but is scoped to neither a component (component_ref) nor a contract (touches_operations)")
@@ -1986,6 +2204,7 @@ def validate_all(path: Path) -> int:
         warnings += [f"{cp.name}: {w}" for w in check_file_producing_targets(cm.tasks or [], cp.stem)]
         warnings += [f"{cp.name}: {w}" for w in check_embedded_drift(cm, cid, docs_dir)]
         warnings += [f"{cp.name}: {w}" for w in check_v15_advisories(cm, cp.stem)]
+        warnings += [f"{cp.name}: {w}" for w in check_test_wiring(cm, cp.stem, docs_dir, cid)]
         c_errs, c_warns = check_container(
             cm, fams, arch, docs_dir, ux, api, data_ents, data_present, design
         )

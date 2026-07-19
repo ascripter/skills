@@ -1,0 +1,24 @@
+# Minimal STOCK system strategy (no meta_corpus_dialect) for the test-wiring
+# fixture. The task validator reads the dialect flag + test_file_convention
+# from here; no system tests needed.
+metadata:
+  test_strategy_version: "2.0"
+  last_updated: "2026-07-19T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: "10101010-bbbb-1010-1010-101010101003"
+  status: "complete"
+test_approach:
+  pyramid_targets: {unit: "~80%", integration: "~20%"}
+coverage_threshold:
+  line_pct: 80.0
+mock_policy: "Real in-process deps; no network in unit tests."
+fixture_strategy: "Shared factories in tests/factories.py."
+shared_infrastructure:
+  - path: tests/factories.py
+    purpose: "Job/result factories."
+    realizes: [fixture_strategy]
+tests: []
+container_strategies:
+  - {container_id: svc, file_path: docs/TEST-STRATEGY__svc.yaml}
+test_strategy_warnings:
+  - "WRN-001: no cross-container workflow exists; the system suite is empty by design."

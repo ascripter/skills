@@ -73,7 +73,13 @@ metadata:                                  # REQUIRED
                                            #   introduced by 1.5 fire at >= 1.5 only.
                                            #   The validator gates each presence check on the
                                            #   version that introduced it, so older artifacts
-                                           #   warn instead of failing
+                                           #   warn instead of failing.
+                                           #   SPLAN1 (2026-07-19, still 1.5 — additive
+                                           #   vocabulary + warn-only checks need no bump):
+                                           #   new kind test_infrastructure; test-wiring
+                                           #   checks #27-#30 (ungated warnings); the
+                                           #   placement advisory is kind-aware (test root /
+                                           #   any-component for integration seams)
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-task                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -111,10 +117,21 @@ tasks:                                      # REQUIRED — list[Task], non-empty
   - tsk_id: TSK-001                         # REQUIRED — unique within THIS file
     title: <short imperative phrase>        # REQUIRED — e.g. "Implement the auth service"
     kind:                                   # REQUIRED — one of:
-      # scaffold | implementation | test | integration | migration | config | design | chore
+      # scaffold | implementation | test | test_infrastructure | integration | migration | config | design | chore
       #   scaffold       — container skeleton: package layout, manifest, entrypoint
       #   implementation — implement a component's behaviour (the bulk of the work)
       #   test           — author the test(s) realizing one or more TST-NNN
+      #   test_infrastructure — the container's ONE shared-test-infrastructure
+      #                    task (SPLAN1/⚠A): builds the TEST-STRATEGY
+      #                    `shared_infrastructure` deliverables (conftest,
+      #                    factories, fake helpers), embedding the mock_policy +
+      #                    fixture_strategy texts verbatim in its description.
+      #                    Scaffold-like exemptions: no component_ref /
+      #                    target_symbol pin; a DIRECTORY target_files (e.g.
+      #                    ["tests/"]) is the norm. depends_on = the container
+      #                    scaffold + every schema/module-kind impl task
+      #                    (factories construct every artifact type); every
+      #                    kind:test task depends on it (check 28).
       #   integration    — wire two components together / a within-container call
       #   migration      — schema / persistence / data-migration setup (DDL,
       #                    repository wiring) — the home for entity realization
@@ -472,10 +489,15 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     or functional_structure is headless.
 # 16. target_files grounding — for a kind:implementation task, EXACTLY ONE
 #     target_files entry (blocks complete; the atomic-codegen pin). Plus an advisory
-#     (non-blocking) placement check: for a component-scoped task the entry SHOULD
-#     sit within the owning component's `code_location` directories in
-#     ARCH__<cid>.yaml. Outside ⇒ WARNING (placement drift). Directory-level;
-#     the placement check is skipped when no code_location.
+#     (non-blocking) placement check, kind-aware since SPLAN1 (SK-09):
+#     kind test / test_infrastructure entries SHOULD sit under the test root
+#     derived from TEST-STRATEGY's test_file_convention (default `tests/`) —
+#     never the component's code_location; a kind:integration seam task may
+#     write within ANY component's code_location (it legitimately touches the
+#     other side's files); every other component-scoped task stays within its
+#     OWN component's `code_location` directories in ARCH__<cid>.yaml.
+#     Outside ⇒ WARNING (placement drift). Directory-level; skipped when no
+#     code_location.
 # 17. Coverage / integrity failures force metadata.status: draft (they do not
 #     crash the validator) so partial task graphs remain saveable as drafts.
 # 18. Embedded per-task specifics (VERSION-GATED — each presence check blocks
@@ -537,4 +559,23 @@ task_warnings:                              # OPTIONAL — list of "WRN-NNN: ...
 #     whose description names a sibling impl task's target_symbol that its
 #     depends_on does not include. Naming a callable you don't depend on is a
 #     scheduling lie.
+# 27. Test-subject reachability (advisory, ungated — SPLAN1/SK-11) — a
+#     kind:test task whose TST names subject work unit(s) in
+#     targets_work_units must carry a DIRECT depends_on edge to an impl task
+#     building each subject (target_symbol match). The code skill pairs each
+#     test task with its impl task through direct deps — an absorber-tail
+#     edge validates green but pairs the test with the wrong worker (the
+#     corpus's 191-row PLAN4 rewire). Fires only when the TST carries
+#     subjects; WARNS.
+# 28. Infra wiring (advisory, ungated) — when this file declares a
+#     kind:test_infrastructure task, every kind:test task depends on it (the
+#     shared fixtures/mocks must exist before any test builds). WARNS.
+# 29. Scaffold cross-file edge (advisory, ungated — F23(ii-edge)) — when the
+#     system TASKS.json exists, the container scaffold carries a depends_on
+#     entry on the system scaffold (TASKS/TSK-NNN form). WARNS.
+# 30. Eval-marker ownership (advisory, ungated — SK-07 consumption) — for each
+#     gating: false TST: its test task mentions the exclusion marker
+#     (description / acceptance / test_spec directives), and some system
+#     scaffold task owns marker registration + addopts exclusion (single-homed
+#     in the repo-root test config; the conftest registers nothing). WARNS.
 # =============================================================================

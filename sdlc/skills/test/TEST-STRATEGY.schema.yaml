@@ -26,7 +26,14 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  test_strategy_version: "1.0"             # REQUIRED
+  test_strategy_version: "2.0"             # REQUIRED — 2.0 (2026-07-19, SPLAN1):
+                                           #   D2 per-test `priority` RETIRED;
+                                           #   + gating/non_gating_marker (SK-07),
+                                           #   + shared_infrastructure (SK-08),
+                                           #   + test_file_convention (SK-09).
+                                           #   2.0 (not 1.x) deliberately clears
+                                           #   self-stamped corpus versions — see
+                                           #   the container schema's seam gate.
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-test                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -83,6 +90,32 @@ fixture_strategy_rationale: <string>       # OPTIONAL — why this strategy
 test_data_strategy: <string>              # OPTIONAL — sensitive/large-volume data handling
 
 # ---------------------------------------------------------------------------
+# shared_infrastructure (v2.0, SK-08) — the shared deliverables the mock/
+# fixture/data policy implies (conftest, factories, fake-LLM helper). The
+# `task` skill turns this list into ONE test-infrastructure task per container
+# (kind: test_infrastructure) that every test task depends on; codegen workers
+# import instead of each reinventing the helper. Container files may override
+# (null ⇒ inherit this list). ADVISORY when the policy prose names mocks/
+# stubs/fixtures/factories but this list is empty.
+# ---------------------------------------------------------------------------
+shared_infrastructure:                     # OPTIONAL — list of deliverables
+  - path: tests/conftest.py                # REQUIRED when present — repo-relative
+    purpose: <string>                      # REQUIRED when present — what it provides
+    realizes: [mock_policy]                # REQUIRED when present — ≥1 of
+                                           #   mock_policy | fixture_strategy |
+                                           #   test_data_strategy
+    contents_hint: <string>                # OPTIONAL — for the codegen worker
+
+# ---------------------------------------------------------------------------
+# test_file_convention (v2.0, SK-09) — a path TEMPLATE, not a per-TST field.
+# The `task` skill derives each test task's target_files[0] from it; this
+# validator only type-checks. Container files may override (null ⇒ inherit).
+# ---------------------------------------------------------------------------
+test_file_convention: "tests/<container>/<component_snake>/test_<tst_id_snake>.py"  # OPTIONAL
+                                           #   (the default; one file per TST —
+                                           #   the corpus-blessed PLAN1-D3 layout)
+
+# ---------------------------------------------------------------------------
 # ci_integration / environments — how the tiers run and where. Light here;
 # detailed pipeline config belongs in /sdlc:deploy.
 # ---------------------------------------------------------------------------
@@ -119,7 +152,30 @@ tests:                                      # REQUIRED — list[SystemTest] (may
     involves_containers:                    # REQUIRED — non-empty. container_ids this
       - backend-api                         #   test exercises. Validated against ARCH.
       - web-frontend
-    priority: must | should | could         # REQUIRED
+    # priority: must | should | could       # RETIRED (D2, 2026-07-16) — the
+                                            #   priority paradigm is retired
+                                            #   pipeline-wide. Old artifacts
+                                            #   carrying it still parse
+                                            #   (accepted-and-ignored).
+    gating: true | false                    # OPTIONAL (v2.0, SK-07) — absent/true
+                                            #   ⇒ part of the default suite;
+                                            #   false ⇒ excluded (an out-of-band
+                                            #   eval). Advisory: a gating: false
+                                            #   test's directives must mention
+                                            #   the exclusion marker.
+    non_gating_marker: eval_nongating       # OPTIONAL — pytest marker for
+                                            #   gating: false (default shown).
+                                            #   CONSUMPTION CONTRACT: the task
+                                            #   skill emits an apply-the-marker
+                                            #   directive in the test task; the
+                                            #   SYSTEM SCAFFOLD task owns marker
+                                            #   registration + addopts exclusion
+                                            #   in the repo-root test config
+                                            #   (pytest: [tool.pytest.ini_options]
+                                            #   markers + addopts = -m "not
+                                            #   <marker>"); the conftest registers
+                                            #   nothing. (Corpus worked example:
+                                            #   PLAN4-D3.)
     setup: <string>                         # OPTIONAL — non-obvious setup/teardown
     acceptance: <string>                    # REQUIRED — one machine-checkable pass condition
     status: draft | confirmed               # REQUIRED — interview progress
@@ -189,4 +245,12 @@ test_strategy_warnings:                     # OPTIONAL — list of "WRN-NNN: ...
 # 8.  Upstream status awareness — if PRD/DATA/ARCH metadata.status != complete,
 #     emit a warning (non-blocking; the skill itself refuses to run in that
 #     case).
+# 9.  shared_infrastructure (v2.0, SK-08) — item shape (path + purpose + valid
+#     realizes ≥1) blocks when the field is used; PLUS an ADVISORY at complete
+#     when mock_policy/fixture_strategy prose names mocks/stubs/fixtures/
+#     factories and shared_infrastructure is empty (policy with no named
+#     deliverable — downstream workers each reinvent it).
+# 10. gating advisories (v2.0, SK-07; never block) — a gating: false test whose
+#     directives never mention its exclusion marker gets a reminder; a
+#     gating: false unit-tier test is suspicious (evals are usually e2e).
 # =============================================================================

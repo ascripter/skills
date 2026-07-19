@@ -64,7 +64,7 @@ Drawn from `ARCH.yaml.containers[<id>]` and `docs/ARCH__<id>.yaml`:
   (container- and component-level, structured entries only) must be exercised
   by a test (`targets_failure_mode` / `targets_security_concern`) OR deferred.
 - **Work units (advisory, never blocks).** Every component `work_units[].name`
-  SHOULD be exercised by a test (`targets_work_unit`, with `component_ref` set —
+  SHOULD be exercised by a test (`targets_work_units`, with `component_ref` set —
   unit names are unique only within their component). A gap emits a
   WARNING, not a block — a test strategy is risk-driven, so a trivial work unit
   (a plain getter) may legitimately go untested. Seed one unit test per work
@@ -72,6 +72,14 @@ Drawn from `ARCH.yaml.containers[<id>]` and `docs/ARCH__<id>.yaml`:
   with a `WRN-NNN` that names the unit to silence the warning intentionally.
   (A pre-1.2 `targets_operation` / `OPN-NNN` is a deprecated alias: the
   validator warns and never blocks.)
+- **Test subjects (v2.0, BLOCKS at `complete`).** The mirror of the layer
+  above, per-test instead of per-unit: every **unit-tier** test must name its
+  subject(s) in `targets_work_units` OR be deferred via a `WRN-NNN` naming its
+  `tst_id` (check 12). The seam is what the `task` skill wires each test
+  task's `depends_on` from — a subject-less unit test forces the absorber
+  pattern that cost the corpus a 191-row hand rewire. Blocks only at
+  `test_strategy_container_version >= 2.0`; warns below; silent in the
+  meta-corpus dialect (the per-unit advisory above carries the signal there).
 
 (Container-level `acceptance_criteria` in `ARCH.yaml` and bare-string
 failure-modes/concerns without a stable id are surfaced as seeds but are
@@ -95,7 +103,7 @@ The validator counts the item as covered.
 A **sharded / no-API-layer meta-corpus** (a CLI factory dogfooding these
 skills) may set `meta_corpus_dialect: true` on the **system** strategy file and
 trace coverage with just `covers` + `component_ref` — populating none of the
-per-target fields (`targets_work_unit`, `targets_component`,
+per-target fields (`targets_work_units`, `targets_component`,
 `targets_failure_mode`). A generated app OMITS the flag and keeps the strict
 rules above. In the dialect the validator additionally treats an item as
 covered when:
@@ -152,8 +160,8 @@ is exactly what CLAUDE.md §6a ("paired deferral") forbids.
 So when you defer a test for a behaviour that has real code (a work_unit / an FR
 realized by a callable), **name the behaviour clearly** in the WRN — the
 work_unit name and/or the FR id, not just a `TST-NNN` — so the `task` skill's
-symmetry check (its cross-check #23) can see the deferral and force the matching
-impl task to `priority: could` (or its own deferral). A test deferred for a
+symmetry check (its cross-check #23) can see the deferral and demand a matching
+`task_warnings` deferral of the impl task. A test deferred for a
 purely-structural reason (a process FR with no code, an NFR checked by an
 external tool) has no impl partner and needs no downstream pairing. Reserve test
 deferrals for genuine no-code / elsewhere-covered items — don't defer a test
@@ -201,3 +209,28 @@ the validator prints the exact uncovered ids and forces a FAIL. Either add the
 missing test or defer the id with a reasoned WRN-NNN, then re-validate. A
 `status: draft` artifact lists the same gaps as advisory notes but still exits
 0 — so you can always save partial progress.
+
+---
+
+## Non-gating tests: the marker contract (v2.0, SK-07)
+
+A test that must never block PR CI (an out-of-band eval — real-model LLM-judge
+runs, nightly load probes) sets `gating: false` and is excluded from the
+default suite via ONE pytest marker (`non_gating_marker`, default
+`eval_nongating`). Ownership is split across three artifacts — single-home
+each piece, duplicate nothing (corpus worked example: PLAN4-D3):
+
+- **This strategy (the TST item):** `gating: false`, plus one directive line
+  telling the codegen worker to decorate the test with
+  `@pytest.mark.<marker>`. The validator reminds you when the directive is
+  missing (advisory).
+- **The task graph:** the test task inherits the marker directive via its
+  embedded `test_spec`; the **system scaffold task** owns marker registration
+  + the default exclusion in the repo-root test config (pytest:
+  `[tool.pytest.ini_options] markers` + `addopts = -m "not <marker>"`).
+- **The conftest registers nothing** — registration lives in the root config
+  only, so a plain `pytest` run deselects the evals and the nightly runner
+  opts in with `-m <marker>`.
+
+`gating` is not a coverage mechanism: a `gating: false` test still counts for
+covers/acceptance/risk tracing (the behaviour IS verified — just out-of-band).

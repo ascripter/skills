@@ -1,0 +1,115 @@
+{
+  "metadata": {
+    "tasks_container_version": "1.5",
+    "last_updated": "2026-07-19T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "10101010-bbbb-1010-1010-101010101006",
+    "status": "complete",
+    "changelog": [
+      "1.5 (2026-07-19): Test-wiring smoke fixture (checks #27-#30). Expect [OK] exit 0 with EXACTLY these warnings: #27 on TSK-005 (subject do_work built by TSK-002, edge missing - deps point at the TSK-003 absorber instead), #28 on TSK-005 (no dep on the TSK-004 test-infrastructure task), #29 on TSK-001 (no TASKS/TSK-NNN cross-file edge), #30 on TSK-006 (non-gating TST-102's eval_nongating marker mentioned nowhere) and #30 scaffold-side (no system scaffold task mentions marker registration)."
+    ]
+  },
+  "container_id": "svc",
+  "overview": "Deliberately mis-wired test edges over a correct task inventory: the impl/infra tasks are right, the test wiring is the smell under test.",
+  "tasks": [
+    {
+      "tsk_id": "TSK-001",
+      "title": "Scaffold the svc package",
+      "kind": "scaffold",
+      "description": "Create the src/svc package skeleton and test layout. DELIBERATELY missing the TASKS/TSK-001 cross-file edge (check #29).",
+      "outputs": ["src/svc/__init__.py", "tests/"],
+      "acceptance": ["the package imports"],
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-002",
+      "title": "Implement do_work",
+      "kind": "implementation",
+      "description": "Process one queued job.",
+      "component_ref": "ingest-worker",
+      "target_symbol": "do_work",
+      "unit_kind": "callable",
+      "unit_summary": "Process one queued job.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": ["job: Job"],
+        "output": "Result",
+        "raises": []
+      },
+      "depends_on": ["TSK-001"],
+      "target_files": ["src/svc/worker.py"],
+      "outputs": ["do_work processes a job"],
+      "acceptance": ["a valid job yields a completed result"],
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-003",
+      "title": "Implement aggregate_results",
+      "kind": "implementation",
+      "description": "Aggregate processed job results.",
+      "component_ref": "ingest-worker",
+      "target_symbol": "aggregate_results",
+      "unit_kind": "callable",
+      "unit_summary": "Aggregate processed job results.",
+      "interface_contract": {
+        "source": "work_unit",
+        "inputs": ["results: list[Result]"],
+        "output": "Summary",
+        "raises": []
+      },
+      "depends_on": ["TSK-001", "TSK-002"],
+      "target_files": ["src/svc/agg.py"],
+      "outputs": ["aggregate_results summarizes a batch"],
+      "acceptance": ["a batch of results yields one summary"],
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-004",
+      "title": "Build the shared test infrastructure",
+      "kind": "test_infrastructure",
+      "description": "Build the deliverables TEST-STRATEGY.shared_infrastructure declares. Fixture strategy (verbatim): 'Shared factories in tests/factories.py.' Mock policy (verbatim): 'Real in-process deps; no network in unit tests.' Files: tests/factories.py.",
+      "depends_on": ["TSK-001"],
+      "target_files": ["tests/"],
+      "outputs": ["tests/factories.py"],
+      "acceptance": ["pytest collects with the shared factories importable"],
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-005",
+      "title": "Author TST-101 (do_work unit test)",
+      "kind": "test",
+      "description": "Author the do_work happy-path unit test. MIS-WIRED on purpose: depends on the TSK-003 absorber, not the TSK-002 subject impl (check #27) and not the TSK-004 infra task (check #28).",
+      "component_ref": "ingest-worker",
+      "implements_tests": ["TST-101"],
+      "test_spec": {
+        "tier": "unit",
+        "directives": ["Arrange a queued job; act do_work(); assert the result record."],
+        "acceptance": "do_work returns a completed result for a valid job."
+      },
+      "depends_on": ["TSK-003"],
+      "target_files": ["tests/svc/ingest_worker/test_tst_101.py"],
+      "outputs": ["TST-101 green"],
+      "acceptance": ["the test fails before TSK-002 and passes after"],
+      "status": "confirmed"
+    },
+    {
+      "tsk_id": "TSK-006",
+      "title": "Author TST-102 (aggregation quality eval)",
+      "kind": "test",
+      "description": "Author the non-gating aggregation eval. Correctly wired (subject + infra deps) but never mentions the exclusion marker anywhere (check #30 task-side material - do not name the marker in this description or the check is satisfied by accident).",
+      "component_ref": "ingest-worker",
+      "implements_tests": ["TST-102"],
+      "test_spec": {
+        "tier": "integration",
+        "directives": ["Run the aggregator on the golden batch; grade the summary."],
+        "acceptance": "Golden-batch aggregate matches the rubric."
+      },
+      "depends_on": ["TSK-003", "TSK-004"],
+      "target_files": ["tests/svc/ingest_worker/test_tst_102.py"],
+      "outputs": ["TST-102 green (nightly)"],
+      "acceptance": ["the eval runs out-of-band"],
+      "status": "confirmed"
+    }
+  ],
+  "task_warnings": []
+}

@@ -1,0 +1,19 @@
+# Shared ARCH container fixture for the v2.0 seam fixtures (10/11): the
+# users-service declares two work_units so targets_work_units has names to
+# resolve against.
+container_id: backend
+archetype: backend-api
+overview: "User-management backend API."
+components:
+  - component_id: users-service
+    archetype: service
+    purpose: "Create and read users."
+    responsibilities: ["Validate and persist a new user.", "Fetch a user by id."]
+    implements_requirements: [FR-001]
+    acceptance_criteria: ["create returns 201 with the new user id"]
+    work_units:
+      - name: create_user
+        summary: "Validate and persist a new user."
+      - name: read_user
+        summary: "Fetch a user by id."
+    status: confirmed

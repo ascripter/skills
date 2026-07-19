@@ -1,0 +1,34 @@
+{
+  "metadata": {
+    "tasks_version": "1.1",
+    "last_updated": "2026-07-19T10:00:00Z",
+    "generated_by": "sdlc-task",
+    "session_id": "10101010-bbbb-1010-1010-101010101005",
+    "status": "complete",
+    "changelog": [
+      "1.1 (2026-07-19): System half of the test-wiring smoke fixture. The scaffold DELIBERATELY omits any eval_nongating marker registration mention so check #30's scaffold-side arm fires."
+    ]
+  },
+  "overview": "Bootstrap the single-service repo. The scaffold task deliberately does not mention non-gating marker registration (check #30 material).",
+  "build_order": [
+    "svc"
+  ],
+  "tasks": [
+    {
+      "tsk_id": "TSK-001",
+      "title": "Scaffold the repo skeleton",
+      "kind": "scaffold",
+      "description": "Create the package layout, pyproject, and CI skeleton.",
+      "outputs": [
+        "pyproject.toml",
+        ".github/workflows/ci.yml"
+      ],
+      "acceptance": [
+        "pip install -e . succeeds"
+      ],
+      "estimate": "s",
+      "status": "confirmed"
+    }
+  ],
+  "task_warnings": []
+}

@@ -61,11 +61,25 @@ ARCH__*.yaml for the checks). The authoritative list lives in the two
    `implements_requirements`.
 8. Coverage gates (trace-or-defer) — workflow (system), requirement,
    acceptance, and risk (container). See `coverage-and-defer.md`.
+9. `targets_work_units` entries resolve to the `component_ref`'s
+   `work_units[].name` (the legacy singular `targets_work_unit` is folded in
+   as an alias); **test→subject seam** (v2.0): every unit-tier test names its
+   subject(s) or is deferred by tst_id — blocks at
+   `test_strategy_container_version >= 2.0` (warns below; silent in the
+   meta-corpus dialect).
+10. `shared_infrastructure` item shape (path + purpose + `realizes` ⊆
+    {mock_policy, fixture_strategy, test_data_strategy}, ≥1) when the field is
+    used.
 
 **Non-blocking warnings:** missing optional enrichers; a
 `container_strategies` file_path not on disk; an upstream
 `metadata.status != complete` (the skill itself refuses to run in that case,
-but a standalone validator run surfaces it).
+but a standalone validator run surfaces it); the legacy singular
+`targets_work_unit` alias at ≥ 2.0 (migrate to the plural); a `gating: false`
+test whose directives don't mention its exclusion marker, or at unit tier
+(SK-07); mock/fixture policy prose naming deliverables while
+`shared_infrastructure` is empty (SK-08); work-unit coverage (a unit no test
+exercises).
 
 ## Recovery flow on `[FAIL]`
 

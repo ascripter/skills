@@ -15,7 +15,7 @@ Execute in this order (rationale below):
 | # | Plan | Skills touched | Findings | Status |
 |---|---|---|---|---|
 | 1 | SPLAN2 — task schema & validator repairs (incl. D2 priority removal) | task | SK-02, SK-03, SK-12..SK-20 | **EXECUTED 2026-07-19** |
-| 2 | SPLAN1 — test→subject seam + shared test infrastructure | test, task | SK-06..SK-11, SK-16 | open |
+| 2 | SPLAN1 — test→subject seam + shared test infrastructure | test, task | SK-06..SK-11, SK-16 | **EXECUTED 2026-07-19** |
 | 3 | SPLAN3 — arch work-unit contract quality | arch | SK-21..SK-24 | open |
 | 4 | SPLAN4 — code packets & execution loop | code | SK-04, SK-25..SK-28 | open |
 | 5 | SPLAN5 — pipeline integrity + upstream skills + CLAUDE.md delta | setup, prd, ux, data, api, design, arch/task (D2 loaders), CLAUDE.md | SK-01, SK-05, SK-29..SK-35 | open |
@@ -44,6 +44,14 @@ test-side per-TST `priority` removal (it edits those schema regions anyway); **S
    (`*_version` in metadata); new checks on existing fields start as **warnings**.
    In-repo precedent: task `interface_contract` "REQUIRED … at artifact version >= 1.3
    (older artifacts warn instead)" (`TASKS__CONTAINER.schema.yaml:160-161`).
+   **Amendment (2026-07-19, from SPLAN2/SPLAN1 execution):** the AICF corpus
+   self-stamps versions ABOVE the stock schema (TEST-STRATEGY containers at 1.9;
+   TASKS containers at 1.8/1.9), so "gate on the next version" is porous — the
+   corpus walks through it. A new blocking check's floor must CLEAR the corpus's
+   self-stamped numbers (use 2.0), and SHOULD additionally shape/mode-gate
+   (`meta_corpus_dialect`, PRD shape) per the FR_GATE precedent
+   (task `validate_schema.py`, `load_prd_id_families`) — a mode flag can't be
+   version-stamped past.
 4. **Removals keep readers tolerant.** A removed field (e.g. `priority`) is never
    *required* again but stays *accepted* on old artifacts (parse-and-ignore); coverage
    loaders read old + new shapes and union them.
@@ -65,6 +73,11 @@ test-side per-TST `priority` removal (it edits those schema regions anyway); **S
      the bare command.
 8. **Each plan ends with an execution ledger** — mark steps done with a one-line
    result; resume from the ledger.
+9. **Runtime strings are cp1252-safe** (2026-07-19, SPLAN2 lesson): any string a
+   validator can `print()` at runtime (warnings, errors, summaries) must contain
+   only cp1252-encodable characters — a `→`/`≥`/`⊆` in a warning crashes
+   `print()` with UnicodeEncodeError on the Windows console, turning exit 0 into
+   exit 1. Non-ASCII typography is fine in comments and docstrings only.
 
 ## Decision log
 
@@ -83,3 +96,12 @@ test-side per-TST `priority` removal (it edits those schema regions anyway); **S
   HEAD as `Gap-1`..`Gap-6` (see README addendum for the mapping + plan-side
   reconciliation notes in SPLAN2/SPLAN3). Executors: treat Gap code as existing
   neighbors, not greenfield.
+- **SPLAN1 executed 2026-07-19.** Deviations (all in its ledger/reconciliation
+  note): seam check silent (not advisory) in meta-dialect; #27–#30 as ungated
+  warnings; test schemas → 2.0, task container stays 1.5. Post-execution
+  corpus baselines: test validator **exit 0** (was exit 1 / 224 errors; 225
+  warnings = 222 work-unit-coverage + 3 shared-infra true positives); task
+  validator exit 0 with **8** warnings (was 207 — placement class collapsed).
+  Pre-existing defect repaired in passing: the test eval gold's TST-001..008
+  collided with the staged system file under global uniqueness → renumbered
+  006-013.

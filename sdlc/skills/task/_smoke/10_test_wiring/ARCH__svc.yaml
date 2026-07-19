@@ -1,0 +1,32 @@
+# Container deep-dive for the test-wiring fixture: one component, two
+# work_units, so TST subjects and impl target_symbols have names to meet on.
+metadata:
+  arch_container_version: "1.1"
+  last_updated: "2026-07-19T10:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "10101010-bbbb-1010-1010-101010101002"
+  status: "complete"
+container_id: svc
+archetype: worker
+overview: "Background worker that ingests and processes queued jobs."
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+deployment:
+  shape: container
+  shape_confidence: confirmed
+observability:
+  logs: "stdout structured json"
+components:
+  - component_id: ingest-worker
+    archetype: background_worker
+    purpose: "Pulls and processes queued jobs."
+    responsibilities: ["Process one job.", "Aggregate processed results."]
+    code_location: ["src/svc"]
+    work_units:
+      - name: do_work
+        summary: "Process one queued job."
+      - name: aggregate_results
+        summary: "Aggregate processed job results."
+    status: confirmed
+arch_container_warnings: []

@@ -1,0 +1,28 @@
+# INVALID: container version 2.0, status complete, stock mode — TST-002 is
+# unit-tier but names no targets_work_units and no WRN-NNN defers TST-002, so
+# check 12 blocks. (At a pre-2.0 version the same file only WARNS — see
+# fixture 05, whose container is 1.0.) Expect: [FAIL], exit 1.
+metadata:
+  test_strategy_container_version: "2.0"
+  last_updated: "2026-07-19T10:00:00Z"
+  generated_by: sdlc-test
+  session_id: 10101010-1010-1010-1010-101010101011
+  status: complete
+container_id: backend
+overview: "Unit tests for the user-management backend."
+inherits_from: docs/TEST-STRATEGY.yaml
+coverage_target:
+  line_pct: 85.0
+tests:
+  - tst_id: TST-002
+    name: "users-service creates a user"
+    tier: unit
+    description: "Happy-path create on the users service. Subject seam MISSING on purpose."
+    component_ref: users-service
+    directives: ["Arrange a valid payload; act create(); assert a persisted user with an id."]
+    covers: [FR-001]
+    acceptance: "create() returns the new user with a non-null id."
+    status: confirmed
+test_strategy_warnings:
+  - "WRN-001: NFR-001 is verified by the system-level load probe; not re-tested here."
+  - "WRN-002: work units create_user and read_user carry no dedicated per-unit test yet; deferred to the next hardening pass."
