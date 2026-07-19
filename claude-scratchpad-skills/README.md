@@ -56,6 +56,29 @@ SPLAN2 first because the D2 priority removal rewrites the same validator regions
 before adding avoids editing doomed code. SPLAN5 last because its CLAUDE.md delta
 documents conventions the earlier plans introduce.
 
+## Addendum (2026-07-19) — dogfooding findings A.1–A.6 ↔ Gap-1..6, already at HEAD
+
+A second dogfooding pass (build-sandbox container, arch/test/task) surfaced six findings
+(A.1–A.6). Investigation at skills-repo HEAD shows **all six are already implemented in the
+skill sources**, tagged `Gap-1`…`Gap-6` (commit `483ffe7 "fixes"` — which predates this
+folder's commit; the 0.3.6 plugin cache the audit ran against did not contain the arch-side
+gaps). `SKILLS-AUDIT.md` stays immutable; this addendum is the evidence record. **Plan
+executors must treat the Gap code as existing neighbors, not greenfield.**
+
+| Finding | Marker | HEAD implementation | Residual |
+|---|---|---|---|
+| A.1 — single-file multi-branch deliverable needs a composition/entry work_unit | Gap-1 | arch `entrypoint` WorkUnit kind (`ARCH__CONTAINER.schema.yaml:323-331`), advisory in `check_component_work_units` (`arch/validate_schema.py:1712-1732`), fixtures `_smoke/23_entrypoint_valid` + `24_seam_and_gaps` | authoring guidance missing (SKILL.md/references: zero hits) → SPLAN3 step 3 |
+| A.2 — don't model an externally-enforced constraint as a work_unit | Gap-2 | per-unit advisory (`arch/validate_schema.py:1690-1711`), schema `:628`, fixture 24 | authoring guidance missing → SPLAN3 step 3; complementary to SK-21's per-component advisory (SPLAN3 step 1) |
+| A.3 — dependency edges priority-monotonic; lean aggregator/integration deps | Gap-3 | task check #22 BLOCKING (`task/validate_schema.py:1155`, call `:1858`; `TASKS__CONTAINER.schema.yaml:466`; `TASKS.schema.yaml:167`), invariants (a)–(c) (`granularity-and-ordering.md:77-97`), fixture `07_priority_inversion.json` | **check #22 + invariant (a) are deliberately DELETED by SPLAN2/D2** (no priority field ⇒ no inversion possible); the (b)/(c) content survives as the rewritten priority-free invariants (SPLAN2 step 1e) |
+| A.4 — impl/test deferral sets stay symmetric | Gap-4 | task check #23 advisory (`task/validate_schema.py:630`, `:1534`), CLAUDE.md §6a, fixture `08_defer_asymmetry/` | SPLAN2 step 1b reworks the could-arm to deferral-only (consistent with A.4) |
+| A.5 — pin the cross-container INPUT contract on the shared seam | Gap-5 | system-edge `invocation` field (`ARCH.schema.yaml:194-203`), container `external_edges` `via_unit` + `invocation` (`ARCH__CONTAINER.schema.yaml:434-482`), cross-check #27 advisory (`arch/validate_schema.py:1974-2007`), fixture 24 | authoring guidance missing → SPLAN3 step 3 |
+| A.6 — bind the concrete variant of a parameterized code_location | Gap-6 | check #20 Gap-6 arm (`arch/validate_schema.py:1543-1554`), schema `:571`, fixture 24 | authoring guidance missing → SPLAN3 step 3; its warning text says "MVP-variant" — D2 vocabulary, sweep in SPLAN5 step 4 |
+
+Owner decisions 2026-07-19: execution starts with SPLAN2 (folder order); **⚠B resolved: drop**
+(condition "tell the skill directly which inputs it shall take" is satisfied by the v1.4
+self-contained-task embeds + SPLAN2 step 2 + SPLAN4 steps 1–2); **⚠A resolved: (i) new
+`kind: test_infrastructure`**.
+
 ## Provenance chain (for archaeology)
 
 AICF repo, `claude-scratchpad/`: `AUDIT-FINDINGS.md` (F1–F23 corpus findings + K1–K6

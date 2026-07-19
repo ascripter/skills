@@ -6,6 +6,14 @@ Skills touched: **arch** only. Findings: SK-21, SK-22, SK-23, SK-24. Corpus line
 was ARCH v1.15).
 Status: **open**. Line numbers = 0.3.6; re-locate at HEAD.
 
+> **Reconciliation note (2026-07-19, see README addendum):** the repo HEAD already carries
+> the Gap-1/2/5/6 implementations (schema + validator + fixtures) this plan was authored
+> blind to — `entrypoint` WorkUnit kind + single-file advisory (Gap-1), the no-code
+> policy-unit advisory at `validate_schema.py:1690` (Gap-2), the `via_unit`/`invocation`
+> seam + cross-check #27 (Gap-5), and the templated-code_location arm of #20 (Gap-6).
+> Cited SK-21/SK-23 line numbers have shifted accordingly. Steps below are annotated;
+> the *authoring guidance* for all four gaps is new scope in step 3.
+
 ## Steps
 
 ### 1. SK-21 — quality bar on #23 (empty-contract loophole)
@@ -23,6 +31,11 @@ a. New **advisory** (never blocks; no version gate needed): per component, when 
    filling the shape, not deciding interfaces; verify or add family contracts."
    Per-component (not per-unit) keeps noise bounded and targets the actual failure
    mode (blanket-stamping), not the trivial callable.
+   **Reconciliation:** HEAD already has a *per-unit* advisory for the single no-code
+   policy unit (Gap-2, `validate_schema.py:1690-1711` — "model it as a security_concern
+   + test, not a work_unit"). The new per-component advisory is COMPLEMENTARY (Gap-2 =
+   one policy unit; this = an emitter blanket-stamping empties) — land it beside Gap-2,
+   don't duplicate or replace it.
 b. `signature` stays unchecked and optional (deliberate — the corpus decision PLAN2-D1
    authored contracts without signature fields; the schema calls it "verbatim only
    when the signature IS the contract"). Document that in the #23 docstring so a
@@ -68,6 +81,29 @@ a. New reference section (in `component-discovery.md` or a new
      **dispatch inventory in its contract inputs** (the list of callees it fans out
      to) and NEVER takes graph self-edges; the inventory is the contract, the edges
      stay lean (granularity invariant (b) on the task side).
+   - **Gap authoring guidance (new scope, 2026-07-19):** the validator half of
+     Gap-1/2/5/6 exists at HEAD but NOTHING teaches the arch agent at authoring time
+     (SKILL.md/references grep: zero hits) — the same reference doc carries four
+     authoring rules so the advisories stop firing post-hoc:
+     * **Entrypoint composition root (Gap-1):** when a component's `code_location` is
+       ONE executable file with >1 run-mode branch (CLI/shell archetypes), emit an
+       explicit `kind: entrypoint` work_unit owning arg/mode dispatch + step-sequencing
+       + setup/teardown — the per-branch units never own the file's control flow.
+       Relation to the aggregator pattern above: the entrypoint IS the typical
+       dispatcher; its contract lists the branch inventory in inputs.
+     * **No policy-only units (Gap-2):** a constraint enforced purely externally
+       (platform/runtime/deploy) is a `security_concern` (+ mitigation) and/or
+       acceptance criterion covered by a test — never a work_unit (it becomes a
+       codegen task with nothing to emit).
+     * **Pin the cross-container calls seam (Gap-5):** a cross-container `calls`
+       external edge points `via_unit` at the callee's `entrypoint` work_unit (which
+       pins argv/mode IN ⇄ exit-code/stdout/stderr OUT for both sides) and records
+       the caller-side binding in `invocation` — authoring only the consumer side
+       leaves the INPUT contract unpinned (cross-check #27 warns).
+     * **Bind template placeholders (Gap-6):** a `code_location` containing
+       `<placeholder>` tokens binds the concrete variant being built; further
+       variants are their own components/work_units (or a WRN deferral) — codegen
+       must not re-derive the binding.
 b. The schema comment :678-680 currently frames the block as "meta-corpus dialect …
    Absent for a generated app." Soften to: an optional pattern ANY project with
    uniform unit families may use (the dialect merely required it first) — otherwise
@@ -89,9 +125,24 @@ b. The schema comment :678-680 currently frames the block as "meta-corpus dialec
   advisory (exit 0, warning present); + fixture with unit touches ⊄ component traces
   and one with the key missing → error text carries the fix hint; + valid fixture
   using `work_unit_family_contracts` outside meta-mode.
+  **Reconciliation:** `_smoke/23_entrypoint_valid` and `_smoke/24_seam_and_gaps`
+  already exist (Gap-1/2/5/6 coverage) — extend them where they fit, don't recreate.
 - `evals/`: extend the grader for the emptiness advisory if the eval set asserts on
   warnings.
 - Bump `arch_version`/`arch_container_version` docs; SKILL.md 9b/9c touch-ups.
+
+### 6. Pre-existing fixture defect surfaced 2026-07-19 (fix in this plan)
+
+`sdlc/skills/task/_smoke/work_units_style_selftest.py` FAILS at HEAD on its
+"valid mixed-style container passes" arm: the arch validator's #23
+DEFER-OR-DECLARE check now errors on
+`arch/_smoke/19_work_units_mixed_style/ARCH__api.yaml` (4 errors of the form
+"work_units[...]='createTask' traces no schema-bearing contract (no
+traces_api_operation) but leaves ['inputs','output','raises'] absent") — the
+fixture predates a #23 hardening and no longer satisfies the check it is
+supposed to prove green. Repair the fixture (declare the missing contract
+fields or add traces_api_operation) as part of this plan's fixture pass, and
+re-run the task-side selftest as the cross-skill proof.
 
 ## Verification / done when
 
@@ -109,3 +160,5 @@ b. The schema comment :678-680 currently frames the block as "meta-corpus dialec
 - [ ] 3 family/aggregator reference + schema comment soften
 - [ ] 4 prose alignment
 - [ ] 5 fixtures/evals/versions · verification green (bare exit codes)
+- [ ] 6 repair `19_work_units_mixed_style` vs hardened #23 · task-side
+      `work_units_style_selftest.py` passes again

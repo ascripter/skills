@@ -114,14 +114,12 @@ a. **Generation rules** (`references/granularity-and-ordering.md` + SKILL.md poi
      every `kind: test` task depends on it.
    - test task `target_files` derived from `test_file_convention` (step 4).
 
-   ⚠A OPEN — **infra task kind.** Pipeline order is arch→test→task, so arch can't own
-   a unit for deliverables the test stage defines. Options: (i) new task kind
-   `test_infrastructure` — exempt from check #4's target_symbol⊆work_unit pin, allowed
-   a directory `target_files`; (ii) reuse `kind: config`; (iii) require an ARCH
-   work_unit via an arch re-touch (what the corpus did: PLAN4-D2 added
-   `build_test_infrastructure` to factory-tooling — but that was retrofit, not
-   pipeline-order-clean). **Recommendation: (i)** — honest kind, clean exemption,
-   mirrors how `scaffold` is already special-cased.
+   ⚠A RESOLVED (owner, 2026-07-19): **(i) new task kind `test_infrastructure`** —
+   exempt from check #4's target_symbol⊆work_unit pin, allowed a directory
+   `target_files`; honest kind, clean exemption, mirrors how `scaffold` is already
+   special-cased. (Rejected: (ii) reuse `kind: config` — dishonest semantics; (iii)
+   arch re-touch — pipeline-order-unclean, arch runs before test defines the
+   deliverables.)
 b. **New cross-checks** (warn-level, version-gated on next `tasks_container_version`):
    - **test-subject reachability:** for each `kind: test` task with
      `implements_tests: [TST-x]` where TST-x carries `targets_work_units`, warn when
@@ -172,5 +170,5 @@ c. **Placement check learns the test root** (SK-09): in the check-16 block
 - [ ] 2 test gating flag + marker contract
 - [ ] 3 test shared_infrastructure + D2 per-TST priority removal
 - [ ] 4 test placement convention
-- [ ] 5 task consumption (⚠A resolved: ___) + 4 new checks + placement test-root
+- [ ] 5 task consumption (⚠A resolved: **(i) new `kind: test_infrastructure`**, owner 2026-07-19) + 4 new checks + placement test-root
 - [ ] 6 fixtures/evals/versions · verification suite green

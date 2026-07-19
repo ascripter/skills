@@ -14,7 +14,7 @@ Execute in this order (rationale below):
 
 | # | Plan | Skills touched | Findings | Status |
 |---|---|---|---|---|
-| 1 | SPLAN2 — task schema & validator repairs (incl. D2 priority removal) | task | SK-02, SK-03, SK-12..SK-20 | open |
+| 1 | SPLAN2 — task schema & validator repairs (incl. D2 priority removal) | task | SK-02, SK-03, SK-12..SK-20 | **EXECUTED 2026-07-19** |
 | 2 | SPLAN1 — test→subject seam + shared test infrastructure | test, task | SK-06..SK-11, SK-16 | open |
 | 3 | SPLAN3 — arch work-unit contract quality | arch | SK-21..SK-24 | open |
 | 4 | SPLAN4 — code packets & execution loop | code | SK-04, SK-25..SK-28 | open |
@@ -73,6 +73,13 @@ test-side per-TST `priority` removal (it edits those schema regions anyway); **S
   for the verified blast radius). PRD keeps a single flat `features` list;
   milestones deleted; per-TST and per-task priority removed; every must-have-keyed
   coverage check re-scopes to all FRs.
-- Open ⚠ boxes live inside the plans: SPLAN1 ⚠A (infra-task kind), SPLAN2 ⚠B
-  (`inputs[]` fate), SPLAN5 ⚠C (`mitigation_refs` restriction), SPLAN5 ⚠D
+- **⚠A (2026-07-19, resolved):** infra task kind = (i) new `kind: test_infrastructure`.
+- **⚠B (2026-07-19, resolved):** `inputs[]` = drop (owner condition — "tell the skill
+  directly which inputs it shall take" — satisfied by the v1.4 self-contained embeds;
+  rationale recorded in SPLAN2 step 3).
+- Open ⚠ boxes remaining: SPLAN5 ⚠C (`mitigation_refs` restriction), SPLAN5 ⚠D
   (`paradigm` required at complete).
+- **Addendum 2026-07-19:** dogfooding findings A.1–A.6 verified already-implemented at
+  HEAD as `Gap-1`..`Gap-6` (see README addendum for the mapping + plan-side
+  reconciliation notes in SPLAN2/SPLAN3). Executors: treat Gap code as existing
+  neighbors, not greenfield.

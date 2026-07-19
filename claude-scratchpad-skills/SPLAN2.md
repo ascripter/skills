@@ -3,7 +3,9 @@
 Skills touched: **task** only. Findings: SK-02 (task half), SK-03, SK-12, SK-13, SK-14,
 SK-15, SK-17, SK-18, SK-19, SK-20. Corpus lineage: **K1, K5, K6b, K7, K8**, **F10,
 F14b, F4**, mech G2. Execute FIRST (it deletes/rewrites regions SPLAN1 lands next to).
-Status: **open**. Line numbers = 0.3.6; re-locate at HEAD.
+Status: **EXECUTED 2026-07-19** (see the ledger; two in-flight deviations recorded
+there: the FR_GATE shape-gate on the all-FR re-scope, and fixture_briefs typed as
+mapping-or-list). Line numbers = 0.3.6; re-locate at HEAD.
 
 ## Steps
 
@@ -19,11 +21,20 @@ a. `validate_schema.py`: delete `priority` from the required-field loops (system
    (cross-check #22 — renumber or tombstone the number, don't reuse it); keep
    `ContainerTask.priority`/`SystemTask.priority` (:264/:282) as parsed-but-ignored
    **deprecated** fields (convention: removals stay accepted on old artifacts).
+   **Reconciliation (2026-07-19):** check #22 is the Gap-3 implementation of
+   dogfooding finding A.3(a) — its deletion is the deliberate D2 retirement, not an
+   oversight (no priority field ⇒ no inversion possible; A.3(b)/(c) survive via 1e).
+   HEAD locations: `validate_schema.py:1155` (check), `:1858` (call site),
+   `TASKS__CONTAINER.schema.yaml:466`, `TASKS.schema.yaml:167`. Also **retire the
+   fixture `_smoke/07_priority_inversion.json`** — the check it exercises disappears.
 b. Deferral symmetry (#23, :1537-1578): the impl-side escape "is the task
    `priority: could`" (:1565-1567) becomes deferral-only — an impl task whose test was
    deferred TEST-side must itself be deferred in `task_warnings` (or the test
    restored). Update the warning text (:1571-1578) to drop the "Mark this task
-   post-MVP (priority: could)" arm.
+   post-MVP (priority: could)" arm. **Reconciliation:** this check is Gap-4 (finding
+   A.4) — keep it; HEAD locations `:630` (helper), `:1534` (check). The fixture
+   `_smoke/08_defer_asymmetry/` overview text references `priority: must` and the
+   could-arm — update it in the same pass.
 c. Coverage scope: `FR_MUST` (:422-441) and the union gap report (:1698-1729) re-scope
    to **all** PRD FRs. NOTE the loader must tolerate both PRD shapes — flat `features`
    (post-SPLAN5) and legacy `must_have_features`+`nice_to_have_features` (union them);
@@ -65,7 +76,15 @@ c. Check #20 (embedded-copy drift): add a `family_contract` arm — compare agai
    interface_contract arm). `cli_contract` drift vs UX is optional/deferred (UX shards
    are per-surface files; cheap once loaded — implement if low-effort, else note).
 
-### 3. K5 — `inputs[]` fate (SK-14) — ⚠B OPEN
+### 3. K5 — `inputs[]` fate (SK-14) — ⚠B RESOLVED: drop (owner, 2026-07-19)
+
+Owner's condition: "we can drop it *IF* in turn we tell the skill directly which inputs
+it shall take." Satisfied by the v1.4 self-contained-task embeds — the inputs live ON
+the task (`interface_contract` / `test_spec` / `operation_contract` / `entity_slice` /
+`design_spec` / `config_keys`) with `requirement_context` joined at emit time; step 2
+adds the remaining carriers (cli_contract / family_contract / fixture_briefs) and
+SPLAN4 steps 1–2 close the packet-side channels (test covers grounding, worker digest
+entity-slice fetch). `inputs[]` was a second, pointer-based channel nothing resolved.
 
 Evidence: schema calls it "the upstream artifacts / contracts / files this task
 consumes" (`TASKS__CONTAINER.schema.yaml:298-300`) but NOTHING resolves it — not the
@@ -158,14 +177,41 @@ machine-checkable; N tasks sharing an identical acceptance line is a generation 
   `cli_contract`/`family_contract`/`fixture_briefs`/system `touches_entities`
   surviving a model round-trip (K8 closed).
 
-## Execution ledger
+## Execution ledger (executed 2026-07-19)
 
-- [ ] 1 D2 removal (validator/schema/references/questions/helpers)
-- [ ] 2 K8 fields + extra="allow" + #20 family arm
-- [ ] 3 ⚠B resolved: ___ (recommendation: drop)
-- [ ] 4 F10 rule + zero-dependent advisory
-- [ ] 5 directory-pin doc + cardinality advisory
-- [ ] 6 F14b guidance (+advisory if cheap)
-- [ ] 7 K1 contract sweep + docstrings
-- [ ] 8 acceptance guidance
-- [ ] 9 fixtures/evals/versions · verification green
+- [x] 1 D2 removal — required-field loops, `_PRIORITY_RANK`/`check_priority_monotonic`
+      deleted, #22 tombstoned (number retired in code + both schema docs); #23 could-arm
+      → deferral-only; invariant (a) deleted, (b)/(c) rewritten priority-free (letters
+      kept stable); priority questions removed; versions bumped (container **1.5**,
+      system **1.1**) with migration notes; fixture `07_priority_inversion.json` deleted.
+      **Deviation (binding convention 3):** the all-FR coverage re-scope needed a gate —
+      implemented as `FR_GATE` keyed on the **PRD's declared shape** (flat `features` ⇒
+      every FR blocks; legacy split PRD ⇒ must-have blocks, nice-to-have gaps WARN).
+      A tasks_version gate was unusable: the live corpus stamps its own 1.3.
+- [x] 2 K8 fields declared via a shared `_TaskModel(extra="allow",
+      str_strip_whitespace)` base on ALL models; `cli_contract`/`family_contract`/
+      `fixture_briefs` + `SystemTask.touches_entities`; #20 gains the family_contract
+      arm (guarded on ARCH present). **Deviation:** the live corpus's fixture_briefs is
+      a MAPPING, not a list → typed `Union[dict, list[dict]]`.
+- [x] 3 ⚠B **drop** executed — schema+model deprecated (parse-and-ignore), questions +
+      guidance + FR-013 phrasing scrubbed.
+- [x] 4 F10 entity→owning-module rule (granularity doc) + zero-dependent-module
+      advisory (**#24**, ≥1.5).
+- [x] 5 directory-pin convention documented + multi-path/single-file advisory
+      (**#25**, ≥1.5).
+- [x] 6 F14b guidance + unnamed-callee advisory (**#26**, ≥1.5) — caught 1 real
+      instance in the live corpus on first run.
+- [x] 7 K1 contract stated in both module docstrings (validate_schema.py +
+      code/topo_order.py); remaining blocking graph rules = resolution + acyclicity in
+      both.
+- [x] 8 acceptance-quality paragraph (task-discovery.md).
+- [x] 9 Verification GREEN (bare exit codes): 8/8 smoke fixtures at documented codes;
+      new `09_v15_advisories/` fixture (all 3 advisories + #20 family arm fire; 1.4
+      copy stays silent — gate proven); evals golds priority-stripped (container golds
+      stay **1.3** — they predate the v1.4 embeds, e.g. design_spec/entity_slice);
+      `evals/selftest.py` PASS; model round-trip preserves all embeds + unknown keys
+      (K8 closed); live corpus: task validator **exit 0** (207 warnings = 199 known
+      placement + 6 legacy nice-to-have-FR advisories + 1 drift + 1 new callee catch);
+      `topo_order.py --scope all` exit 0; `--emit` packet carries
+      cli_contract/family_contract/requirement_context. Note: cp1252 lesson — validator
+      warning strings must stay Windows-console-safe (no `→`/`≥` in runtime strings).
