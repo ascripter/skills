@@ -16,7 +16,7 @@ Execute in this order (rationale below):
 |---|---|---|---|---|
 | 1 | SPLAN2 — task schema & validator repairs (incl. D2 priority removal) | task | SK-02, SK-03, SK-12..SK-20 | **EXECUTED 2026-07-19** |
 | 2 | SPLAN1 — test→subject seam + shared test infrastructure | test, task | SK-06..SK-11, SK-16 | **EXECUTED 2026-07-19** |
-| 3 | SPLAN3 — arch work-unit contract quality | arch | SK-21..SK-24 | open |
+| 3 | SPLAN3 — arch work-unit contract quality | arch | SK-21..SK-24 | **EXECUTED 2026-07-19** |
 | 4 | SPLAN4 — code packets & execution loop | code | SK-04, SK-25..SK-28 | open |
 | 5 | SPLAN5 — pipeline integrity + upstream skills + CLAUDE.md delta | setup, prd, ux, data, api, design, arch/task (D2 loaders), CLAUDE.md | SK-01, SK-05, SK-29..SK-35 | open |
 
@@ -105,3 +105,16 @@ test-side per-TST `priority` removal (it edits those schema regions anyway); **S
   Pre-existing defect repaired in passing: the test eval gold's TST-001..008
   collided with the staged system file under global uniqueness → renumbered
   006-013.
+- **SPLAN3 executed 2026-07-19.** Deviations (in its ledger/reconciliation
+  note): step 2b's missing-key case landed as an **ungated warning**, not an
+  error — the corpus itself trips it (`build-test-entrypoint` in
+  `ARCH__build-sandbox` touches 2 entities with no `traces_data_entities`
+  key; an error would have flipped the corpus red); the emptiness advisory
+  gained a ≥3-callable-units floor; no new reference file (guidance extended
+  in `component-discovery.md`); step 3a's Gap-authoring scope shrank to the
+  family fold heuristic + aggregator pattern (Gap-1/2/5/6 verified already
+  taught at HEAD). Nothing new blocks → `ARCH__CONTAINER.schema.yaml` bumps
+  only to 1.3 (no 2.0 anchor needed). Post-execution corpus baseline: arch
+  validator **exit 0, 26 advisories** (was 25; +1 SK-22 true positive);
+  emptiness advisory 0 hits. Fixture 19 repaired (contracts declared, mixed
+  styles kept) → `work_units_style_selftest.py` **PASS** again.

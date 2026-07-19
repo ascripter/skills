@@ -4,6 +4,9 @@
 # sequence items; a real parse counts all four. A line-grep for "- name:" would
 # see only two — exactly the miscount that wrongly refused a fully-backfilled
 # container. Downstream `task` (and count_work_units.py) MUST parse, not grep.
+# Every unit DECLAREs its interface contract (inputs/output/raises) — required
+# since the #23 DEFER-OR-DECLARE hardening (no API__*.yaml here to DEFER to);
+# the flow-style entries carry theirs inline, so the style mix survives.
 metadata:
   arch_container_version: "1.0"
   last_updated: "2026-07-03T12:00:00Z"
@@ -54,15 +57,23 @@ components:
         summary: "Handle POST /tasks."
         implements_requirements:
           - "FR-001"
+        inputs:
+          - "payload: TaskCreate"
+        output: "Task"
+        raises:
+          - "ValidationError -> 400"
         status: confirmed
       - name: listTasks
         summary: "Handle GET /tasks."
         implements_requirements:
           - "FR-002"
+        inputs: []
+        output: "list[Task]"
+        raises: []
         status: confirmed
       # --- flow style (one-liner mappings) ---
-      - {name: updateTask, summary: "Handle PATCH /tasks/{id}.", implements_requirements: ["FR-003"], status: confirmed}
-      - {name: deleteTask, summary: "Handle DELETE /tasks/{id}.", implements_requirements: ["FR-004"], status: confirmed}
+      - {name: updateTask, summary: "Handle PATCH /tasks/{id}.", implements_requirements: ["FR-003"], inputs: ["task_id: str", "patch: TaskPatch"], output: "Task", raises: ["NotFoundError -> 404"], status: confirmed}
+      - {name: deleteTask, summary: "Handle DELETE /tasks/{id}.", implements_requirements: ["FR-004"], inputs: ["task_id: str"], output: "None", raises: ["NotFoundError -> 404"], status: confirmed}
     status: confirmed
 
   # Plumbing archetype — legitimately unit-free (config_loader); no block, no warn.

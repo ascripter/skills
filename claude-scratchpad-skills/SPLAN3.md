@@ -4,7 +4,22 @@ Skills touched: **arch** only. Findings: SK-21, SK-22, SK-23, SK-24. Corpus line
 **F2/F11** (the contract-free cluster PLAN2 hand-authored 214 contracts for), the
 **294-error traces class** (PLAN4 sign-off repair — its second occurrence; the first
 was ARCH v1.15).
-Status: **open**. Line numbers = 0.3.6; re-locate at HEAD.
+Status: **EXECUTED 2026-07-19** (see ledger; deviations noted per step).
+Line numbers = 0.3.6; re-locate at HEAD.
+
+> **Execution reconciliation (2026-07-19):** three findings reshaped the steps.
+> (i) The **missing-key case is live in the corpus** — `build-test-entrypoint`
+> (`ARCH__build-sandbox.yaml`, self-stamped 1.8) has units touching 2 entities and
+> no `traces_data_entities` key; step 2b's "error" as written would have flipped
+> the corpus exit 0 -> 1, so it landed as an **ungated warning** (convention #3;
+> corpus 25 -> 26 advisories, true positive). (ii) Step 3a's "zero hits" claim was
+> stale: Gap-1/2/5/6 authoring guidance already lives in `component-discovery.md`
+> (:308-320, :322-329, :230-231) and `edge-derivation.md` (:78-121) — only the
+> family fold heuristic and the aggregator/dispatcher pattern were missing, and
+> they went into `component-discovery.md` (no new reference file). (iii) The
+> emptiness advisory gained a **>= 3 callable-DECLARE-units floor** (a 1-unit
+> trivial `main()` would fire at 100%; Gap-2 already covers singletons). Corpus
+> scan proved it a clean true-negative (zero all-empty units).
 
 > **Reconciliation note (2026-07-19, see README addendum):** the repo HEAD already carries
 > the Gap-1/2/5/6 implementations (schema + validator + fixtures) this plan was authored
@@ -155,10 +170,45 @@ re-run the task-side selftest as the cross-skill proof.
 
 ## Execution ledger
 
-- [ ] 1 emptiness advisory + docstring + SKILL.md sentence
-- [ ] 2 derive-at-write rule + error fix-hints (incl. missing-key case)
-- [ ] 3 family/aggregator reference + schema comment soften
-- [ ] 4 prose alignment
-- [ ] 5 fixtures/evals/versions · verification green (bare exit codes)
-- [ ] 6 repair `19_work_units_mixed_style` vs hardened #23 · task-side
-      `work_units_style_selftest.py` passes again
+- [x] 1 emptiness advisory + docstring + SKILL.md sentence — per-component
+      roll-up in #23 with a **>= 3 callable DECLARE units** floor + >= 80%
+      all-empty ratio; docstring documents the advisory AND that `signature`
+      is deliberately unchecked (PLAN2-D1); SKILL.md 9b sentence + schema #23
+      comment. Corpus: 0 hits (true-negative proven by scan).
+- [x] 2 derive-at-write rule + error fix-hints — new "Derive component traces
+      from unit touches" section in `merge-validate.md` + Phase 7 bullet in
+      SKILL.md + schema #21 note; subset error carries the fix-hint;
+      missing-key case landed as **ungated WARNING** (DEVIATION from "error" —
+      the corpus itself trips it; convention #3). Fires once on the corpus
+      (build-test-entrypoint, true positive) -> 26 advisories total.
+- [x] 3 family/aggregator guidance + soften — fold heuristic (>= 3 same-shape
+      units -> one family; 112/214-on-16-families scale proof) + PLAN2-D3
+      aggregator/dispatcher pattern (dispatch inventory in contract inputs,
+      never self-edges) added to `component-discovery.md` "Deriving
+      work_units" (**no new reference file** — sibling guidance lives there);
+      "meta-corpus dialect only" softened in 5 sites (schema x2, validator
+      module docstring + model docstring, discovery bullet). Gap-1/2/5/6
+      authoring guidance verified ALREADY TAUGHT at HEAD (step 3a's "zero
+      hits" was stale) — not re-added.
+- [x] 4 prose alignment — `test-discovery.md:125` now says "interface contract
+      fields (the flat inputs/output/raises …)"; WorkUnit schema comment
+      carries the downstream mapping (kind -> unit_kind, summary ->
+      unit_summary, flat fields -> nested interface_contract{...}).
+- [x] 5 fixtures/versions · verification green — NEW `_smoke/25_contract_quality/`
+      (exit 0; exactly 5 documented warnings: SK-21 roll-up + 3x Gap-2 +
+      SK-22 missing-key); `ARCH__CONTAINER.schema.yaml` 1.2 -> 1.3 +
+      changelog; SKILL.md changelog + skill_version 1.3; warning-bucket
+      labels genericized (they now carry Gap/derive/emptiness advisories, not
+      just waivers); NO grader change (grade.py asserts artifact WRN format
+      only — verified). All 28 arch fixtures at documented exit codes (bare $?).
+- [x] 6 fixture 19 repaired — all 4 units DECLARE contracts, mixed block/flow
+      styles preserved (flow entries carry contracts inline; "- name:" grep
+      count stays 2 < 4 so the undercount proof holds); fixture 21 header
+      cite "17/19/20" -> "17/20 (+19 passes)"; task-side
+      `work_units_style_selftest.py` -> **SELFTEST PASS** (incl. the
+      previously-failing "valid mixed-style passes [OK]" arm).
+
+**Post-execution baselines:** arch validator on the corpus: exit 0,
+**26 advisories** (was 25; +1 = the SK-22 missing-key true positive on
+build-test-entrypoint); emptiness advisory absent (true-negative). Selftest
+PASS. Fixture sweep: 28/28 at documented codes.

@@ -67,6 +67,20 @@ Same merge rules as above:
 - Removals require user confirmation.
 - Unrelated keys preserved.
 
+### Derive component traces from unit touches (every container write)
+
+Before writing a container file, set **every** component's
+`traces_data_entities` to
+`sorted(existing entries ∪ union of its work_units' touches_entities)`.
+The curated list may EXCEED the union (entities the component reads
+without a unit naming them) but must never lag it. **The subset law
+(`touches_entities ⊆ traces_data_entities`, cross-check #21) is maintained
+by derivation, not by hand** — twice now (ARCH v1.15, PLAN4) a
+touches-completion pass broke it corpus-wide because the component lists
+were being hand-maintained. A component whose units touch entities while
+its `traces_data_entities` is missing/empty draws an advisory (the subset
+check has no base to fire against there — the derive step was skipped).
+
 After writing, run `set_claude_md_pointer.py` (Phase 8) — the bullet's
 timestamp is updated regardless of which mode wrote.
 
@@ -175,7 +189,11 @@ This validates:
 
     - **#21 per-unit integrity** — each `work_units[].name` is non-empty and
       unique within its component; `summary` non-empty; `traces_api_operation`,
-      `implements_requirements` (⊆ the component's), `touches_entities` resolve.
+      `implements_requirements` (⊆ the component's), `touches_entities` resolve
+      (⊆ the component's `traces_data_entities` — the error's fix is the derive
+      rule above: complete the component list to the union of unit touches).
+      Advisory: a component whose units touch entities while its
+      `traces_data_entities` is missing/empty (subset check has no base).
     - **#21 blocking upgrade** — a NON-TRIVIAL component (non-plumbing archetype
       carrying `implements_requirements` or a traced contract) that declares no
       `work_units` and no `work_units_waiver` blocks `complete`. Counts come from

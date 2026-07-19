@@ -122,8 +122,10 @@ For each `components[]`:
   (both are needed — unit names are unique only within their component), and
   pull the unit's traces into the test: `covers` ← the unit's
   `implements_requirements`, plus a happy-path assertion from its `summary` /
-  `satisfies_acceptance`; its `interface_contract` (inputs/output/raises) names
-  the argument/return/error shapes to assert. **The seeded test carries its
+  `satisfies_acceptance`; its interface contract fields (the flat
+  inputs/output/raises on the work_unit — the nested `interface_contract:`
+  block exists only on the downstream Task embed) name the
+  argument/return/error shapes to assert. **The seeded test carries its
   subject from birth; a hand-added test names its subject(s) or defers** — at
   `status: complete` a unit-tier test with neither blocks (v2.0 check 12; the
   `task` skill wires each test task's `depends_on` from this list). A test that

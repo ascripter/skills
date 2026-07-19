@@ -350,16 +350,35 @@ The arch validator warns (#23) on the empty-callable shape.
   - Fill `signature` only when the signature itself is the contract (a public
     library API); otherwise codegen renders it from `inputs`/`output` + the
     tech stack.
-  - **FAMILY** (opt-in, meta-corpus dialect only) — a sharded / no-API-layer
-    corpus (a CLI factory with no OPR to DEFER to) may declare a container-level
+  - **FAMILY** (opt-in for ANY project with uniform unit families; the
+    meta-corpus dialect merely required it first) — declare a container-level
     `work_unit_family_contracts` list: one shared `inputs`/`output`/`raises`
     contract per uniform unit family (gate units, stage-node bodies, CLI verb
     handlers, sub-agent runners), keyed by `member_components` /
     `member_name_globs` / `member_archetypes`. A terse family member inherits
     its family's contract and may omit its own; a member OVERRIDES by declaring
     its own. Cross-check #23 recognizes this only when the block is present — a
-    generated app carries no such block and keeps the strict per-unit DECLARE
+    container that declares no such block keeps the strict per-unit DECLARE
     rule above.
+
+**When to fold units into a family.** When **≥ 3 units share one contract
+shape** (per-stage bodies, per-clause gates, per-command handlers, per-schema
+loaders), declare ONE `work_unit_family_contracts` entry — family name, member
+selector, shared inputs/output/raises — instead of N copies. Scale proof: the
+meta-corpus put 112 of its 214 units on 16 families. Do NOT instead stamp
+trivial empty contracts across the members to satisfy #23 — a component where
+≥ 3 callable units are ≥ 80% all-empty (`inputs: []`, `output: "None"`,
+`raises: []`) trips the emptiness advisory; the family mechanism is the honest
+way to say "one decided shape, many members".
+
+**Aggregator/dispatcher contract pattern (PLAN2-D3).** A unit that dispatches
+over sibling units — a `run_stage_quality_gate` fanning out to per-clause
+gates, a command router, the `entrypoint` unit dispatching run-mode branches
+(the entrypoint IS the typical dispatcher) — declares its **dispatch inventory
+in its contract `inputs`** (the list of callees it fans out to) and NEVER
+takes graph self-edges to them. The inventory is the contract; the edges stay
+lean (the task skill's granularity invariant (b) forbids absorber-style edge
+fan-in for the same reason).
 
 **Work_unit-completeness check (before closing the component).** Reflect on the
 drafted units against the component's own signals: does every owned API

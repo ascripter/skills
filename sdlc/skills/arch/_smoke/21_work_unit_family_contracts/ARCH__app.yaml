@@ -1,4 +1,5 @@
-# 21 — Meta-corpus dialect (cross-check 23 arm b), all four arms coexisting.
+# 21 — Family contracts (cross-check 23 arm b — opt-in for ANY project with
+# uniform unit families; meta-corpus style shown), all four arms coexisting.
 # `work_unit_family_contracts` declares two shared contracts; terse family
 # members inherit them and omit inputs/output/raises:
 #   * handle_* verbs join cli-verb-handlers via a name-glob   (FAMILY / arm b)
@@ -6,7 +7,8 @@
 #   * create_task DECLAREs its own inputs/output/raises        (DECLARE / arm a)
 #   * schemas is kind:module, a file deliverable               (FILE   / arm c)
 # Expectation: validator exits 0 with [OK]. A non-family contract-less unit
-# would still BLOCK (proven by fixtures 17/19/20, which carry no family block).
+# would still BLOCK (proven by fixtures 17/20, which carry no family block;
+# 19 declares full contracts and passes).
 metadata:
   arch_container_version: "1.0"
   last_updated: "2026-07-08T12:00:00Z"

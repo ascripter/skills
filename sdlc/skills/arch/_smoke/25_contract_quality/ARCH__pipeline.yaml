@@ -1,0 +1,129 @@
+# 25 — Contract-quality advisories (SK-21 + SK-22). VALID and complete —
+# every check that BLOCKS passes; the two new ADVISORIES fire. Expectation:
+# exit 0 with [OK] and EXACTLY these 5 warnings:
+#   * SK-21 emptiness roll-up on `stage-runner`: 3/3 callable units declare
+#     the all-empty contract (inputs: [], output: "None", raises: []) —
+#     legal per unit under #23 DECLARE, but blanket-stamped across the
+#     component (>=3 units, >=80% empty).
+#   * 3x Gap-2 per-unit "nothing to emit" advisories on the same three units
+#     (intentional overlap: Gap-2 flags each unit, SK-21 flags the pattern).
+#   * SK-22 missing-key advisory on `entity-writer`: its units touch 2
+#     entities (Job, Result) but the component has NO traces_data_entities
+#     key, so the #21 subset check has no base to fire against — the Phase 7
+#     derive rule was skipped.
+# Container archetype backend-api + directory code_locations keep Gap-1
+# (single-file entrypoint nudge) out of the picture. No DATA-MODEL.yaml is
+# staged, so touches_entities resolution against entities is skipped.
+metadata:
+  arch_container_version: "1.0"
+  last_updated: "2026-07-19T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "25252525-bbbb-2525-2525-252525252525"
+  status: "complete"
+
+container_id: pipeline
+archetype: backend-api
+overview: "Batch pipeline: parse, transform, emit, persist."
+
+tech_stack:
+  language: "Python"
+  language_confidence: confirmed
+
+deployment:
+  shape: container
+  shape_confidence: confirmed
+
+observability:
+  logs: "stdout structured json"
+
+failure_modes:
+  - id: batch-corrupt
+    description: "Input batch fails to parse."
+    likelihood: low
+    impact: high
+    mitigation: "Quarantine the batch and continue."
+
+components:
+  # SK-21 target: every callable unit declares the all-empty contract —
+  # an emitter filled the shape without deciding interfaces.
+  - component_id: stage-runner
+    archetype: service
+    purpose: "Runs the parse/transform/emit stages."
+    responsibilities:
+      - "Run each pipeline stage over the batch."
+    code_location:
+      - "src/pipeline/stages/"
+    implements_requirements:
+      - "FR-001"
+      - "FR-002"
+      - "FR-003"
+    work_units:
+      - name: run_parse
+        summary: "Parse the input batch."
+        implements_requirements:
+          - "FR-001"
+        inputs: []
+        output: "None"
+        raises: []
+        status: confirmed
+      - name: run_transform
+        summary: "Transform parsed records."
+        implements_requirements:
+          - "FR-002"
+        inputs: []
+        output: "None"
+        raises: []
+        status: confirmed
+      - name: run_emit
+        summary: "Emit the output artifact."
+        implements_requirements:
+          - "FR-003"
+        inputs: []
+        output: "None"
+        raises: []
+        status: confirmed
+    status: confirmed
+
+  # SK-22 target: units touch entities, but the component never declares
+  # traces_data_entities — the derive-at-write step was skipped.
+  - component_id: entity-writer
+    archetype: repository
+    purpose: "Persists jobs and results."
+    responsibilities:
+      - "Write processed jobs and their results to the store."
+    code_location:
+      - "src/pipeline/store/"
+    implements_requirements:
+      - "FR-004"
+      - "FR-005"
+    work_units:
+      - name: write_job
+        summary: "Persist a processed job."
+        implements_requirements:
+          - "FR-004"
+        touches_entities:
+          - "Job"
+        inputs:
+          - "job: Job"
+        output: "Job"
+        raises:
+          - "StoreError"
+        status: confirmed
+      - name: write_result
+        summary: "Persist a job result."
+        implements_requirements:
+          - "FR-005"
+        touches_entities:
+          - "Result"
+        inputs:
+          - "result: Result"
+        output: "Result"
+        raises:
+          - "StoreError"
+        status: confirmed
+    status: confirmed
+
+internal_edges: []
+external_edges: []
+
+arch_warnings: []

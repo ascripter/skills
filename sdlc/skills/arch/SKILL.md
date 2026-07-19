@@ -557,6 +557,11 @@ Write or merge the active mode's output yaml:
   see `references/edge-derivation.md`). These are the only mutations
   container mode may make to `ARCH.yaml`; it never edits or removes
   existing entries.
+- Container mode, before writing: set every component's
+  `traces_data_entities` to `sorted(existing ∪ union of its work_units'
+  touches_entities)` — the subset law (#21) is maintained by derivation,
+  not by hand (see `references/merge-validate.md` → "Derive component
+  traces from unit touches").
 
 When writing, (re)write the active output's `metadata.upstream_provenance`:
 one entry per upstream artifact consumed this run (`docs/PRD.yaml`,
@@ -643,6 +648,9 @@ checks emit warnings only.
     `output: "None"`); a unit that traces an API operation may defer to that
     schema. Waiver-aware like #21/#22. This is what stops the emitter from
     filling only trace fields and leaving every interface contract empty.
+    Explicit empties are for genuinely-trivial callables — an emitter that
+    stamps empties across a component (≥3 callable units, ≥80% all-empty)
+    trips the emptiness advisory instead.
 9c. **Container→system edge roll-up (#24 — block `complete`)** — every
     container file's `external_edges[]` entry must have a corresponding
     `ARCH.yaml.edges` row ({from: that container, to: target container,
@@ -785,6 +793,12 @@ file. Each invocation reads or writes one entry under `sessions:`:
 
 ```yaml
 # changelog:
+#   1.3 (2026-07-19): SPLAN3 contract quality — SK-21 emptiness roll-up
+#     advisory (>=3 callable units >=80% all-empty); SK-22 derive rule
+#     (component traces_data_entities = curated UNION unit touches, Phase 7)
+#     + subset fix-hint + missing-key advisory; family contracts reframed as
+#     opt-in for any project (fold >=3 same-shape units); aggregator/
+#     dispatcher contract pattern documented (PLAN2-D3).
 #   1.2 (2026-07-03): work_units cross-check #21 upgraded to BLOCKING for
 #     non-trivial components (waivable via work_units_waiver); new #22 FR->work_unit
 #     coverage cross-check; work_units emit block-style; "drilled" now means
@@ -792,7 +806,7 @@ file. Each invocation reads or writes one entry under `sessions:`:
 #     containers instead of counting them as specified.
 #   1.1: per-component work_units (#21), code_location (#20), upstream provenance.
 session_file_version: "1"
-skill_version: "1.2"
+skill_version: "1.3"
 last_updated: <iso8601>
 
 sessions:

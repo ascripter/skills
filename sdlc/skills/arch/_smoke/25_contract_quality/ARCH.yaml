@@ -1,0 +1,44 @@
+# 25 — VALID system file for the contract-quality advisories fixture.
+# The interesting half is ARCH__pipeline.yaml (SK-21 emptiness roll-up +
+# SK-22 missing-traces_data_entities advisory). Expectation: exit 0, [OK].
+metadata:
+  arch_version: "1.0"
+  last_updated: "2026-07-19T12:00:00Z"
+  generated_by: sdlc-arch
+  session_id: "25252525-aaaa-2525-2525-252525252525"
+  status: "complete"
+
+architecture_pattern:
+  pattern: monolith
+  pattern_confidence: confirmed
+  rationale: "Single deployable; fixture for contract-quality advisories."
+
+identity_and_auth:
+  identity_provider: none
+  identity_provider_confidence: confirmed
+  token_strategy: none
+  token_strategy_confidence: confirmed
+
+containers:
+  - container_id: pipeline
+    archetype: backend-api
+    purpose: "Batch pipeline: parse, transform, emit, persist."
+    owns_api_resources: []
+    owns_ux_surfaces: []
+    persistence: []
+    implements_requirements:
+      - "FR-001"
+      - "FR-002"
+      - "FR-003"
+      - "FR-004"
+      - "FR-005"
+    deployment_unit: container
+    external: false
+    status: confirmed
+    file_path: "docs/ARCH__pipeline.yaml"
+
+edges: []
+
+non_container_features: []
+
+arch_warnings: []

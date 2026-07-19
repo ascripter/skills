@@ -1,0 +1,24 @@
+# Minimal PRD for the contract-quality fixture (25). Supplies FR-001..FR-005 so
+# the container's implements_requirements resolve and #22 has real FR ids.
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-07-19T12:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "25252525-0000-2525-2525-252525252525"
+  status: "complete"
+
+functional_requirements:
+  must_have_features:
+    - "FR-001: Parse the input batch."
+    - "FR-002: Transform parsed records."
+    - "FR-003: Emit the output artifact."
+    - "FR-004: Persist processed jobs."
+    - "FR-005: Persist job results."
+  nice_to_have_features: []
+
+non_functional_requirements:
+  performance_targets: []
+  other: []
+
+use_cases:
+  core_workflows: []

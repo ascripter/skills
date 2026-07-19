@@ -19,7 +19,12 @@
 # =============================================================================
 
 metadata:                                  # REQUIRED
-  arch_container_version: "1.2"            # REQUIRED
+  arch_container_version: "1.3"            # REQUIRED — 1.3 (2026-07-19): SK-21
+                                           #   emptiness advisory, SK-22 derive
+                                           #   rule + missing-key advisory,
+                                           #   family contracts opt-in for any
+                                           #   project. All additive/advisory —
+                                           #   nothing new blocks.
   last_updated: <ISO-8601 UTC>             # REQUIRED — bumped on every write
   generated_by: sdlc-arch                  # REQUIRED
   session_id: <uuid4>                      # REQUIRED — sub-session id from state file
@@ -382,6 +387,11 @@ components:                                # REQUIRED — non-empty
                                            #   filled ONLY when the signature itself is the
                                            #   contract (public library API). Else codegen
                                            #   renders it from inputs/output + the tech stack.
+        # Downstream mapping (task-artifact v1.4 embeds): `task` copies `kind`
+        # onto the task's `unit_kind`, `summary` onto `unit_summary`, and the
+        # four FLAT fields above into a NESTED `interface_contract{inputs,
+        # output, raises, signature}` block — the nested block exists only on
+        # the Task embed, never here.
         status: draft | confirmed          # REQUIRED — interview progress.
     work_units_waiver: <one sentence>      # OPTIONAL — the escape hatch for the #21/#22
                                            #   blocking gates. Set it (alongside
@@ -482,17 +492,21 @@ external_edges:                            # OPTIONAL
 # codegen must guess the INPUT contract; pin via_unit (+ invocation).
 
 # ---------------------------------------------------------------------------
-# work_unit_family_contracts — OPTIONAL, meta-corpus dialect only.
-# Declares one shared DEFER-OR-DECLARE contract per uniform work_unit *family*,
-# so terse members inherit it instead of repeating inputs/output/raises on each
-# (a CLI factory with no API layer has no OPR to DEFER to). Declaring a
-# non-empty list opts the container into the dialect: cross-check #23 then
-# treats a family member as DECLARED even when it omits its own contract. A
-# generated app OMITS this block and keeps the strict per-unit DECLARE rule.
-# A member OVERRIDES its family by declaring its own inputs/output/raises.
-# Membership is the UNION of the selectors provided.
+# work_unit_family_contracts — OPTIONAL. An opt-in pattern for ANY project
+# whose units form uniform families (≥3 units sharing one contract shape:
+# per-stage bodies, per-clause gates, per-command handlers); the meta-corpus
+# dialect merely required it first (a CLI factory with no API layer has no
+# OPR to DEFER to). Declares one shared DEFER-OR-DECLARE contract per
+# *family*, so terse members inherit it instead of repeating
+# inputs/output/raises on each. Declaring a non-empty list opts the container
+# in: cross-check #23 then treats a family member as DECLARED even when it
+# omits its own contract. A container WITHOUT this block keeps the strict
+# per-unit DECLARE rule. A member OVERRIDES its family by declaring its own
+# inputs/output/raises. Membership is the UNION of the selectors provided.
+# Prefer a family over stamping empty contracts across members — the
+# emptiness advisory (#23) flags that shape.
 # ---------------------------------------------------------------------------
-work_unit_family_contracts:                # OPTIONAL — omit for a generated app
+work_unit_family_contracts:                # OPTIONAL — omit when units are heterogeneous
   - family: <family label>                 # REQUIRED — e.g. "gate-units"
     contract: <string>                     # OPTIONAL — prose of the shared contract
     inputs: [<string>, ...]                # OPTIONAL — shared input contract
@@ -582,7 +596,13 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #       * implements_requirements     → FR-NNN/NFR-NNN format + exists in PRD.yaml
 #         AND ⊆ the OWNING component's implements_requirements.
 #       * touches_entities            → ⊆ the owning component's traces_data_entities
-#         (and a DATA-MODEL entity name).
+#         (and a DATA-MODEL entity name). The subset law is maintained by
+#         DERIVATION, not by hand: at write time the component's
+#         traces_data_entities is completed to the union of its units'
+#         touches_entities (curated entries may EXCEED the union, never lag
+#         it — Phase 7 derive rule). Advisory when the component's key is
+#         missing/empty while its units touch entities (the subset check has
+#         no base to fire against there).
 #     Cross-check failures force `metadata.status: draft`. The work_units LIST is
 #     still OPTIONAL for a trivial/plumbing component, BUT a NON-TRIVIAL component
 #     (same set as #20: non-plumbing archetype carrying implements_requirements or
@@ -615,13 +635,13 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     `raises: []`, `output: "None"`). A unit WITH traces_api_operation may
 #     defer to the API schema. A unit with a NON-CALLABLE kind (module /
 #     content / tooling) is EXEMPT — its deliverable is a file, not a callable,
-#     so the interface-contract fields don't apply. Meta-corpus dialect
-#     (OPT-IN): if the container declares `work_unit_family_contracts`, a unit
-#     belonging to a family INHERITS that family's shared contract and may omit
-#     its own inputs/output/raises. A generated app carries no such block, so
-#     the strict per-unit DECLARE requirement is preserved for it. Blocks
-#     `complete`; the component's work_units_waiver downgrades its units' gaps
-#     to warnings.
+#     so the interface-contract fields don't apply. FAMILY (OPT-IN, any
+#     project with uniform unit families): if the container declares
+#     `work_unit_family_contracts`, a unit belonging to a family INHERITS that
+#     family's shared contract and may omit its own inputs/output/raises. A
+#     container without the block keeps the strict per-unit DECLARE
+#     requirement. Blocks `complete`; the component's work_units_waiver
+#     downgrades its units' gaps to warnings.
 #     This is the lint that catches an emitter which fills only the trace
 #     fields (implements_requirements/touches_entities/…) and leaves every
 #     contract field empty — downstream atomic tasks then re-guess each
@@ -630,6 +650,14 @@ arch_warnings:                             # OPTIONAL — list of "WRN-NNN: ..."
 #     raises has nothing to emit — it usually captures a policy enforced
 #     EXTERNALLY; #23 WARNS to move it to a security_concern/acceptance_criterion
 #     + a test rather than a phantom codegen task.
+#     Also (SK-21, advisory, per component): explicit empties are for
+#     genuinely-trivial callables — when ≥3 of a component's callable
+#     DECLARE units are ≥80% all-empty (inputs: [] + output "None" +
+#     raises: []), ONE roll-up warning fires: that shape is an emitter
+#     filling the fields, not deciding interfaces. Verify each contract or
+#     fold the family into work_unit_family_contracts. (`signature` stays
+#     deliberately optional and UNCHECKED — PLAN2-D1: codegen renders it
+#     from inputs/output + tech stack unless the signature IS the contract.)
 # 24. Container→system edge roll-up — every external_edges[] entry implies a
 #     system-level ARCH.yaml.edges row {from: this container, to: the target
 #     container, type: same}. Missing rows BLOCK `complete`: a container-sourced

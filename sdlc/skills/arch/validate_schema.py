@@ -58,12 +58,15 @@ Validates:
          DECLARE its interface contract — `inputs`, `output`, and `raises` all
          present (explicit empties `inputs: []` / `raises: []` / `output:
          "None"` count as declared). A unit with traces_api_operation may
-         defer to the API schema. Meta-corpus dialect (opt-in): if the
-         container declares `work_unit_family_contracts`, a unit belonging to a
-         family inherits that family's shared contract and may omit its own
-         (a CLI factory with no API layer declares one contract per uniform
-         unit family instead of repeating it per member). Blocking; a
-         component-level `work_units_waiver` downgrades it to a warning.
+         defer to the API schema. FAMILY (opt-in, any project with uniform
+         unit families): if the container declares
+         `work_unit_family_contracts`, a unit belonging to a family inherits
+         that family's shared contract and may omit its own (declare one
+         contract per uniform unit family instead of repeating it per
+         member). Blocking; a component-level `work_units_waiver` downgrades
+         it to a warning. Advisory (SK-21): a component where >= 3 callable
+         DECLARE units are >= 80% all-empty gets one emptiness roll-up
+         warning (an emitter stamping the shape).
     8. Edge-table consistency (block status: complete):
        - #24 container→system edge roll-up: every external_edges[] entry in a
          container file implies a system-level ARCH.yaml.edges row
@@ -599,21 +602,23 @@ class ExternalEdge(_Base):
 
 
 class WorkUnitFamilyContract(BaseModel):
-    """One DEFER-OR-DECLARE contract shared by a uniform work_unit *family*
-    (the meta-corpus dialect — DATA-MODEL WorkUnit.meta_corpus_dialect).
+    """One DEFER-OR-DECLARE contract shared by a uniform work_unit *family*.
 
-    Some corpora — a CLI factory with NO API layer, so no OPR for a unit to
-    DEFER to — declare ONE shared inputs/output/raises contract per uniform
-    unit family (gate units, stage-node bodies, CLI verb handlers,
-    subgraph/sub-agent runners) instead of repeating it on every terse member.
-    A member INHERITS its family's contract unless it overrides with its own
-    inputs/output/raises.
+    An opt-in pattern for ANY project whose units form uniform families
+    (>= 3 units sharing one contract shape: gate units, stage-node bodies,
+    CLI verb handlers, subgraph/sub-agent runners); the meta-corpus dialect
+    merely required it first (a CLI factory with NO API layer has no OPR for
+    a unit to DEFER to). Declare ONE shared inputs/output/raises contract per
+    family instead of repeating it on every terse member — and prefer this
+    over stamping empty contracts across members (the #23 emptiness advisory
+    flags that shape). A member INHERITS its family's contract unless it
+    overrides with its own inputs/output/raises.
 
     Declaring a non-empty `work_unit_family_contracts` list opts the container
-    into the dialect: cross-check 23 then treats a family member as DECLARED
-    even when it omits inputs/output/raises. A generated app with no such block
-    keeps the strict per-unit DECLARE requirement. Membership is the UNION of
-    the selectors provided — a unit matches when its owning component_id is in
+    in: cross-check 23 then treats a family member as DECLARED even when it
+    omits inputs/output/raises. A container with no such block keeps the
+    strict per-unit DECLARE requirement. Membership is the UNION of the
+    selectors provided — a unit matches when its owning component_id is in
     `member_components`, OR that component's archetype is in `member_archetypes`,
     OR its `name` matches any glob in `member_name_globs`.
     """
@@ -1600,6 +1605,13 @@ def check_component_work_units(
       warns:
         * a non-trivial component that declares no work_units but records a
           `work_units_waiver` — surfaced so a reviewer sees the waiver, non-blocking.
+        * SK-22 missing-key: units touch entities but the component's
+          `traces_data_entities` is missing/empty — the subset check above has
+          no base to fire against, so the drift would go unseen. Advisory; the
+          fix is the Phase 7 derive rule (component list = curated entries
+          UNION the units' touches).
+        * Gap-2 (per unit) and Gap-1 (per component) advisories — see the
+          inline comments below.
 
     Name uniqueness is checked here (not as a raising model_validator) so a draft
     with duplicate names stays loadable and reports a fixable error.
@@ -1615,6 +1627,7 @@ def check_component_work_units(
         units = comp.work_units or []
         waiver = (comp.work_units_waiver or "").strip()
         seen_names: Set[str] = set()            # names seen within THIS component
+        touched_ents: Set[str] = set()          # union of units' touches_entities
         if not units and archetype not in _PLUMBING_COMPONENT_ARCHETYPES:
             has_trace = any([
                 comp.traces_api_resources, comp.traces_api_operations,
@@ -1677,6 +1690,7 @@ def check_component_work_units(
                     )
             for e in op.touches_entities or []:
                 es = str(e).strip()
+                touched_ents.add(es)
                 if data_entity_names and es not in data_entity_names:
                     errs.append(
                         f"{where}.touches_entities '{e}' is not an entity in "
@@ -1685,7 +1699,9 @@ def check_component_work_units(
                 elif comp_ents and es not in comp_ents:
                     errs.append(
                         f"{where}.touches_entities '{e}' is not in the owning "
-                        f"component '{cid}' traces_data_entities"
+                        f"component '{cid}' traces_data_entities - complete the "
+                        f"component's traces_data_entities to the union of its "
+                        f"units' touches_entities (Phase 7 derive rule)"
                     )
             # Gap-2 (advisory): a DECLARE-dialect unit that declares nothing to
             # emit (no inputs, output "None", raises nothing) is usually a policy
@@ -1709,6 +1725,19 @@ def check_component_work_units(
                     f"mitigation) and/or acceptance_criterion and cover it with a "
                     f"test, not a work_unit"
                 )
+        # SK-22 (advisory): units name entities the component list doesn't
+        # even carry. The subset law is maintained by DERIVATION (Phase 7:
+        # traces_data_entities = curated entries UNION the units' touches), so
+        # a missing/empty key alongside touching units means the derive step
+        # was skipped — the check above can't fire (empty subset base) and the
+        # drift would go unseen.
+        if touched_ents and not comp_ents:
+            warns.append(
+                f"{file_label}: components[{i}]='{cid}' has work_units touching "
+                f"{len(touched_ents)} entit(ies) but traces_data_entities is "
+                f"missing/empty - add the key and complete it to the union of "
+                f"its units' touches_entities (Phase 7 derive rule)"
+            )
         # Gap-1 (advisory): in an EXECUTABLE-deliverable container (CLI/shell), a
         # single-file component with >=2 work_units and no `entrypoint` unit
         # leaves the file's top-level control flow unowned. Gated on the
@@ -1820,11 +1849,26 @@ def check_work_unit_contracts(
                 demo FR-013 v1.30): the deliverable IS a file whose definition
                 set / content is the interface, so inputs/output/raises are
                 not applicable and the check does not apply.
-      FAMILY  — meta-corpus dialect only: the container declares
-                `work_unit_family_contracts` and the unit belongs to one, so it
-                inherits that family's shared contract and may omit its own
-                inputs/output/raises. A generated app carries no such block, so
-                this arm never fires for it (strict per-unit DECLARE preserved).
+      FAMILY  — opt-in by declaring `work_unit_family_contracts` (first
+                required by the meta-corpus dialect, but ANY project with
+                uniform unit families may use it): the unit belongs to a
+                declared family, so it inherits that family's shared contract
+                and may omit its own inputs/output/raises. A container that
+                declares no such block keeps strict per-unit DECLARE.
+
+    Advisory (SK-21, emptiness roll-up): explicit empties are legal per unit,
+    but a component where >= 3 callable DECLARE units are >= 80% all-empty
+    (`inputs: []` + `output: "None"` + `raises: []`) gets ONE roll-up warning
+    — that shape is an emitter filling the fields, not deciding interfaces.
+    Complements the per-unit Gap-2 "nothing to emit" advisory in #21: Gap-2
+    flags the single policy unit; this flags blanket-stamping across a
+    component.
+
+    `signature` is DELIBERATELY optional and unchecked (PLAN2-D1: the corpus
+    contracts were authored without signature fields; the schema fills it
+    "verbatim only when the signature IS the contract" — codegen renders it
+    from inputs/output + the tech stack otherwise). Do not "fix" this by
+    adding a signature check.
 
     Returns (errs, warns). Errs block complete. A component-level
     `work_units_waiver` downgrades that component's contract gaps to warnings
@@ -1846,11 +1890,22 @@ def check_work_unit_contracts(
     for i, comp in enumerate(container.components or []):
         cid = comp.component_id
         waived = bool((comp.work_units_waiver or "").strip())
+        n_declare = 0    # callable DECLARE-case units in this component
+        n_all_empty = 0  # ... whose declared contract is entirely empty
         for j, op in enumerate(comp.work_units or []):
             if op.kind in _NON_CALLABLE_WORK_UNIT_KINDS:
                 continue  # FILE case — the deliverable is the file itself
             if op.traces_api_operation:
                 continue  # DEFER case — contract lives in API__*.yaml
+            n_declare += 1
+            out = op.output
+            if (
+                op.inputs == []
+                and op.raises == []
+                and isinstance(out, str)
+                and out.strip().lower() == "none"
+            ):
+                n_all_empty += 1
             missing = [
                 f
                 for f, v in (
@@ -1877,6 +1932,17 @@ def check_work_unit_contracts(
                 warns.append(msg + " [waived via work_units_waiver]")
             else:
                 errs.append(msg)
+        # SK-21 (advisory): one legitimately-trivial callable is fine; a
+        # component where nearly EVERY callable declares the all-empty
+        # contract is an emitter stamping the shape, not deciding interfaces.
+        if n_declare >= 3 and n_all_empty / n_declare >= 0.8:
+            warns.append(
+                f"{file_label}: component '{cid}': {n_all_empty}/{n_declare} "
+                f"callable units declare empty contracts (inputs: [], output: "
+                f"\"None\", raises: []) - likely an emitter filling the shape, "
+                f"not deciding interfaces; verify each contract or declare a "
+                f"shared work_unit_family_contracts family"
+            )
     return errs, warns
 
 
@@ -2574,7 +2640,7 @@ def validate_all(arch_path: Path) -> int:
     ]
 
     titled_warnings: List[Tuple[str, List[str]]] = [
-        ("undeclared work_unit contract(s) [waived]", contract_warns),
+        ("work_unit contract advisorie(s) [waived gaps / emptiness roll-up]", contract_warns),
         ("FR-named deliverable path(s) outside every code_location (cross-check 25)", deliverable_path_warns),
         ("external calls edge(s) not mirrored in api_consumers (cross-check 26)", api_mirror_warns),
         ("cross-container calls edge(s) with no pinned invocation seam (cross-check 27)", unpinned_seam_warns),
@@ -2797,7 +2863,7 @@ def _print_warnings(
             print(f"  - {w}")
     if operation_warnings:
         print()
-        print(f"WARNINGS ({len(operation_warnings)} component(s) without work_units [waived or advisory]):")
+        print(f"WARNINGS ({len(operation_warnings)} component work_units advisorie(s) [waivers / Gap-1 / Gap-2 / traces derive]):")
         for w in operation_warnings:
             print(f"  - {w}")
     if fr_work_unit_rollup:
