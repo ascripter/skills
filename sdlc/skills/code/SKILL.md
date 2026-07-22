@@ -65,10 +65,10 @@ during the run, and a report at the end.
 | `SKILL.md` | This file — dispatch, the execution flow, the gates. |
 | `CODE-MANIFEST.schema.yaml` | Human-readable canonical schema for `docs/CODE-MANIFEST.json`. |
 | `validate_schema.py` | Pydantic v2 validator for the manifest (+ advisory disk cross-checks). |
-| `topo_order.py` | Deterministic scheduler AND worker-packet builder: loads all TASKS files + the ledger, topo-sorts with the test-first policy, prints ready/blocked/stale tasks and ring boundaries; `--emit <qualified-id>…` prints the verbatim task object(s) + a `requirement_context` slice from PRD for the worker brief. Run it — never hand-compute the order or `Read` a TASKS shard to slice a task. |
+| `topo_order.py` | Deterministic scheduler AND worker-packet builder: loads all TASKS files + the ledger, topo-sorts with the test-first policy, prints ready/blocked/stale tasks and ring boundaries; `--emit <qualified-id>…` prints the verbatim task object(s) + a `requirement_context` slice from PRD (`implements` / `implements_workflows` / `test_spec.covers` ids resolved to FR/NFR/WKF/ACR statements) for the worker brief. Run it — never hand-compute the order or `Read` a TASKS shard to slice a task. |
 | `set_claude_md_pointer.py` | CLAUDE.md pointer injector, called at close. |
 | `references/execution-loop.md` | Scheduling policy, the four verification rings, the heal loop, opus escalation. Read on entering Phase 4. |
-| `references/emit-rules.md` | Kind → write behavior, provenance markers, same-file merging, the path ladder + path safety. Read on entering Phase 4. |
+| `references/emit-rules.md` | Kind → write behavior, provenance markers, same-file merging, the path ladder + path safety. Its **Worker digest** section is the one named block every worker brief includes verbatim. Read on entering Phase 4. |
 | `references/state-and-idempotency.md` | Ledger schema, fingerprints, the re-run decision matrix, resume semantics. Read in Phases 1–2. |
 | `references/edge-cases.md` | Unusual situations (missing target_files, draft tasks, hand-broken graphs, …). |
 
@@ -178,9 +178,10 @@ token/asset files). Use
 big **upstream YAMLs** (ARCH); read whole files only when INDEX is absent or
 the doc is small. Never `Read` a TASKS shard to slice a task — the per-task
 JSON is pulled by `topo_order.py --emit` (Phase 4), which also joins the
-`requirement_context` (FR/NFR/WKF statements) so the packet, not PRD, carries
-the requirement grounding. This is what makes a task a complete **worker
-packet** (Phase 4).
+`requirement_context` (FR/NFR/WKF/ACR statements — for a test task these come
+from its `test_spec.covers`) so the packet, not PRD, carries the requirement
+grounding for implementation *and* test tasks alike. This is what makes a task
+a complete **worker packet** (Phase 4).
 
 ### Phase 3 — Plan & approval
 
@@ -202,11 +203,16 @@ manager never writes source files itself — it dispatches **waves of worker
 subagents** and integrates their results. Per wave:
 
 1. **Compose the wave** from `topo_order.py`'s ready set: up to **3 work
-   units** whose task sets have **pairwise-disjoint `target_files`**. A work
+   units** whose task sets have **pairwise-disjoint `target_files`** —
+   disjointness is **path-aware**: a directory entry contains every path
+   beneath it (`tests/` overlaps `tests/unit/test_x.py`; check mechanically
+   with `topo_order.py --overlap <qid> <qid> …`). A work
    unit = one implementation task + the test task(s) exercising it
    (test-first ready-queue policy — the pair runs in ONE worker so the heal
    loop sees both sides). Tasks touching **shared files** (scaffold, barrel
-   exports, a config file another pending task also writes) run **solo** —
+   exports, a config file another pending task also writes) and tasks with a
+   **directory-pinned target** (canonically `test_infrastructure`'s
+   `["tests/"]`) run **solo** —
    a wave of one. Skip-check every candidate against the ledger first
    (idempotency matrix in `references/state-and-idempotency.md`).
 2. **Dispatch workers** (Agent tool, run in parallel, non-interactive). Build
@@ -219,12 +225,15 @@ subagents** and integrates their results. Per wave:
    ```
 
    It prints, per requested task, the **verbatim task JSON object** joined with a
-   `requirement_context` slice (the task's `implements`/`implements_workflows`
-   ids resolved to their one-line PRD statements) — so the worker has its FR/NFR
-   grounding in-packet without opening PRD. Each worker's brief is then
+   `requirement_context` slice (the task's `implements` / `implements_workflows` /
+   `test_spec.covers` ids resolved to their one-line PRD statements) — so every
+   worker, implementation and test alike, has its FR/NFR/WKF/ACR grounding
+   in-packet without opening PRD. Each worker's brief is then
    self-contained: its packet(s) (the v1.4 embeds + requirement_context ARE the
-   context), the container's tech-stack slice, the
-   emit-rules digest (provenance marker + path safety), and the instruction
+   context), the container's tech-stack slice, the **worker digest** from
+   `references/emit-rules.md` (one named block — packet consumption, path
+   safety, per-kind rendering, provenance; included whole, never
+   cherry-picked), and the instruction
    set: emit per the kind table, run the **static ring** (compile / import /
    typecheck / format check of touched files), run the **unit ring** (the
    unit's just-authored tests), **heal ≤2 attempts inline**, then STOP and
@@ -245,6 +254,9 @@ subagents** and integrates their results. Per wave:
    that ring's suite (component unit tests together → container integration
    + full container suite → system e2e/contract), heal ≤3 with the same
    escalation. Higher rings never run inside workers (port/DB collisions).
+   Run every ring command **bare** and record its captured numeric exit code
+   in the ledger — never read `$?` after a pipe (measurement rule in
+   `references/execution-loop.md`).
 6. **Container boundary** (bare-run form only): after a container's ring
    closes, report ("`backend-api` done: 14 impl, 9 test, container ring
    green — 2 containers remain") and gate: *continue with `<next>` / stop
@@ -255,7 +267,8 @@ already holds everything confirmed so far.
 
 **Why 3 workers, why disjoint files:** parallel workers can't see each
 other's just-written code — the embedded contracts are the only seam. Disjoint
-`target_files` makes write conflicts impossible; the integration/container
+`target_files` — path-aware, so a directory pin conflicts with every file
+beneath it — makes write conflicts impossible; the integration/container
 rings catch contract-level mismatches one ring later. Three is the sweet spot
 between wall-clock speedup and blast radius when a seam assumption is wrong.
 If the Agent tool is unavailable in the session, fall back to executing units
@@ -300,6 +313,7 @@ Full rules with examples: `references/emit-rules.md`.
 | `scaffold` | Package/repo skeleton: the files in `target_files` (or path-shaped `outputs`) — manifest, entrypoint, workspace config. |
 | `implementation` | **One deliverable** (`target_symbol`) in **one file** (`target_files[0]`). `unit_kind: callable` (default) renders the callable from the task's embedded `interface_contract`; `module`/`content`/`tooling` emit the file itself; `entrypoint` renders the composition/dispatch root (arg/mode parse + step-sequencing + setup + exit codes) that dispatches into the per-mode callables. Pre-1.3 fallback: the ARCH work_unit (or the API operation it defers to). First task on a file creates it; later tasks Edit-insert. |
 | `test` | The runnable test(s) realizing each `implements_tests` TST — tier, directives and acceptance from the task's embedded `test_spec` (pre-1.3 fallback: the TST entry in `TEST-STRATEGY__<cid>.yaml`). |
+| `test_infrastructure` | The container's ONE shared-test-infrastructure task: conftest, factories, fake helpers per its `description` (mock_policy + fixture_strategy ride in it verbatim). Scaffold-like — no `component_ref`/`target_symbol`, directory `target_files` (`["tests/"]`) the norm, file-header provenance. Every `test` task depends on it; its directory pin means it runs **solo**, never in a parallel wave. |
 | `integration` | Wiring: route registration, DI, the consumer-side client against the provider's contract — from the task's embedded `operation_contract` (pre-1.4 fallback: resolve `touches_operations` in `API__*.yaml`). |
 | `migration` | Schema/DDL/persistence setup for `touches_entities`, per the task's embedded `entity_slice` (pre-1.4 fallback: the DATA-MODEL entity slice). |
 | `config` | Env/settings wiring (the `config_loader` seam) from the task's embedded `config_keys` — never invent keys (pre-1.4 fallback: ground in ARCH/API/PRD and warn); secrets *backends* belong to deploy. |

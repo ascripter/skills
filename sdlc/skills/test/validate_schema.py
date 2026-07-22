@@ -405,8 +405,9 @@ def _deferred_literals(warnings: List[str], ids: Set[str]) -> Set[str]:
 def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
     """Return {'FR','NFR','WKF','ACR'} id sets declared in PRD.yaml.
 
-    FR from functional_requirements.must/nice; NFR from
-    non_functional_requirements.performance_targets + .other; WKF from
+    FR from functional_requirements.features (D2 flat list; legacy
+    must_have_features + nice_to_have_features are unioned for back-compat);
+    NFR from non_functional_requirements.performance_targets + .other; WKF from
     use_cases.core_workflows; ACR via a raw token scan (acceptance criteria
     are nested per FR/NFR/USR). Honors monorepo mode.
     """
@@ -422,7 +423,7 @@ def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
     def _pull(node: dict) -> None:
         freqs = node.get("functional_requirements") or {}
         if isinstance(freqs, dict):
-            for key in ("must_have_features", "nice_to_have_features"):
+            for key in ("features", "must_have_features", "nice_to_have_features"):
                 for item in freqs.get(key) or []:
                     mm = re.match(r"^FR-\d+", str(item).strip(), re.IGNORECASE)
                     if mm:

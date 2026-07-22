@@ -232,7 +232,8 @@ traces_ux_surfaces: null        # list[string] — SCR-NNN ids this design syste
 # when a surface deliberately deviates (a denser data grid, a hero page with a
 # bespoke look, an inverted-scheme modal). Downstream `task` derives one
 # per-surface design task per entry (in addition to the global theme/token
-# task), so an entry = concrete design work.
+# task), so an entry = concrete design work (realized by task's design coverage
+# check #15).
 # -----------------------------------------------------------------------------
 surface_overrides: null         # dict[SCR-NNN, SurfaceOverride] — each:
                                 #   SCR-004:

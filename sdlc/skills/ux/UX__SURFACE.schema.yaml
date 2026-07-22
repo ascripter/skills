@@ -108,6 +108,10 @@ layout:
                                 #     detail_pane | hero | banner
 
   # CLI surfaces (cli_command):
+  # Downstream `task` embeds this whole block VERBATIM as the CLI handler task's
+  # `cli_contract` (a self-contained slice — the worker codes a parser straight
+  # from it, no UX lookup). Keep every CLIArg complete enough to generate an
+  # argument parser from: name, kind, type, required, and description at minimum.
   cli_args:                     # null OR list of CLIArg
     # Each CLIArg:
     #   - name: kebab-case

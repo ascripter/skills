@@ -50,7 +50,8 @@ Validates:
          every traces_prd_features entry; SCR-NNN on every traces_ux_surfaces
          entry; WKF-NNN on every traces_prd_workflows entry. Hard error in
          status:complete; warning (force draft) otherwise.
-       - Feature coverage: every PRD must_have_features FR-NNN is either traced
+       - Feature coverage: every PRD FR-NNN (the flat `features` list, or the
+         legacy must/nice union) is either traced
          by some entity's traces_prd_features OR explicitly deferred by being
          named in a data_warnings entry (the documented trace-or-defer
          contract — a process/behaviour feature with no data entity is deferred
@@ -1055,6 +1056,41 @@ def _paradigm_of(root: object) -> Paradigm:
         return Paradigm.relational
 
 
+# ⚠D (D2): the silent relational default hides a forgotten paradigm on a
+# file-native/CLI project (the exact trap the original AICF DATA-MODEL v1 was
+# hand-rewritten to escape). From this artifact version on, an undeclared
+# paradigm is an ERROR at status:complete; older artifacts keep the silent
+# default + a warning. The floor CLEARS the meta-corpus's self-stamped 2.25
+# (CLAUDE.md §10 — a new blocking check must not hard-fail legacy artifacts).
+_PARADIGM_GATE_VERSION: "tuple[int, ...]" = (3, 0)
+
+
+def _version_tuple(version: str) -> "tuple[int, ...]":
+    """Parse ``"2.25"`` -> ``(2, 25)`` for a major.minor comparison; ``(0,)`` when
+    unparseable."""
+    parts = re.findall(r"\d+", str(version))
+    return tuple(int(x) for x in parts[:2]) if parts else (0,)
+
+
+def check_paradigm_declared(dm: "DataModel") -> List[str]:
+    """Return scope-labelled ``persistence.paradigm`` paths not explicitly
+    declared (⚠D). The caller decides error-vs-warning by artifact version."""
+    gaps: List[str] = []
+
+    def _scope(label: str, root: object) -> None:
+        persistence = _get_dotted(root, "persistence")
+        declared = persistence is not None and getattr(persistence, "paradigm", None) is not None
+        if not declared:
+            gaps.append(f"{label}persistence.paradigm")
+
+    if dm.metadata.monorepo and dm.products:
+        for slug, product in dm.products.items():
+            _scope(f"products.{slug}.", product)
+    else:
+        _scope("", dm)
+    return gaps
+
+
 def check_required(dm: DataModel) -> List[str]:
     """Return a flat list of missing required field paths.
 
@@ -1443,10 +1479,14 @@ def check_key_value_design(root: object) -> List[str]:
     return errs
 
 
-def load_prd_must_have_features(
+def load_prd_features(
     prd_path: Path,
 ) -> Dict[Optional[str], List[str]]:
-    """Return PRD must_have_features FR-NNN IDs, scoped correctly.
+    """Return the PRD's gating FR-NNN IDs, scoped correctly. D2 gating subset
+    (FR_GATE semantics, CLAUDE.md §10 / task precedent): the flat `features`
+    list when present, else the legacy `must_have_features` ONLY. A legacy PRD's
+    `nice_to_have_features` is post-MVP backlog the pre-D2 coverage gate never
+    required, so it stays ungated — widening it would hard-fail legacy artifacts.
 
     Single-product mode: returns ``{None: [FR-001, ...]}``.
     Monorepo mode: returns ``{"<slug>": [FR-001, ...], ...}`` — one entry per
@@ -1469,9 +1509,13 @@ def load_prd_must_have_features(
     def _pull(node: dict) -> List[str]:
         out: List[str] = []
         fr = node.get("functional_requirements") or {}
-        mhf = fr.get("must_have_features") if isinstance(fr, dict) else None
-        if isinstance(mhf, list):
-            for item in mhf:
+        if not isinstance(fr, dict):
+            return out
+        feats = fr.get("features")
+        if not feats:  # legacy: gate on must_have only (nice_to_have stays ungated)
+            feats = fr.get("must_have_features") or []
+        if isinstance(feats, list):
+            for item in feats:
                 s = str(item).strip()
                 m = _FEATURE_ID_RE.match(s)
                 if m:
@@ -1544,7 +1588,7 @@ def collect_deferred_features(warnings: Optional[List[str]]) -> set:
     """FR-NNN ids explicitly named in a `data_warnings` entry.
 
     The documented coverage contract (see DATA-MODEL.schema.yaml header) is:
-    every PRD must-have FR-NNN must be traced by >=1 entity OR land in a
+    every PRD FR-NNN must be traced by >=1 entity OR land in a
     `data_warnings` deferral. A process/behaviour feature (a recovery path, a
     codegen heal-loop, a gate) introduces no entity; naming it in a warning is
     the sanctioned way to record "intentionally not modelled as data". Any
@@ -1647,7 +1691,7 @@ def validate_file(path: Path) -> int:
     # Per-product or single-product cross-checks.
     docs_dir = path.parent
     prd_path = docs_dir / "PRD.yaml"
-    prd_features_by_scope = load_prd_must_have_features(prd_path)
+    prd_features_by_scope = load_prd_features(prd_path)
     prd_volume = load_prd_data_volume(prd_path)
 
     relationship_errs: List[str] = []
@@ -1714,6 +1758,13 @@ def validate_file(path: Path) -> int:
     missing = check_required(dm)
     status = dm.metadata.status
 
+    # ⚠D: undeclared paradigm — blocking error at/after the gate version,
+    # advisory warning below it (version-gated per CLAUDE.md §10).
+    paradigm_decl_gaps = check_paradigm_declared(dm)
+    _paradigm_gated = _version_tuple(dm.metadata.data_model_version) >= _PARADIGM_GATE_VERSION
+    paradigm_decl_errs = paradigm_decl_gaps if _paradigm_gated else []
+    paradigm_decl_warns = [] if _paradigm_gated else paradigm_decl_gaps
+
     # Hard errors (block status:complete): missing required, relationship integrity,
     # field references, classification integrity, bounded-context partition,
     # mode mismatch (already caught by pydantic model_validator).
@@ -1728,6 +1779,7 @@ def validate_file(path: Path) -> int:
         or warning_id_errs
         or trace_id_errs
         or paradigm_errs
+        or paradigm_decl_errs
     )
     soft_problems = bool(uncovered_features or volume_errs)
 
@@ -1774,6 +1826,14 @@ def validate_file(path: Path) -> int:
                 for e_ in paradigm_errs:
                     print(f"  - {e_}")
                 print()
+            if paradigm_decl_errs:
+                print(
+                    f"{len(paradigm_decl_errs)} undeclared paradigm (required at "
+                    f"data_model_version >= {'.'.join(map(str, _PARADIGM_GATE_VERSION))}):"
+                )
+                for e_ in paradigm_decl_errs:
+                    print(f"  - {e_}: declare persistence.paradigm explicitly (no silent relational default)")
+                print()
             if uncovered_features:
                 print(
                     f"{len(uncovered_features)} PRD FR-NNN feature(s) with no entity trace "
@@ -1799,6 +1859,14 @@ def validate_file(path: Path) -> int:
             f"{n_entities} entit(y/ies); "
             f"{total_features} PRD FR-NNN feature(s) all covered."
         )
+        if paradigm_decl_warns:
+            print(
+                f"\nAdvisory (never blocks below data_model_version "
+                f"{'.'.join(map(str, _PARADIGM_GATE_VERSION))}): "
+                f"{len(paradigm_decl_warns)} undeclared paradigm - defaulting to relational:"
+            )
+            for w in paradigm_decl_warns:
+                print(f"  - {w}: declare it explicitly to avoid a silent SQL-flavored default")
         return 0
 
     # status == "draft"

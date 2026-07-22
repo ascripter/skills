@@ -98,7 +98,7 @@ to write the answer in free text and accept it as-is.
 `entities` is the only `critical` theme in this skill. It runs a full
 per-entity drill-down — propose → describe → fields → primary_key →
 traces → approve → next entity. This is the data-model analogue of PRD's
-`must_have_features` per-feature flow.
+`features` per-feature flow.
 
 Because the theme is also marked `synthesis: true`, the per-entity
 loop is followed by a **dynamic scope-completeness sweep** (drawing

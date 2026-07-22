@@ -30,7 +30,7 @@
     {
       "id": 4,
       "name": "existing-prd-merge",
-      "prompt": "Run sdlc-prd. `docs/PRD.yaml` already exists. Update only the timeline_milestones and success_metrics themes. Leave everything else alone. Use first-option answers.",
+      "prompt": "Run sdlc-prd. `docs/PRD.yaml` already exists. Update only the stakeholders and success_metrics themes. Leave everything else alone. Use first-option answers.",
       "expected_output": "Existing keys preserved verbatim except for the two updated themes. Custom keys not in our schema are preserved. metadata.last_updated is bumped. CLAUDE.md timestamp is updated, no duplicate block.",
       "files": [
         "evals/fixtures/existing-prd/docs/PRD.yaml",

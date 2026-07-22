@@ -54,7 +54,7 @@ Examples:
 - `PRD.data_model.key_entities: [User, Project]` but `models/` has
   `User`, `Project`, `Workspace` → pre-fill all three from the repo,
   tag `Workspace` as `⚠ inferred — not in PRD; appears in repo`.
-- `PRD.functional_requirements.must_have_features` includes FR-007 about
+- `PRD.functional_requirements.features` includes FR-007 about
   notifications but no UX surface references notifications → pre-fill a
   `Notification` entity as `⚠ inferred`, flag uncovered surface trace.
 

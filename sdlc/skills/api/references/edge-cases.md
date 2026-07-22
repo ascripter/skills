@@ -32,7 +32,7 @@ and ask the user to fix it first.
 
 ### PRD feature with no obvious resource
 
-A `must_have_features` entry the agent can't imagine any single
+A `features` entry the agent can't imagine any single
 resource owning — e.g. "Send a weekly digest email" or
 "Theme switcher (light/dark)". Behaviour:
 
@@ -219,7 +219,7 @@ When `PRD.metadata.monorepo == true`:
   (e.g. both products having a `users` resource).
 - The interview runs **per product**: theme 8 enumerates each
   product's resources separately; theme 10 deep-dives the union.
-- Coverage checks run per-product: every product's `must_have_features`
+- Coverage checks run per-product: every product's `features`
   must be covered by at least one resource from that product (or
   listed in that product's `non_api_features`); every product's UX
   surfaces must be covered by a resource from that product.

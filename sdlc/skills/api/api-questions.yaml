@@ -685,7 +685,7 @@ questions:
   - theme: per_resource_deepdive
     id: traces_prd_features
     schema_path: resource.traces_prd_features
-    question: "Which PRD must_have_features (FR-NNN ids) does this resource implement?"
+    question: "Which PRD features (FR-NNN ids) does this resource implement?"
     hint: "Pure FR-NNN id list — no verbatim PRD text. Drives the feature-coverage check. Every PRD FR-NNN must end up traced here OR listed in non_api_features. The validator enforces FR-NNN format on every entry."
     suggested_answers: []
     free_text_allowed: true

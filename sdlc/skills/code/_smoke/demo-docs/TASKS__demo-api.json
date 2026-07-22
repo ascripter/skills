@@ -6,6 +6,7 @@
     "session_id": "smoke000-code-code-code-taskdemoapi0",
     "status": "complete",
     "changelog": [
+      "1.3 (2026-07-20): implements + test_spec.covers added so the emit golden check (emit_selftest.py) can prove requirement_context resolution against demo-docs/PRD.yaml (SPLAN4).",
       "1.3 (2026-07-07): Embedded per-task specifics (schema v1.3)."
     ]
   },
@@ -78,6 +79,9 @@
       "touches_entities": [
         "Item"
       ],
+      "implements": [
+        "FR-001"
+      ],
       "depends_on": [
         "TSK-001",
         "TSK-002"
@@ -109,6 +113,9 @@
         "raises": [],
         "signature": null
       },
+      "implements": [
+        "FR-002"
+      ],
       "depends_on": [
         "TSK-001"
       ],
@@ -140,7 +147,11 @@
           "Act: call createItem().",
           "Assert: 201 with a persisted id."
         ],
-        "acceptance": "Creating an item returns 201 with a persisted id."
+        "acceptance": "Creating an item returns 201 with a persisted id.",
+        "covers": [
+          "FR-001",
+          "ACR-001"
+        ]
       },
       "depends_on": [
         "TSK-003"
@@ -173,7 +184,11 @@
           "Act: call listItems().",
           "Assert: both items are returned."
         ],
-        "acceptance": "GET /items returns the persisted items."
+        "acceptance": "GET /items returns the persisted items.",
+        "covers": [
+          "FR-002",
+          "ACR-002"
+        ]
       },
       "depends_on": [
         "TSK-004"

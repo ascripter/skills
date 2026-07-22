@@ -3,7 +3,35 @@
 Skills touched: **code** only. Findings: SK-04, SK-25, SK-26, SK-27, SK-28. Corpus
 lineage: **K2, K3, K4**, F9's residual, F3/F5's delivery channel, and the PLAN4
 sign-off false-green.
-Status: **open**. Line numbers = 0.3.6; re-locate at HEAD.
+Status: **EXECUTED 2026-07-20**. Line numbers = 0.3.6; re-locate at HEAD.
+
+> **Execution reconciliation (2026-07-20).** Five deviations, all verified
+> against HEAD before executing:
+> 1. **Fold-in (new scope):** SPLAN1's ⚠A created `kind: test_infrastructure`
+>    after this plan was authored, and the code skill had ZERO mentions of it
+>    (no emit-rules entry, no SKILL.md kind-table row, no wave rule) — a worker
+>    receiving one had no instructions. Landed with steps 2/3: a rendering
+>    entry (scaffold-like, file-header provenance, description carries
+>    mock_policy/fixture_strategy verbatim), a kind-table row, and the
+>    runs-solo wave rule (it is SK-27's canonical directory-pinned case).
+> 2. **Live-corpus ACR regression impossible:** the corpus PRD has zero
+>    `"ACR-NNN:"` definition lines and no corpus `test_spec.covers` names an
+>    ACR — the corpus regression is FR-only (TSK-238); ACR resolution is
+>    proven by the demo-docs golden check instead. Step 1b's stock-PRD shape
+>    claim verified correct (`prd/PRD.schema.yaml:304-314`).
+> 3. **Step 5 concretized:** demo-docs had no PRD.yaml, and adding one
+>    activates the task validator's union FR gate (fully-stitched, no
+>    transitive ARCH credit) — so TSK-003/004 gained `implements` and
+>    TSK-005/006 gained `test_spec.covers` (their `test_spec` already
+>    existed, contrary to the plan draft's "no test_spec" note). Golden
+>    script = `_smoke/emit_selftest.py` (mirrors work_units_style_selftest
+>    conventions). Fingerprint-safe: only `TASKS/TSK-001` is pinned by
+>    demo-state.yaml and was not touched.
+> 4. **No eval change:** `evals.json` never asserts brief composition.
+> 5. **No SKILL.md version touch:** the field doesn't exist in code's
+>    SKILL.md; not introduced mid-plan.
+> The `--overlap` helper (step 3b "only if cheap") was included per owner
+> decision (2026-07-20 review).
 
 ## Steps
 
@@ -92,8 +120,38 @@ b. Ledger schema (`state-and-idempotency.md`): ring records carry the captured
 
 ## Execution ledger
 
-- [ ] 1 emit covers+ACR (+PRD line-shape verified)
-- [ ] 2 worker digest restructure + brief list + K4 line
-- [ ] 3 path-aware overlap rule (+optional --overlap helper)
-- [ ] 4 measurement rule + ledger exit codes
-- [ ] 5 golden emit fixture · verification green
+- [x] 1 emit covers+ACR (+PRD line-shape verified) — `emit_packets` harvests
+  `test_spec.covers`; `_REQ_RE` admits ACR; module/emit/load_requirements
+  docstrings + SKILL.md (:68/:181/:221) + execution-loop (:52/:151) claims
+  updated. Corpus `--emit aicf-cli/TSK-238`: FR-018 + FR-056 resolved (was
+  `{}`); impl packet (`build-sandbox/TSK-004`) byte-identical to HEAD.
+- [x] 2 worker digest restructure + brief list + K4 line — emit-rules.md now
+  has a bounded "## Worker digest … *End of worker digest.*" block (path
+  safety, one-file merge, per-kind rendering, provenance, what-NOT-to-write,
+  plus a promoted "Packet consumption" section: requirement_context rule +
+  entity-slice fetch + the K4 INDEX-path line); both brief lists
+  (execution-loop, SKILL.md) name the digest; stale two-rule enumeration
+  grep-clean.
+- [x] 3 path-aware overlap rule + --overlap helper — rule in execution-loop
+  wave bullet + SKILL.md wave step + "why disjoint" paragraph;
+  `topo_order.py --overlap` (segment-prefix containment mirroring task's
+  `_path_within_any`, exit 0/1). Proven on the corpus incident shape:
+  `TSK-414 tests/` vs `TSK-238 tests/aicf/...` → 1; nested dirs → 1;
+  disjoint dirs → 0.
+- [x] 4 measurement rule + ledger exit codes — "Measure rings bare" paragraph
+  in execution-loop rings section (294-error false-green evidence);
+  state-and-idempotency ledger gains `ring_exit`, `ring_container_exit`, and
+  the `failure: "exit N: …"` prefix; SKILL.md ring-closure step points at the
+  rule.
+- [x] 5 golden emit fixture · verification green — NEW demo-docs/PRD.yaml
+  (FR-001/002 + ACR-001/002, post-D2 flat features) + implements/covers on
+  TSK-003..006 + NEW `_smoke/emit_selftest.py` (7 assertions).
+- [x] fold-in: test_infrastructure rendering entry + kind-table row + solo
+  wave rule (see reconciliation note 1).
+
+**Post-execution baselines (2026-07-20):** `emit_selftest.py` SELFTEST PASS
+(exit 0, 7/7). Task validator on demo-docs: exit 0, output byte-identical to
+pre-change baseline (4 warnings). Corpus: `--scope all` byte-identical to HEAD
+(exit 0, 461 pending); `--emit aicf-cli/TSK-238` exit 0 with covers FRs
+resolved; impl packet emit byte-identical. `py_compile` clean on topo_order.py
++ emit_selftest.py.

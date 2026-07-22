@@ -21,7 +21,7 @@ import re
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union
 
 try:
     import yaml
@@ -229,6 +229,10 @@ class UseCases(_ThemeBase):
 
 
 class FunctionalRequirements(_ThemeBase):
+    # D2: one flat `features` list. must_have_features / nice_to_have_features
+    # are retained as ACCEPTED legacy fields (parse-and-union — see
+    # `flat_features()`) so old PRDs validate; new writes emit only `features`.
+    features: Optional[List[str]] = None
     must_have_features: Optional[List[str]] = None
     nice_to_have_features: Optional[List[str]] = None
     out_of_scope: Optional[List[str]] = None
@@ -236,6 +240,13 @@ class FunctionalRequirements(_ThemeBase):
     integrations_required_confidence: Optional[Confidence] = None
     ai_features: Optional[List[str]] = None
     ai_features_confidence: Optional[Confidence] = None
+
+    def flat_features(self) -> List[str]:
+        """The FR list, tolerant of both shapes: `features` if present, else the
+        legacy must_have + nice_to_have union (must first, preserving FR order)."""
+        if self.features:
+            return list(self.features)
+        return list(self.must_have_features or []) + list(self.nice_to_have_features or [])
 
 
 class TechnicalConstraints(_ThemeBase):
@@ -321,6 +332,10 @@ class Stakeholders(_ThemeBase):
 
 
 class Milestones(_ThemeBase):
+    # D2: milestones are REMOVED from new PRDs (no MVP/phase split — every
+    # consumer is built whole by /sdlc:code). This model is retained only so
+    # legacy PRDs still carrying a typed `milestones` block validate cleanly
+    # (parse-and-accept); the interview never emits it. See PRD.schema.yaml.
     mvp_scope: Optional[str] = None
     phases: Optional[List[str]] = None
 
@@ -337,16 +352,19 @@ class RiskItem(_ThemeBase):
 
     A `top_risks` entry may be a plain string (legacy/simple form, no
     regression) OR this mapping. Only `statement` + `disposition` are
-    required. `mitigation_refs` point at EXISTING cross-stage ids
-    (FR-/NFR-/TST-/SIG-/QUE-…) — they are references, not a new id family, so
-    the validator treats them as free strings (no dangling check). By
-    convention `mitigation_refs` is non-empty when disposition == mitigated,
-    but that is a content-critic/judgment concern, not a deterministic gate.
+    required. `mitigation_refs` point at ids that EXIST at PRD-write time only
+    (the PRD-minted families FR/NFR/QUE/INT/OOS/AIF) — NOT downstream ids like
+    TST-/SIG- that no stage has minted yet (⚠C, D2). A mitigation realized by a
+    later stage is simply the FR/NFR that demands it. They are references, not a
+    new id family (no dangling check); `check_mitigation_refs()` emits an
+    ADVISORY (never blocks) for any forward reference. By convention
+    `mitigation_refs` is non-empty when disposition == mitigated, but that is a
+    content-critic/judgment concern, not a deterministic gate.
     """
 
     statement: str                       # REQUIRED — the risk in prose
     disposition: RiskDisposition         # REQUIRED — mitigated | accepted_residual | open
-    mitigation_refs: List[str] = Field(default_factory=list)  # OPTIONAL — existing ids
+    mitigation_refs: List[str] = Field(default_factory=list)  # OPTIONAL — PRD-write-time ids
 
 
 # A top risk is EITHER a structured RiskItem OR a plain string. Mapping entries
@@ -512,10 +530,11 @@ class PRD(BaseModel):
 # "<PREFIX>-NNN: " (3+ zero-padded digits, colon, space). Violations are
 # warnings for drafts; errors for status=complete.
 #
-# Sibling fields that should share one counter (e.g. must_have_features +
-# nice_to_have_features sharing FR-NNN) appear as separate entries with the
-# same prefix below. The validator only checks per-item format, not gapless
-# numbering — the writing agent is responsible for sequential assignment.
+# Sibling fields that should share one counter (e.g. the flat `features` list and
+# the legacy must_have_features + nice_to_have_features it replaced, all sharing
+# FR-NNN) appear as separate entries with the same prefix below. The validator
+# only checks per-item format, not gapless numbering — the writing agent is
+# responsible for sequential assignment.
 #
 # `scope` distinguishes two cases:
 #   - "top"     — field lives at the PRD root in both single- and multi-product
@@ -535,8 +554,9 @@ ID_FAMILIES: List[Tuple[str, str, str]] = [
     ("JTB", "use_cases.primary_jobs_to_be_done", "product"),
     ("JTB", "use_cases.secondary_jobs", "product"),
     ("EDG", "use_cases.edge_cases", "product"),
-    ("FR", "functional_requirements.must_have_features", "product"),
-    ("FR", "functional_requirements.nice_to_have_features", "product"),
+    ("FR", "functional_requirements.features", "product"),
+    ("FR", "functional_requirements.must_have_features", "product"),  # legacy (accepted)
+    ("FR", "functional_requirements.nice_to_have_features", "product"),  # legacy (accepted)
     ("OOS", "functional_requirements.out_of_scope", "product"),
     ("INT", "functional_requirements.integrations_required", "product"),
     ("AIF", "functional_requirements.ai_features", "product"),
@@ -668,11 +688,13 @@ def check_open_questions(prd: "PRD") -> List[str]:
 # =============================================================================
 
 # Path is dotted relative to a Product (or top level in single-product mode).
+# NB: the FR list requirement is NOT in this table — it is D2-tolerant (satisfied
+# by the flat `features` list OR the legacy must/nice union) and checked
+# separately in check_required().
 REQUIRED_PATHS: List[str] = [
     "problem_opportunity.problem_statement",
     "users_personas.primary_users",
     "use_cases.core_workflows",
-    "functional_requirements.must_have_features",
     "technical_constraints.primary_language",
     "technical_constraints.runtime_platform",
     "product_identity.name",
@@ -702,16 +724,18 @@ _FR_TOKEN_RE = re.compile(r"\bFR-\d+\b", re.IGNORECASE)
 
 
 def check_acr_coverage(prd: PRD) -> List[str]:
-    """ADVISORY (never blocks): must-have FRs no acceptance criterion names.
+    """ADVISORY (never blocks): FRs no acceptance criterion names.
 
-    Downstream `test` gates ACR→TST coverage, so a must-have FR that no
-    ACR-NNN entry names (an `FR-NNN` token inside the criterion string) has
-    no machine-linked done-condition — flag it so the interview can add one.
+    Downstream `test` gates ACR→TST coverage, so an FR that no ACR-NNN entry
+    names (an `FR-NNN` token inside the criterion string) has no machine-linked
+    done-condition — flag it so the interview can add one. D2: scopes to ALL
+    FRs (the flat `features` list, or the legacy union), not just must-haves.
     """
     gaps: List[str] = []
 
     def _scope(label: str, root: object) -> None:
-        frs = _get_dotted(root, "functional_requirements.must_have_features") or []
+        fr_block = getattr(root, "functional_requirements", None)
+        frs = fr_block.flat_features() if fr_block is not None else []
         acrs = _get_dotted(root, "success_metrics.acceptance_criteria") or []
         named = {m.upper() for a in acrs if isinstance(a, str) for m in _FR_TOKEN_RE.findall(a)}
         for entry in frs:
@@ -729,6 +753,45 @@ def check_acr_coverage(prd: PRD) -> List[str]:
     return gaps
 
 
+# mitigation_refs may name only ids that EXIST at PRD-write time — the PRD-minted
+# families. TST/SIG/... are minted by downstream stages and cannot be resolved
+# forward (⚠C, D2). This is the realization of "restrict to same-stage/upstream
+# ids": FR/NFR/QUE are the common mitigators; INT/OOS/AIF are also PRD-minted
+# and therefore admissible (the corpus legitimately mitigates a risk with an
+# INT-NNN integration id). Anything else is a forward reference → advisory.
+_MITIGATION_ALLOWED_PREFIXES: Set[str] = {"FR", "NFR", "QUE", "INT", "OOS", "AIF"}
+_REF_PREFIX_RE = re.compile(r"^([A-Z]+)-\d+$")
+
+
+def check_mitigation_refs(prd: PRD) -> List[str]:
+    """ADVISORY (never blocks): mitigation_refs that forward-reference an id no
+    stage has minted at PRD-write time (a downstream family like TST-/SIG-)."""
+    warns: List[str] = []
+
+    def _scope(label: str, root: object) -> None:
+        risks_block = getattr(root, "risks_assumptions", None)
+        risks = getattr(risks_block, "top_risks", None) or []
+        for risk in risks:
+            refs = getattr(risk, "mitigation_refs", None) or []
+            for ref in refs:
+                if not isinstance(ref, str):
+                    continue
+                m = _REF_PREFIX_RE.match(ref.strip().upper())
+                if m and m.group(1) not in _MITIGATION_ALLOWED_PREFIXES:
+                    warns.append(
+                        f"{label}mitigation_refs names '{ref}' - a downstream/unknown "
+                        f"id family that does not exist at PRD-write time; reference the "
+                        f"FR/NFR the mitigation realizes instead (SK-32/D2)"
+                    )
+
+    if prd.metadata.monorepo and prd.products:
+        for slug, product in prd.products.items():
+            _scope(f"products.{slug}.", product)
+    else:
+        _scope("", prd)
+    return warns
+
+
 def check_required(prd: PRD) -> List[str]:
     """Return list of missing required field paths.
 
@@ -740,6 +803,12 @@ def check_required(prd: PRD) -> List[str]:
         for path in REQUIRED_PATHS:
             if _is_empty(_get_dotted(root, path)):
                 missing.append(f"{scope_label}{path}")
+        # FR list is D2-tolerant: satisfied by flat `features` OR the legacy
+        # must/nice union. Report against the canonical new path when absent.
+        fr_block = getattr(root, "functional_requirements", None)
+        frs = fr_block.flat_features() if fr_block is not None else []
+        if _is_empty(frs):
+            missing.append(f"{scope_label}functional_requirements.features")
 
     if prd.metadata.monorepo and prd.products:
         for slug, product in prd.products.items():
@@ -798,13 +867,18 @@ def validate_file(path: Path) -> int:
     missing = check_required(prd)
     id_violations = check_ids(prd) + check_open_questions(prd)
     acr_gaps = check_acr_coverage(prd)
+    mitigation_warns = check_mitigation_refs(prd)
     status = prd.metadata.status
 
     def _print_acr_gaps() -> None:
         if acr_gaps:
-            print(f"\nAdvisory (never blocks): {len(acr_gaps)} must-have FR(s) not named by any acceptance criterion:")
+            print(f"\nAdvisory (never blocks): {len(acr_gaps)} FR(s) not named by any acceptance criterion:")
             for g in acr_gaps:
                 print(f"  - {g}")
+        if mitigation_warns:
+            print(f"\nAdvisory (never blocks): {len(mitigation_warns)} mitigation_refs forward reference(s):")
+            for w in mitigation_warns:
+                print(f"  - {w}")
 
     if status == "complete":
         if missing or id_violations:

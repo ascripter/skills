@@ -1,0 +1,79 @@
+# D2 flat-features shape (post-milestones-removal). Proves: the flat
+# `functional_requirements.features` list validates; the ACR advisory scopes to
+# ALL features; mitigation_refs naming PRD-write-time ids (FR/NFR/INT) are clean.
+# Companion legacy-shape proof: 01_valid_single.yaml (must_have/nice split still
+# validates). Expected: exit 0, [OK] complete, no advisories.
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-07-20T00:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "99999999-9999-9999-9999-999999999999"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+product_identity:
+  name: "Acme Tasks"
+  name_confidence: confirmed
+  one_liner: "Track team work without the noise."
+  one_liner_confidence: confirmed
+
+problem_opportunity:
+  problem_statement: "Existing trackers are too heavyweight for small teams."
+  problem_statement_confidence: confirmed
+
+users_personas:
+  primary_users:
+    - "PER-001: Engineering team leads"
+  primary_users_confidence: confirmed
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Add a task in under 3 seconds"
+
+functional_requirements:
+  # One flat list, one FR-NNN counter — no must/nice split.
+  features:
+    - "FR-001: Quick add — add a task in under 3 seconds via a global shortcut."
+    - "FR-002: Keyboard navigation — every primary action reachable without a mouse."
+    - "FR-003: Cloud sync — tasks persist across devices."
+  integrations_required:
+    - "INT-001: Sync backend (managed key-value store)."
+
+technical_constraints:
+  primary_language: typescript
+  primary_language_rationale: "Team is fluent and our other tools use it."
+  primary_language_confidence: confirmed
+  runtime_platform: web
+  runtime_platform_rationale: "Reach is the priority."
+  runtime_platform_confidence: confirmed
+
+success_metrics:
+  acceptance_criteria:
+    - "ACR-001: FR-001 — a task can be added end-to-end in under 3 seconds."
+    - "ACR-002: FR-002 — all primary actions pass a keyboard-only walkthrough."
+    - "ACR-003: FR-003 — a task created on one device appears on another within 5s."
+
+risks_assumptions:
+  top_risks:
+    - "Scope creep beyond the single-user MVP"
+    - statement: "Sync backend rate-limits us at scale"
+      disposition: mitigated
+      mitigation_refs:
+        - "INT-001"   # PRD-minted integration id — exists at PRD-write time (clean)
+        - "FR-003"
+    - statement: "Adoption slower than modeled"
+      disposition: accepted_residual
+
+open_questions:
+  undecided_decisions:
+    - id: QUE-001
+      question: "Offline mode in MVP or post-MVP?"
+      status: open
+      blocks:
+        - "FR-001"
+  parking_lot:
+    - id: QUE-002
+      question: "Native mobile app?"
+      status: deferred

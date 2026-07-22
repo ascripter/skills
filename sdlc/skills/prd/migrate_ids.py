@@ -2,10 +2,12 @@
 
 What this script does
 ---------------------
-- Renames legacy `F-NNN: ...` items in `must_have_features` /
-  `nice_to_have_features` to `FR-NNN: ...` (preserving the original number).
+- Renames legacy `F-NNN: ...` items in `features` (or the legacy
+  `must_have_features` / `nice_to_have_features`) to `FR-NNN: ...`
+  (preserving the original number).
 - Adds `<PREFIX>-NNN: ` prefixes to every list[string] field that now
-  carries IDs. Sibling lists (must-have + nice-to-have, primary + secondary,
+  carries IDs. Sibling lists (the flat `features` list plus the legacy
+  must-have + nice-to-have it replaced, primary + secondary,
   performance_targets + other, primary_jobs + secondary_jobs) share one
   continuous counter per family per scope.
 - Items already prefixed correctly are kept as-is; their numbers count
@@ -21,8 +23,8 @@ to match the convention used throughout `PRD.yaml`.
 
 Family map (prefix -> sibling list fields, in order)::
 
-    FR  - functional_requirements.must_have_features,
-          .nice_to_have_features         (also migrates legacy F-NNN)
+    FR  - functional_requirements.features
+          (legacy: .must_have_features, .nice_to_have_features; also migrates F-NNN)
     OOS - functional_requirements.out_of_scope
     INT - functional_requirements.integrations_required
     AIF - functional_requirements.ai_features
@@ -96,6 +98,8 @@ FAMILIES: List[Tuple[str, List[str], str]] = [
     (
         "FR",
         [
+            # D2: flat list first; legacy split still migrated for old PRDs.
+            "functional_requirements.features",
             "functional_requirements.must_have_features",
             "functional_requirements.nice_to_have_features",
         ],

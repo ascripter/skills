@@ -115,7 +115,7 @@ This validates:
    - **DATA-store coverage** — every store in
      `DATA-MODEL.yaml.persistence.*` appears in some container's
      `persistence`.
-   - **PRD feature coverage** — every PRD `must_have_features` FR-NNN
+   - **PRD feature coverage** — every PRD `features` FR-NNN
      appears in some container's `implements_requirements` OR in
      `ARCH.yaml.non_container_features`. Skipped when `docs/PRD.yaml` is
      absent. This catches operational features (scheduler/worker work

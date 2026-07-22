@@ -12,10 +12,12 @@ Run from the project root:
     python sdlc/skills/code/topo_order.py --next
     python sdlc/skills/code/topo_order.py --fingerprints
     python sdlc/skills/code/topo_order.py --emit build-sandbox/TSK-004 build-sandbox/TSK-006
+    python sdlc/skills/code/topo_order.py --overlap build-sandbox/TSK-004 build-sandbox/TSK-006
 
 The `--emit` mode is the **worker-packet builder**: it prints the verbatim task
 object(s) for the requested qualified id(s), each joined with a
-`requirement_context` slice (the task's FR/NFR/WKF ids resolved to their one-line
+`requirement_context` slice (the task's FR/NFR/WKF/ACR ids — from `implements`,
+`implements_workflows`, and `test_spec.covers` — resolved to their one-line
 PRD statements). The manager builds a wave from the schedule, then calls `--emit`
 for exactly those ids and pipes the result into each worker's brief — so neither
 the manager nor a worker ever reads a whole (potentially hundreds-of-KB) TASKS
@@ -69,10 +71,12 @@ except ImportError:
 TSK_RE = re.compile(r"^TSK-\d{3,}$")
 
 # A PRD requirement/workflow definition line: ``- "FR-015: <statement>"`` (also
-# NFR-### under non_functional_requirements and WKF-### under use_cases). The id
-# sits right after an opening quote and is followed by ``:`` — which is what
-# separates a definition line from a mere ``FR-091 (…)`` prose reference.
-_REQ_RE = re.compile(r'"(?P<id>(?:FR|NFR|WKF)-\d+):\s*(?P<text>.*)"\s*$')
+# NFR-### under non_functional_requirements, WKF-### under use_cases, and
+# ACR-### under success_metrics.acceptance_criteria — the family a test task's
+# ``test_spec.covers`` may name). The id sits right after an opening quote and
+# is followed by ``:`` — which is what separates a definition line from a mere
+# ``FR-091 (…)`` prose reference.
+_REQ_RE = re.compile(r'"(?P<id>(?:FR|NFR|WKF|ACR)-\d+):\s*(?P<text>.*)"\s*$')
 
 
 def fingerprint(task: Dict[str, Any]) -> str:
@@ -250,7 +254,7 @@ def resolve_next(g: Graph, state: Dict[str, str]) -> str:
 
 
 def load_requirements(docs: Path) -> Dict[str, str]:
-    """Map every FR/NFR/WKF id to its one-line PRD statement.
+    """Map every FR/NFR/WKF/ACR id to its one-line PRD statement.
 
     PRD requirement families are single-line ``"<id>: <statement>"`` strings, so
     this is a cheap grep — never a whole-PRD parse. Returns an empty map when
@@ -270,6 +274,54 @@ def load_requirements(docs: Path) -> Dict[str, str]:
             # First definition wins; a later prose line can't overwrite it.
             reqs.setdefault(m.group("id"), " ".join(m.group("text").split()))
     return reqs
+
+
+def _path_parts(p: str) -> Tuple[str, ...]:
+    return tuple(x for x in str(p).replace("\\", "/").strip("/").split("/") if x not in ("", "."))
+
+
+def paths_overlap(a: str, b: str) -> bool:
+    """Path-aware overlap: equal paths collide, and a directory entry contains
+    every path beneath it ("tests/" overlaps "tests/unit/test_x.py") — segment
+    prefix containment, mirroring the task validator's _path_within_any."""
+    pa, pb = _path_parts(a), _path_parts(b)
+    n = min(len(pa), len(pb))
+    return n > 0 and pa[:n] == pb[:n]
+
+
+def check_overlap(g: Graph, raw_ids: List[str]) -> int:
+    """--overlap: pairwise path-aware target_files check for a candidate wave."""
+    resolved: List[Tuple[str, List[str]]] = []
+    missing: List[str] = []
+    for raw in raw_ids:
+        qid = resolve_qid(g, raw)
+        if qid is None:
+            missing.append(raw)
+            continue
+        resolved.append((qid, [str(p) for p in (g.tasks[qid].get("target_files") or [])]))
+    if missing:
+        print(
+            f"[overlap] unresolved task id(s): {', '.join(missing)} - "
+            f"not in the loaded graph (check the qualified id)",
+            file=sys.stderr,
+        )
+        return 1
+    hits: List[Tuple[str, str, str, str]] = []
+    for i in range(len(resolved)):
+        for j in range(i + 1, len(resolved)):
+            qa, fa = resolved[i]
+            qb, fb = resolved[j]
+            for a in fa:
+                for b in fb:
+                    if paths_overlap(a, b):
+                        hits.append((qa, a, qb, b))
+    for qa, a, qb, b in hits:
+        print(f"OVERLAP  {qa} '{a}'  <->  {qb} '{b}'")
+    if hits:
+        print(f"[overlap] {len(hits)} overlapping pair(s) - these tasks cannot share a wave")
+        return 1
+    print(f"disjoint - {len(resolved)} task(s) can share a wave (path-aware check)")
+    return 0
 
 
 def resolve_qid(g: Graph, raw: str) -> Optional[str]:
@@ -297,9 +349,11 @@ def emit_packets(g: Graph, docs: Path, raw_ids: List[str]) -> int:
     """Print a self-contained worker packet per requested task, as one JSON array.
 
     Each packet is ``{qualified_id, task, requirement_context}`` where
-    ``requirement_context`` maps the task's ``implements`` (FR/NFR) and
-    ``implements_workflows`` (WKF) ids to their PRD statements — so a worker
-    builds from the packet alone, without reading the (large) TASKS shard or PRD.
+    ``requirement_context`` maps the task's ``implements`` (FR/NFR),
+    ``implements_workflows`` (WKF), and ``test_spec.covers`` (FR/NFR/ACR — a
+    test task's requirement ids live there, not in ``implements``) to their
+    PRD statements — so a worker builds from the packet alone, without reading
+    the (large) TASKS shard or PRD.
     """
     reqs = load_requirements(docs)
     packets: List[Dict[str, Any]] = []
@@ -311,10 +365,16 @@ def emit_packets(g: Graph, docs: Path, raw_ids: List[str]) -> int:
             continue
         task = g.tasks[qid]
         req_ids: List[str] = []
-        for field in ("implements", "implements_workflows"):
-            for r in (task.get(field) or []):
-                if r not in req_ids:
-                    req_ids.append(r)
+        for r in (
+            list(task.get("implements") or [])
+            + list(task.get("implements_workflows") or [])
+            # A test task's requirement ids live in test_spec.covers, not
+            # implements — without this, every test packet ships an empty
+            # requirement_context (SK-25/K2).
+            + list((task.get("test_spec") or {}).get("covers") or [])
+        ):
+            if r not in req_ids:
+                req_ids.append(r)
         rc = {r: reqs[r] for r in req_ids if r in reqs}
         packet: Dict[str, Any] = {
             "qualified_id": qid,
@@ -351,6 +411,14 @@ def main() -> int:
     ap.add_argument("--next", action="store_true", dest="next_", help="Print the --next unit resolution only.")
     ap.add_argument("--fingerprints", action="store_true", help="Print qualified id -> fingerprint and exit.")
     ap.add_argument(
+        "--overlap",
+        nargs="+",
+        metavar="QID",
+        help="Pairwise path-aware target_files overlap check for a candidate "
+        "wave (a directory entry contains every path beneath it). Exit 0 = "
+        "disjoint, 1 = overlapping (or unresolved id).",
+    )
+    ap.add_argument(
         "--emit",
         nargs="+",
         metavar="QID",
@@ -370,6 +438,9 @@ def main() -> int:
 
     if args.emit:
         return emit_packets(g, Path(args.docs), args.emit)
+
+    if args.overlap:
+        return check_overlap(g, args.overlap)
 
     if g.errors:
         for e in g.errors:

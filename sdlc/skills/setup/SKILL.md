@@ -22,17 +22,22 @@ Bootstraps a consumer project so its SDLC specs stay cheap to navigate as they
 grow. `docs/PRD.yaml` and `docs/DATA-MODEL.yaml` routinely reach thousands of
 lines; an agent that loads one whole burns a large slice of its context window.
 This skill wires a generated **`docs/INDEX.yaml`** location map (file + line
-range + one-line summary per symbol) plus the protocol and automation that keep
-it current, so every downstream skill and agent reads by slice instead.
+range + one-line summary per symbol) **plus a cross-reference graph**
+(`referenced_by` blast-radius + `dangling` id-integrity) plus the protocol and
+automation that keep it current, so every downstream skill and agent reads by
+slice instead.
 
 **Run this once, before `/sdlc:prd`.** It is fully idempotent — re-running only
-fills gaps and refreshes the index, never duplicates.
+fills gaps and refreshes the index, never duplicates. **Re-running also upgrades
+a previously installed `docs_index.py`** — an older copy without the
+cross-reference graph gains `--check` (the dangling-reference gate), `--refs`
+(edit blast-radius), and `--find` (predicate search) after a re-run.
 
 ## What it installs into the project
 
 | Target | Purpose |
 |---|---|
-| `.claude/sdlc/docs_index.py` | Stdlib-only index generator (zero deps; copied from this skill). Covers the canonical YAML docs **and** the JSON canonicals (`TASKS.json`, `CODE-MANIFEST.json`), per-task-indexes every large `TASKS__<cid>.json` shard (`<cid>/TSK-NNN` symbols), and emits a `shards:` inventory of every `docs/*__*` sub-artifact. Also a `--show <symbol>` power tool. |
+| `.claude/sdlc/docs_index.py` | Stdlib-only index generator (zero deps; copied from this skill). Covers the canonical YAML docs **and** the JSON canonicals (`TASKS.json`, `CODE-MANIFEST.json`), per-task-indexes every large `TASKS__<cid>.json` shard (`<cid>/TSK-NNN` symbols), emits a `shards:` inventory of every `docs/*__*` sub-artifact, and builds a cross-reference graph (`referenced_by` + `dangling`) over both YAML and JSON docs. Power tools: `--show <symbol>`, `--refs <symbol>` (blast-radius), `--check` (dangling-reference gate), `--find <filters>` (predicate search). |
 | `.claude/settings.json` | A `Write\|Edit\|MultiEdit` **PostToolUse hook** that regenerates the index after any canonical `docs/*.yaml` / `docs/TASKS*.json` edit (and after shard writes, to keep the `shards:` inventory current). Merged in — existing settings preserved. |
 | `.claude/rules/sdlc-docs-access.md` | The slice-don't-slurp retrieval protocol agents follow. |
 | `CLAUDE.md` (`## SDLC Documents`) | Slice-first access note + the `docs/INDEX.yaml` pointer. Coexists with the per-artifact bullets `prd`/`ux`/`data`/`arch` add to the same section. |

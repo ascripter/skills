@@ -173,7 +173,7 @@ user can correct course early. Sources of candidates, in priority order:
 
 1. **`PRD.data_model.key_entities`** — direct names (PascalCase'd if not
    already). Tag `✓ found`.
-2. **`PRD.functional_requirements.must_have_features`** — extract the
+2. **`PRD.functional_requirements.features`** — extract the
    nouns from each FR-NNN feature using lightweight heuristics (see
    `references/entity-discovery.md`). Tag `⚠ inferred`.
 3. **`UX__<surface>.yaml.layout` + `validation_rules` + `components.content_slots`** —

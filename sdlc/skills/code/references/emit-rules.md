@@ -2,7 +2,9 @@
 
 Read this on entering Phase 4. It defines what each task kind writes, how
 several tasks share one file, where paths come from, and the provenance
-markers.
+markers. Everything under "## Worker digest" below goes **verbatim into every
+worker brief** — one named block, never cherry-picked; only the path ladder
+(a manager decision) stays outside it.
 
 ---
 
@@ -23,7 +25,32 @@ paths and note the rung in the ledger entry (`path_source`):
 4. **Ask** — one AskUserQuestion naming the task and proposing a path
    (position-1 recommended). Never invent silently below rung 3.
 
-## Path safety (hard rules)
+---
+
+## Worker digest
+
+Everything from here to *End of worker digest* is included **verbatim in
+every worker brief** (and in the attempt-3 escalation brief) — it is the
+complete rule set a worker needs to turn its packet into files. The manager
+never excerpts individual rules out of it.
+
+### Packet consumption — requirements and entities
+
+- **Requirements ride in the packet.** The packet's `requirement_context`
+  maps the task's FR/NFR/WKF/ACR ids (from `implements`,
+  `implements_workflows`, and `test_spec.covers`) to their one-line PRD
+  statements — consult it there rather than opening PRD. Only fall back to an
+  on-demand PRD read for an id listed under `requirement_context_unresolved`
+  (a stale ref / PRD-absent case).
+- **Entity shapes are fetched, not guessed.** Wherever the task names
+  `touches_entities` (or an embedded slice references an entity), those are
+  DATA-MODEL entities whose field definitions you must respect — read their
+  `docs/INDEX.yaml` slices before rendering. The fetch presumes the `setup`
+  layout (`docs/INDEX.yaml` at the project root); when the factory runs
+  against another layout, the manager resolves the INDEX path once and
+  states it in the brief — use that path.
+
+### Path safety (hard rules)
 
 - All paths are **repo-relative to the consumer project root**. Reject
   absolute paths and any path containing `..` — refuse the task with a clear
@@ -36,7 +63,7 @@ paths and note the rung in the ledger entry (`path_source`):
 - Create missing parent directories; never delete or move existing files. A
   task whose semantics seem to require deleting something goes to a gate.
 
-## Multiple tasks, one file
+### Multiple tasks, one file
 
 Routine: a controller file accumulates one exported function per task
 (gold: TSK-004/005/006 all pin `src/controllers/tasks.ts`).
@@ -58,7 +85,7 @@ Class-shell note: when work_units are `Class.method` style, the class shell
 belongs to the *first* task that needs it and carries no marker of its own —
 markers annotate symbols (methods), not scaffolding.
 
-## Rendering an `implementation` task
+### Rendering an `implementation` task
 
 The deliverable's shape comes from the task's **embedded contract** (schema
 v1.3), never from imagination:
@@ -92,12 +119,8 @@ v1.3), never from imagination:
    All five keep the same invariants — one deliverable, one `target_files[0]`
    entry — only the rendering differs.
 4. Body: implement the task's `description` (+ `unit_summary`) against the
-   task's `acceptance`. `touches_entities` names the DATA-MODEL entities whose
-   field definitions you must respect — read their INDEX slices;
-   `implements` names the FR/NFRs — their statements ride in the packet's
-   `requirement_context` (joined by `topo_order.py --emit`), so consult it there
-   rather than opening PRD. Only fall back to an on-demand PRD read for an id
-   listed under `requirement_context_unresolved` (a stale ref / PRD-absent case).
+   task's `acceptance`, grounding entities and requirements per "Packet
+   consumption" above.
 5. Real implementations only — no `TODO` stubs, no `NotImplementedError`
    placeholders. If the contract is too thin to implement honestly, that's a
    gate ("this work_unit's contract doesn't determine behaviour X"), not a
@@ -107,7 +130,7 @@ v1.3), never from imagination:
    conventions the scaffold task established (formatting, import style, error
    idioms) — the file should read as one hand.
 
-## Rendering the other kinds
+### Rendering the other kinds
 
 - **`scaffold`** — the file set from the ladder: package manifest, workspace
   config, entrypoint, test-harness config. `acceptance` defines "works"
@@ -118,6 +141,16 @@ v1.3), never from imagination:
   fallback: the TST entry in `TEST-STRATEGY__<cid>.yaml`. Name each test so
   the TST id is visible (test name or marker comment) — Stage-15 verification
   keys results to TST ids.
+- **`test_infrastructure`** — the container's ONE shared-test-infrastructure
+  task: build the TEST-STRATEGY `shared_infrastructure` deliverables
+  (conftest, factories, fake helpers) per the task's `description` — the
+  mock_policy and fixture_strategy texts ride in it verbatim and are binding.
+  Scaffold-like: no `component_ref` / `target_symbol`; `target_files` is
+  typically a DIRECTORY (`["tests/"]`) — derive the file set from the
+  description; provenance via file headers, not symbol markers. Every
+  `kind: test` task depends on it, so it lands before the container's first
+  test ring — and its directory pin means it runs **solo**, never inside a
+  parallel wave (see the path-aware overlap rule in `execution-loop.md`).
 - **`integration`** — the wiring the edge describes: register routes into the
   app, bind DI, or build the consumer-side client against the provider's
   contract — method/path/schemas from the task's embedded `operation_contract`
@@ -145,7 +178,7 @@ v1.3), never from imagination:
   `deploy-prep` stops at handoff stubs (CI skeleton, Dockerfile placeholders)
   — `/sdlc:deploy` owns the real thing.
 
-## Provenance markers
+### Provenance markers
 
 One line per generated symbol, in the language's comment syntax, immediately
 above the symbol:
@@ -177,7 +210,7 @@ probe** (symbol marker present + ledger hash match = already generated), the
 (code → TSK → FR/TST) that keeps hand-edits diagnosable. Do not strip them
 when healing; update them when regenerating.
 
-## What NOT to write
+### What NOT to write
 
 - No derived counts or task statistics in generated prose/docstrings
   (CLAUDE.md §8 — they go stale silently).
@@ -186,3 +219,5 @@ when healing; update them when regenerating.
   carries the rest.
 - Nothing outside the task's write targets except the merges this file
   defines (imports, header task-list, class shell).
+
+*End of worker digest.*

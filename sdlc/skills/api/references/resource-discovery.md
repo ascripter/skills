@@ -139,9 +139,9 @@ one for surfaces (both `multiSelect: true`):
 header: "Features?"
 question: "Which PRD FR-NNN features does '<resource_id>' implement?"
 options:
-  - { label: "<FR-001: description>",          description: "<verbatim PRD must_have_features entry>" }
-  - { label: "<FR-003: description>",          description: "<verbatim PRD must_have_features entry>" }
-  - { label: "Other (type)",                  description: "Type the FR-NNN id(s) verbatim from PRD.functional_requirements.must_have_features." }
+  - { label: "<FR-001: description>",          description: "<verbatim PRD features entry>" }
+  - { label: "<FR-003: description>",          description: "<verbatim PRD features entry>" }
+  - { label: "Other (type)",                  description: "Type the FR-NNN id(s) verbatim from PRD.functional_requirements.features." }
   - { label: "None — internal-only resource", description: "This resource doesn't implement any PRD FR-NNN. (Will be flagged in api_warnings unless an explicit reason is captured.)" }
 multiSelect: true
 ```
@@ -193,7 +193,7 @@ this for the first time.
    axes (CRUD per entity / cross-cutting actions / domain workflows)
    dominate? What axes are conspicuously absent?
 2. **Every upstream ID family**, not just the most-direct one:
-   - `PRD.functional_requirements.must_have_features` (FR-NNN) — is
+   - `PRD.functional_requirements.features` (FR-NNN) — is
      every FR traced by a resource OR explicitly in
      `non_api_features`? Read each FR's description text; some
      features (e.g. "Bulk import CSV") imply resources the entity

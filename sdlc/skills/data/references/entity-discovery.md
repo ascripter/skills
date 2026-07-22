@@ -26,7 +26,7 @@ note that downstream you may call them "nodes" (graph) or "collections"
 2. **Schema files on disk** (`schema.prisma`, `*.sql`, `models/`,
    `entities/`, Django `models.py`, SQLAlchemy `declarative_base`
    subclasses) — authoritative if present. Tag `✓ found`.
-3. **`PRD.functional_requirements.must_have_features`** (FR-NNN list) —
+3. **`PRD.functional_requirements.features`** (FR-NNN list) —
    each entry is `"FR-NNN: <title> — <description>"`. Extract candidate
    entity nouns from BOTH the title and the description (the
    description often names the entity directly, e.g. "FR-031: End-to-end
@@ -163,7 +163,7 @@ entities the upstream artifacts imply but the draft list overlooks.
 2. **Every upstream ID family**, not just the most-direct one:
    - `PRD.data_model.key_entities` (ENT-NNN) — are all PRD ENT ids
      present in the draft? Any ENT-NNN whose name doesn't appear?
-   - `PRD.functional_requirements.must_have_features` (FR-NNN) — every
+   - `PRD.functional_requirements.features` (FR-NNN) — every
      FR's description text. Does any feature description name a
      state-bearing noun (registry, log, session, queue, marker) that
      the draft doesn't have?

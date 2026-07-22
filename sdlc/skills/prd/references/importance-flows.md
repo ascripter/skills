@@ -8,10 +8,10 @@ this file when entering Phase 6 alongside `interview-mechanics.md`.
 
 The classification was made deliberately:
 
-- **`critical`** is reserved for fields that define the MVP and the
-  cross-cutting NFR set — currently
-  `functional_requirements.must_have_features`,
-  `functional_requirements.nice_to_have_features`, and
+- **`critical`** is reserved for fields that define the functional scope and
+  the cross-cutting NFR set — currently
+  `functional_requirements.features` (one flat FR-NNN list; D2 retired the
+  must/nice split) and
   `non_functional_requirements.other`. These warrant the most expensive
   interaction because every downstream agent will read them and treat
   them as scope-of-record. The flow is the per-item state machine plus
@@ -49,7 +49,7 @@ mid-flow placeholders, never gaps.
 
 | Prefix | Field(s) — siblings share one continuous counter |
 |---|---|
-| `FR`  | `functional_requirements.must_have_features`, `nice_to_have_features` |
+| `FR`  | `functional_requirements.features` (legacy: `must_have_features` + `nice_to_have_features`) |
 | `OOS` | `functional_requirements.out_of_scope` |
 | `INT` | `functional_requirements.integrations_required` |
 | `AIF` | `functional_requirements.ai_features` |
@@ -70,8 +70,8 @@ mid-flow placeholders, never gaps.
 - IDs are unique within a family + scope. Sibling fields that share a
   counter (the "+" rows above) draw from one sequence: e.g. if
   `primary_users` ends at `PER-003`, `secondary_users` starts at `PER-004`.
-- IDs are stable. Once written they never change. Promoting an item
-  between sibling lists (nice-to-have → must-have, secondary → primary)
+- IDs are stable. Once written they never change. Moving an item
+  between sibling lists that share a counter (secondary → primary)
   means moving the string verbatim, not renumbering.
 - In monorepo mode, each product carries its own independent ID space
   per family. Two products may each have `FR-001`; references are
@@ -135,7 +135,8 @@ typed answer) or `inferred` (accepted as-is).
 
 ### Scalar `high` fields (string)
 
-These are: `problem_opportunity.problem_statement`, `milestones.mvp_scope`.
+These are: `problem_opportunity.problem_statement`, `product_vision` (the MVP
+narrative folded here after D2 retired `milestones`).
 
 1. **Propose.** Compose a 2–4-sentence draft from prior context. Print
    it to the chat preceded by a one-line agent comment explaining what
@@ -169,7 +170,6 @@ These are: `users_personas.primary_users` (PER), `use_cases.core_workflows`
 `functional_requirements.ai_features` (AIF),
 `non_functional_requirements.other` (NFR),
 `data_model.key_entities` (ENT),
-`milestones.phases` (no ID family),
 `risks_assumptions.top_risks` (no ID family).
 
 Each item gets a lighter version of the per-item flow:
@@ -200,8 +200,8 @@ Each item gets a lighter version of the per-item flow:
    the new ID as `<PREFIX>-{:03d}`, and prepend it to the item so the
    stored string is `"<PREFIX>-NNN: <title — description>"`. Append to
    the running list and state-write (item + counter together). Fields
-   that have no ID family (e.g. `milestones.phases`) are appended as
-   plain strings.
+   that have no ID family (e.g. `success_metrics.primary_kpis`) are appended
+   as plain strings.
 
 4. **Next item or end.** Either suggest the next likely item (steps 1–3
    again, with item index incremented) or — if you've run out of
@@ -228,8 +228,8 @@ approval step is needed because every item was confirmed individually.
 
 Applies to:
 
-- `functional_requirements.must_have_features` (FR-NNN family)
-- `functional_requirements.nice_to_have_features` (FR-NNN family)
+- `functional_requirements.features` (FR-NNN family; D2 retired the
+  must/nice split — one flat list)
 - `non_functional_requirements.other` (NFR-NNN family)
 
 This is the full per-item state machine. Every item is challenged
@@ -237,7 +237,7 @@ before it's accepted, drafted with structured detail slots, and the
 *list as a whole* is reflected on with a dynamic scope-completeness
 sweep before it closes.
 
-The shape of the per-item flow is identical across all three fields.
+The shape of the per-item flow is identical across both fields.
 Only the **detail slots** (step b) and the **scope-sweep heuristics**
 (step e) differ between FR-style lists and NFR-style lists — see those
 sections below.
@@ -248,8 +248,7 @@ The relevant family per field:
 
 | Field | Counter | Notes |
 |---|---|---|
-| `functional_requirements.must_have_features` | `state.last_ids.FR` | Runs first; takes low FR-NNN numbers. |
-| `functional_requirements.nice_to_have_features` | `state.last_ids.FR` | Continues from must_have_features. |
+| `functional_requirements.features` | `state.last_ids.FR` | One flat list; FR-NNN in collection order. |
 | `non_functional_requirements.other` | `state.last_ids.NFR` | Continues from `performance_targets`. |
 
 The assignment moment is **step c (Finalize)**, not earlier — proposals
@@ -315,7 +314,7 @@ filling **structured slots** before writing the prose; you don't need
 to label slots in the stored string, but every slot that *applies*
 should be reflected in the prose.
 
-**Slots for FR-style items** (`must_have_features`, `nice_to_have_features`):
+**Slots for FR-style items** (`features`):
 
 | Slot | What to capture |
 |---|---|
@@ -362,7 +361,7 @@ prose makes them machine-unreachable for downstream coverage gates:
 - a done-condition the detail implies → ALSO mint an `ACR-NNN` under
   `success_metrics.acceptance_criteria`, naming the FR id ("ACR-012:
   FR-003 — marking a task done persists across a read"). The validator
-  advises (never blocks) on every must-have FR no ACR names — this is
+  advises (never blocks) on every FR no ACR names — this is
   where those entries come from.
 
 The FR prose still summarizes both (it must read standalone); the minted
@@ -527,12 +526,13 @@ user edited the sweep candidate in step b's free-text path, promote to
 
 ### Caps (per-list)
 
-- **Soft cap**: 10 items per critical list (per the schema hint
-  `must_have_features` = 3–10). The sweep can take a list past 10 if the
-  user keeps picking candidates; that's intentional.
-- **Hard cap**: 20. After that, refuse politely and suggest moving
-  some to `nice_to_have_features` (for FR) or splitting the NFR list
-  into more focused buckets.
+- **Soft cap**: 10 items per critical list (the `features` list runs
+  3–10 for a focused product). The sweep can take a list past 10 if the
+  user keeps picking candidates; that's intentional — a real product has
+  as many FRs as it has, and there is no post-MVP list to spill into.
+- **Hard cap**: 20. After that, refuse politely and suggest routing
+  lower-priority ideas to `open_questions.parking_lot` (for FR) or
+  splitting the NFR list into more focused buckets.
 
 ### State-write timing
 
@@ -637,7 +637,7 @@ Show the draft to the user as a YAML snippet in the chat preceded by a
 one-line agent comment about what you drew on:
 
 ```
-"Based on the FR-### and ENT-### references in your must_have_features
+"Based on the FR-### and ENT-### references in your features list
 and your earlier mention of stable IDs, here's a draft for the
 `artifact_ids` bucket:"
 

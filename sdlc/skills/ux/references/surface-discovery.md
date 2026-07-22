@@ -75,7 +75,7 @@ participate in it. Examples:
 | "WKF-001: List my open tasks" (cli) | `task-list` (cli_command) |
 | "WKF-002: Add a task" (cli) | `task-add` (cli_command), `task-add-prompt` (flow_step, if interactive) |
 
-### 1b — `PRD.functional_requirements.must_have_features` (FR-###) — feature-driven surfaces
+### 1b — `PRD.functional_requirements.features` (FR-###) — feature-driven surfaces
 
 Many FRs name a verb or screen directly in their description ("the CLI
 exposes a `doctor` command", "users can view the artifact via `aicf

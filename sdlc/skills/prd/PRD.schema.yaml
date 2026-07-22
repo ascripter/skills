@@ -30,13 +30,13 @@
 #   TEST-STRATEGY.yaml, TASKS.json) can reference specific items without
 #   ambiguity. Format is always "<PREFIX>-NNN: <content>" with zero-padded
 #   3-digit numbers (NNN ≥ 001). IDs are assigned in collection order and
-#   are stable — they never change once written. Promoting an item between
-#   sibling lists (e.g. nice-to-have → must-have) moves the string verbatim
-#   without renumbering.
+#   are stable — they never change once written. Moving an item between
+#   sibling lists that share a counter (e.g. secondary_users → primary_users)
+#   moves the string verbatim without renumbering.
 #
 #   Family map (prefix → field(s); sibling lists in the same row share one
 #   continuous counter):
-#     FR  — functional_requirements.must_have_features, .nice_to_have_features
+#     FR  — functional_requirements.features (legacy: must_have_features + nice_to_have_features)
 #     OOS — functional_requirements.out_of_scope
 #     INT — functional_requirements.integrations_required
 #     AIF — functional_requirements.ai_features
@@ -155,8 +155,10 @@ use_cases:
 # functional_requirements — what the product must, should, won't do
 # -----------------------------------------------------------------------------
 # ID conventions for list fields below:
-#   must_have_features + nice_to_have_features — share the FR-NNN sequence;
-#     nice_to_have_features continues from where must_have_features left off.
+#   features                 — one flat FR-NNN sequence (no MVP/backlog split;
+#     every consumer of this skillset is built whole by /sdlc:code, so an
+#     economic must/should/could split has no downstream consumer — de-scoped
+#     ideas live in open_questions.parking_lot instead).
 #   out_of_scope             — OOS-NNN sequence.
 #   integrations_required    — INT-NNN sequence.
 #   ai_features              — AIF-NNN sequence.
@@ -169,12 +171,14 @@ use_cases:
 #   backticked paths to verify each build-time deliverable has an owning
 #   component + `code_location`; bare prose slashes are (correctly) ignored.
 functional_requirements:
-  must_have_features: null    # MVP features (list[string]); each item starts with a stable ID:
+  features: null              # the product's functional requirements (list[string]);
+                              # one flat list, each item starting with a stable ID:
                               #   "FR-001: <title and detail description>"
                               # IDs are assigned in collection order (FR-001, FR-002, …).
-  nice_to_have_features: null # post-MVP backlog (list[string]); IDs continue the FR-NNN
-                              # sequence from must_have_features — e.g. if must-haves end
-                              # at FR-005, nice-to-haves start at FR-006. Same format.
+                              # No must/nice split — see the ID conventions note above.
+                              # BACK-COMPAT: legacy PRDs with must_have_features +
+                              # nice_to_have_features still validate (the reader unions
+                              # them, must then nice); new writes emit only `features`.
   out_of_scope: null          # explicit non-goals (list[string]);
                               # each item: "OOS-NNN: <non-goal>"
   integrations_required: null # external systems we must talk to (list[string]);
@@ -290,11 +294,12 @@ stakeholders:
   external_dependencies: null # external teams/vendors we depend on (list[string])
 
 # -----------------------------------------------------------------------------
-# milestones — what we're building toward, and in what phases
+# milestones — REMOVED (D2). No MVP/phase split: every consumer of this skillset
+# is built whole by /sdlc:code, so phased milestones have no downstream consumer.
+# The 1–3-sentence MVP narrative folds into `product_vision`. Legacy PRDs that
+# still carry a `milestones:` block validate unchanged (models are extra="allow",
+# so the key is retained on read, not rejected) — new writes never emit it.
 # -----------------------------------------------------------------------------
-milestones:
-  mvp_scope: null             # 1–3 sentence MVP description (string|null)
-  phases: null                # ordered list of phases beyond MVP (list[string])
 
 # -----------------------------------------------------------------------------
 # success_metrics — how we will know it worked
@@ -313,7 +318,7 @@ success_metrics:
                               # task done persists across a read"). The FR-NNN
                               # token is the machine-extractable FR↔ACR link;
                               # the validator emits an ADVISORY (never blocks)
-                              # for every must-have FR no criterion names.
+                              # for every FR no criterion names.
   definition_of_done: null    # team-level DoD (list[string])
   user_satisfaction_target: null  # e.g. "NPS > 30", "CSAT 4.2/5" (string|null)
 
@@ -329,10 +334,15 @@ risks_assumptions:
   #                           #   mitigated         → handled by mitigation_refs
   #                           #   accepted_residual → deliberately accepted standing risk
   #                           #   open              → undecided; surface at HITL (often a QUE)
-  #    mitigation_refs: ["FR-012", "NFR-004"]  # OPTIONAL — EXISTING cross-stage ids
-  #                           #   (FR-/NFR-/TST-/SIG-/QUE-…), non-empty by convention
-  #                           #   when disposition == mitigated. References, not a
-  #                           #   new id family — no dangling check.
+  #    mitigation_refs: ["FR-012", "NFR-004"]  # OPTIONAL — ids that EXIST at
+  #                           #   PRD-write time only: FR-/NFR-/QUE-. Non-empty by
+  #                           #   convention when disposition == mitigated. A
+  #                           #   mitigation realized by a LATER stage is simply the
+  #                           #   FR/NFR that demands it — do NOT forward-reference
+  #                           #   downstream ids (TST-/SIG-/… don't exist yet; naming
+  #                           #   one is unresolvable and duplicates what the owning
+  #                           #   stage derives). References, not a new id family; the
+  #                           #   validator format-checks the prefix (warn-level).
   key_assumptions: null       # what we are betting is true (list[string])
   blockers: null              # current blockers (list[string])
   dependencies: null          # critical external dependencies (list[string])
@@ -429,7 +439,6 @@ conventions: null               # Optional[Dict[str, Any]] — null when no
 #     security_compliance: { ... }
 #     business_model: { ... }
 #     stakeholders: { ... }
-#     milestones: { ... }
 #     success_metrics: { ... }
 #     risks_assumptions: { ... }
 #     open_questions: { ... }

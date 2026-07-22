@@ -20,7 +20,7 @@ Phase 5 (when presenting pre-fills for confirmation).
 | `PRD.data_model.storage_preferences_rationale`                         | `persistence.primary_store_rationale`              | ✓ found        |
 | `PRD.data_model.data_ownership`                                        | `data_warnings` note (downstream visibility — `"WRN-NNN: data_ownership: <value>"`) | ✓ found        |
 | `PRD.data_model.data_volume_estimate`                                  | gates `scale_and_retention` promotion              | ✓ found        |
-| `PRD.functional_requirements.must_have_features[*]` (FR-NNN id)         | candidate `entities.*.traces_prd_features` (verbatim FR-NNN, no description text) | ⚠ inferred     |
+| `PRD.functional_requirements.features[*]` (FR-NNN id)         | candidate `entities.*.traces_prd_features` (verbatim FR-NNN, no description text) | ⚠ inferred     |
 | `PRD.use_cases.core_workflows[*]` (WKF-NNN id)                         | candidate `entities.*.traces_prd_workflows` (verbatim WKF-NNN); sweep seed | ⚠ inferred |
 | `PRD.functional_requirements.integrations_required`                    | `external_data_sources[*].name`                    | ✓ found        |
 | `PRD.security_compliance.data_sensitivity`                             | `data_classification.regulated_fields` heuristic   | ⚠ inferred     |
@@ -70,7 +70,7 @@ data skill **respects them as authoritative** (`✓ found`):
 
 ## Inferred entities — quick rules
 
-When deriving entities from `must_have_features`, follow the heuristics
+When deriving entities from `features`, follow the heuristics
 in `entity-discovery.md`. The key rule for pre-fill: **every entity from
 the PRD-key_entities list is `✓ found`; every entity derived from
 features or UX is `⚠ inferred`**. The user must confirm the latter

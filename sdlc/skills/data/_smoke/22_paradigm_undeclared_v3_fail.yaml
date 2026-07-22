@@ -1,0 +1,73 @@
+# ⚠D gate: at data_model_version >= 3.0, an undeclared persistence.paradigm is a
+# blocking error at status: complete (no silent relational default). This file is
+# otherwise identical to 01_valid_single_complete.yaml but stamped 3.0 with NO
+# `paradigm:` key -> EXPECT exit 1 (undeclared paradigm). Its legacy twin
+# (01, version 1.0, also no paradigm) passes with only an advisory.
+
+metadata:
+  data_model_version: "3.0"
+  last_updated: "2026-07-20T12:00:00Z"
+  generated_by: sdlc-data
+  session_id: "22222222-2222-2222-2222-222222222222"
+  monorepo: false
+  status: "complete"
+
+data_warnings: []
+
+persistence:
+  # NO `paradigm:` — the point of the fixture. At >= 3.0 this must fail.
+  primary_store: postgres
+  primary_store_confidence: confirmed
+  primary_store_rationale: "Team is fluent; strong transactional needs."
+  polyglot: false
+
+id_strategy:
+  scheme: uuid_v7
+  scheme_confidence: confirmed
+  scheme_rationale: "Time-orderable PKs; no surrogate-leak concerns."
+
+entities:
+  User:
+    description: "Authenticated end-user."
+    primary_key: id
+    fields:
+      id:
+        type: uuid
+        nullable: false
+        primary_key: true
+      email:
+        type: string
+        nullable: false
+        unique: true
+    traces_prd_features: []
+    traces_ux_surfaces: []
+
+relationships: []
+
+enums_and_lookups:
+  enums: {}
+  lookup_tables: []
+
+indexes_and_queries:
+  access_patterns:
+    - description: "Look up a user by email."
+      entity: User
+      fields: [email]
+      read_or_write: read
+  expected_indexes:
+    - entity: User
+      fields: [email]
+      unique: true
+      type: btree
+
+integrity_and_constraints:
+  default_on_delete: restrict
+  unique_constraints: []
+  check_constraints: []
+
+data_classification:
+  pii_fields:
+    - User.email
+  regulated_fields: []
+  encrypted_at_rest: []
+  retention_policy_default: "Indefinite"

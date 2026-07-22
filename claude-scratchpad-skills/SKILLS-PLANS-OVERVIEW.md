@@ -17,8 +17,8 @@ Execute in this order (rationale below):
 | 1 | SPLAN2 — task schema & validator repairs (incl. D2 priority removal) | task | SK-02, SK-03, SK-12..SK-20 | **EXECUTED 2026-07-19** |
 | 2 | SPLAN1 — test→subject seam + shared test infrastructure | test, task | SK-06..SK-11, SK-16 | **EXECUTED 2026-07-19** |
 | 3 | SPLAN3 — arch work-unit contract quality | arch | SK-21..SK-24 | **EXECUTED 2026-07-19** |
-| 4 | SPLAN4 — code packets & execution loop | code | SK-04, SK-25..SK-28 | open |
-| 5 | SPLAN5 — pipeline integrity + upstream skills + CLAUDE.md delta | setup, prd, ux, data, api, design, arch/task (D2 loaders), CLAUDE.md | SK-01, SK-05, SK-29..SK-35 | open |
+| 4 | SPLAN4 — code packets & execution loop | code | SK-04, SK-25..SK-28 | **EXECUTED 2026-07-20** |
+| 5 | SPLAN5 — pipeline integrity + upstream skills + CLAUDE.md delta | setup, prd, ux, data, api, design, arch/task (D2 loaders), CLAUDE.md | SK-01, SK-05, SK-29..SK-35 | **EXECUTED 2026-07-21** |
 
 **Why SPLAN2 first:** the D2 priority removal deletes/rewrites the same task-validator
 regions (required-field loops, check #22, check #23's could-arm, the granularity
@@ -90,8 +90,9 @@ test-side per-TST `priority` removal (it edits those schema regions anyway); **S
 - **⚠B (2026-07-19, resolved):** `inputs[]` = drop (owner condition — "tell the skill
   directly which inputs it shall take" — satisfied by the v1.4 self-contained embeds;
   rationale recorded in SPLAN2 step 3).
-- Open ⚠ boxes remaining: SPLAN5 ⚠C (`mitigation_refs` restriction), SPLAN5 ⚠D
-  (`paradigm` required at complete).
+- Open ⚠ boxes remaining: **NONE** — SPLAN5 ⚠C (`mitigation_refs` → restrict to
+  PRD-minted FR/NFR/QUE/INT/OOS/AIF) and ⚠D (`paradigm` required at complete,
+  gated >= 3.0) both resolved by the owner 2026-07-20 and executed 2026-07-21.
 - **Addendum 2026-07-19:** dogfooding findings A.1–A.6 verified already-implemented at
   HEAD as `Gap-1`..`Gap-6` (see README addendum for the mapping + plan-side
   reconciliation notes in SPLAN2/SPLAN3). Executors: treat Gap code as existing
@@ -105,6 +106,31 @@ test-side per-TST `priority` removal (it edits those schema regions anyway); **S
   Pre-existing defect repaired in passing: the test eval gold's TST-001..008
   collided with the staged system file under global uniqueness → renumbered
   006-013.
+- **SPLAN5 executed 2026-07-21** (Opus 4.8, after re-verifying the plan tail
+  authored by Sonnet 5 following a mid-turn Fable→Sonnet model switch at
+  transcript line 2940). Nine deviations in its ledger/reconciliation. The two
+  load-bearing ones: (a) step 1 is a **MERGE** — the AICF fork lacks stock's
+  JSON/shards machinery, so its cross-ref graph was ported INTO stock rather than
+  replacing it (finding #1); (b) the D2 coverage re-scope uses **FR_GATE
+  gating-subset** semantics (features-else-must_have), NOT the plan's naive union,
+  which would have flipped the legacy corpus red on 14 nice-to-have FRs (task
+  precedent + CLAUDE.md §10). ⚠C restricted mitigation_refs to the PRD-minted
+  families (incl INT, which the corpus uses); ⚠D gated paradigm-required at
+  data_model_version >= 3.0. Corpus non-regressive (prd/data/arch/test
+  byte-identical; ux advisory-label-only). Golden: index_selftest 13/13,
+  emit_selftest 7/7, flat-features loader parity 5/5.
+- **SPLAN4 executed 2026-07-20.** Deviations (in its ledger/reconciliation
+  note): scope fold-in — `kind: test_infrastructure` (SPLAN1/⚠A postdates the
+  plan) got its emit-rules rendering entry, SKILL.md kind-table row, and
+  runs-solo wave rule; the live-corpus ACR regression is FR-only (the corpus
+  PRD declares zero ACR instances) with ACR resolution proven by the new
+  demo-docs golden check; demo-docs gained PRD.yaml + implements/covers on
+  TSK-003..006 to host it (task validator output stayed byte-identical, exit
+  0); the optional `--overlap` helper was included (owner decision). Nothing
+  blocks — emit extension is additive; corpus `--scope all` schedule and impl
+  packets byte-identical to HEAD. Post-execution baselines: corpus
+  `--emit aicf-cli/TSK-238` resolves its covers FRs (was `{}`);
+  `emit_selftest.py` PASS 7/7.
 - **SPLAN3 executed 2026-07-19.** Deviations (in its ledger/reconciliation
   note): step 2b's missing-key case landed as an **ungated warning**, not an
   error — the corpus itself trips it (`build-test-entrypoint` in

@@ -26,9 +26,10 @@ Validates:
        - DATA-store coverage: every store id in
          DATA-MODEL.yaml.persistence.* appears in some container's
          persistence.
-       - PRD feature coverage: every PRD must_have_features FR-NNN
-         appears in some container's implements_requirements OR in
-         ARCH.yaml.non_container_features. Skipped if PRD.yaml absent.
+       - PRD feature coverage: every PRD FR-NNN (the flat `features` list,
+         or the legacy must/nice union) appears in some container's
+         implements_requirements OR in ARCH.yaml.non_container_features.
+         Skipped if PRD.yaml absent.
     6. Edge + trace integrity (block status: complete):
        - Edge endpoint integrity: every edge's `from` / `to` is a valid
          container_id (system level) or component_id (container level),
@@ -810,7 +811,7 @@ _WKF_PREFIX_RE = re.compile(r"^WKF-\d{3,}$", re.IGNORECASE)
 # implements_requirements may trace BOTH functional (FR-NNN) and non-functional
 # (NFR-NNN) requirements — a container can be the home of an NFR (a timeout cap,
 # an input-containment boundary) just as it implements features. FR-coverage
-# (every must-have FR) is unaffected: it only counts FR-NNN entries.
+# (every FR) is unaffected: it only counts FR-NNN entries.
 _FR_OR_NFR_PREFIX_RE = re.compile(r"^(?:FR|NFR)-\d{3,}$", re.IGNORECASE)
 _NFR_ID_RE = re.compile(r"^NFR-\d+", re.IGNORECASE)
 
@@ -1075,10 +1076,14 @@ def load_data_store_ids(data_path: Path) -> Optional[List[str]]:
     return ids
 
 
-def load_prd_must_have_features(prd_path: Path) -> List[str]:
-    """Return FR-NNN prefixes from PRD.functional_requirements.must_have_features.
+def load_prd_features(prd_path: Path) -> List[str]:
+    """Return the gating FR-NNN prefixes from PRD.functional_requirements.
 
-    Each entry typically starts with 'FR-NNN: <description>'. Returns just the
+    D2 gating subset (FR_GATE, CLAUDE.md §10): the flat `features` list when
+    present, else the legacy `must_have_features` ONLY — a legacy PRD's
+    nice_to_have backlog stays outside the container-coverage check (check #4),
+    preserving pre-D2 behavior so a widened scope can't hard-fail legacy ARCHs.
+    Each entry typically starts with 'FR-NNN: <description>'; returns just the
     normalized FR-NNN prefix. Honors monorepo mode (pulls from every product).
     """
     if not prd_path.exists():
@@ -1095,9 +1100,13 @@ def load_prd_must_have_features(prd_path: Path) -> List[str]:
 
     def _pull(node: dict) -> None:
         fr = node.get("functional_requirements") or {}
-        mhf = fr.get("must_have_features") if isinstance(fr, dict) else None
-        if isinstance(mhf, list):
-            for item in mhf:
+        if not isinstance(fr, dict):
+            return
+        feats = fr.get("features")
+        if not feats:  # legacy: must_have only (nice_to_have stays ungated)
+            feats = fr.get("must_have_features") or []
+        if isinstance(feats, list):
+            for item in feats:
                 m = _FEATURE_ID_RE.match(str(item).strip())
                 if m:
                     features.append(m.group(0).upper())
@@ -1116,7 +1125,8 @@ def load_prd_must_have_features(prd_path: Path) -> List[str]:
 def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
     """Return the union of FR-NNN, NFR-NNN and WKF-NNN ids declared in PRD.
 
-    FR draws from must_have_features + nice_to_have_features; NFR from
+    FR draws from the flat `features` list (or the legacy must_have_features +
+    nice_to_have_features union); NFR from
     non_functional_requirements.performance_targets + .other; WKF from
     use_cases.core_workflows. Used for the existence check on
     implements_requirements (FR or NFR) / traces_prd_workflows. Honors
@@ -1144,7 +1154,7 @@ def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
     def _pull(node: dict) -> None:
         freqs = node.get("functional_requirements") or {}
         if isinstance(freqs, dict):
-            for key in ("must_have_features", "nice_to_have_features"):
+            for key in ("features", "must_have_features", "nice_to_have_features"):
                 for item in (freqs.get(key) or []):
                     m = _fr_re.match(str(item).strip())
                     if m:
@@ -1175,7 +1185,7 @@ def load_prd_id_families(prd_path: Path) -> Dict[str, Set[str]]:
 
 
 def check_feature_coverage(arch: Arch, prd_features: List[str]) -> List[str]:
-    """Return PRD must-have FR-NNN ids implemented by no container and not
+    """Return PRD FR-NNN ids implemented by no container and not
     opted out via non_container_features."""
     if not prd_features:
         return []
@@ -2121,8 +2131,9 @@ def _looks_like_path(token: str) -> bool:
 
 
 def load_prd_feature_texts(prd_path: Path) -> Dict[str, str]:
-    """Return {FR-NNN: full item text} from PRD must_have + nice_to_have
-    features. Honors monorepo mode."""
+    """Return {FR-NNN: full item text} from PRD functional_requirements.
+    D2-tolerant: flat `features` list, else legacy must/nice union. Honors
+    monorepo mode."""
     out: Dict[str, str] = {}
     if not prd_path.exists():
         return out
@@ -2139,7 +2150,8 @@ def load_prd_feature_texts(prd_path: Path) -> Dict[str, str]:
         fr = node.get("functional_requirements") or {}
         if not isinstance(fr, dict):
             return
-        for key in ("must_have_features", "nice_to_have_features"):
+        keys = ("features",) if fr.get("features") else ("must_have_features", "nice_to_have_features")
+        for key in keys:
             for item in (fr.get(key) or []):
                 text = str(item).strip()
                 m = _FEATURE_ID_RE.match(text)
@@ -2545,7 +2557,7 @@ def validate_all(arch_path: Path) -> int:
     data_entity_names = load_data_entity_names(docs_dir / "DATA-MODEL.yaml")
     data_enum_names = load_data_enum_names(docs_dir / "DATA-MODEL.yaml")
     prd_path = docs_dir / "PRD.yaml"
-    prd_features = load_prd_must_have_features(prd_path)
+    prd_features = load_prd_features(prd_path)
     prd_families = load_prd_id_families(prd_path)
 
     # 4) Required fields (with new external-container exemption)
@@ -2631,7 +2643,7 @@ def validate_all(arch_path: Path) -> int:
     extra_problems: List[Tuple[str, List[str]]] = [
         ("arch_warnings / container warnings not in WRN-NNN format", warning_id_errs),
         ("PRD trace ID-format error(s) (expected FR-NNN / WKF-NNN)", id_format_errs),
-        ("PRD must-have FR-NNN feature(s) implemented by no container", uncovered_features),
+        ("PRD FR-NNN feature(s) implemented by no container", uncovered_features),
         ("implements_requirements / traces_prd_workflows resolution error(s)", prd_trace_errs),
         ("component work_unit integrity error(s) (cross-check 21)", component_op_errs),
         ("component FR->work_unit coverage error(s) (cross-check 22)", fr_wu_errs),

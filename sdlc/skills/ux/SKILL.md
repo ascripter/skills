@@ -38,7 +38,7 @@ flow step they need to implement.
    every surface is examined, assigned a stable `SCR-NNN` id, and traced
    back to PRD via `traces_workflows` / `implements_requirements` /
    `references_entities`. Theme 4 closes with a **dynamic scope-
-   completeness sweep** (analogous to PRD's `must_have_features` sweep)
+   completeness sweep** (analogous to PRD's `features` sweep)
    that catches surfaces implied by FR/ENT/JTB ids but not by any WKF.
 6. **Write & validate** → merge into `docs/UX.yaml` and write all
    `docs/UX__<surface>.yaml`, prefixing every `ux_warnings` entry with a
@@ -128,11 +128,10 @@ Read these files at startup:
      - `technical_constraints.framework` → preliminary component-library hint
      - `non_functional_requirements.accessibility` → preliminary WCAG target
      - `use_cases.core_workflows` (WKF-###) → primary seed for surface inventory
-     - `functional_requirements.must_have_features` (FR-###) → seed for
-       feature-driven surfaces (verbs/screens that implement a specific FR)
-     - `functional_requirements.nice_to_have_features` (FR-###) → secondary
-       seed; surfaces here get `status: defined` but may stay
-       post-MVP-only at the user's discretion
+     - `functional_requirements.features` (FR-###) → seed for
+       feature-driven surfaces (verbs/screens that implement a specific FR).
+       One flat list post-D2 (legacy PRDs may still carry a must/nice split;
+       the loader unions them)
      - `data_model.key_entities` (ENT-###) → seed for entity-driven
        surfaces (CRUD screens, list/detail/registry views, e.g. a
        `ProjectRegistry` entity implies a `list` command)

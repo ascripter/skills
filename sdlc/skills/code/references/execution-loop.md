@@ -43,17 +43,27 @@ subagents** dispatched in parallel waves. The rules that make this safe:
   work unit is one implementation task plus the test task(s) whose
   `depends_on` reaches it (impl + its tests heal together, so they share a
   worker). The units' combined `target_files` (+ test files) must be
-  **pairwise disjoint** — a candidate overlapping another pending task's
-  files waits or runs **solo** (scaffold tasks, barrel/exports files, shared
-  config). When in doubt, solo: correctness beats parallelism.
+  **pairwise disjoint**, and overlap is **path-aware**: a directory entry
+  contains every path beneath it (`tests/` overlaps `tests/unit/test_x.py`).
+  `topo_order.py --overlap <qid> <qid> …` checks a candidate wave
+  mechanically (exit 0 disjoint / 1 overlapping). A candidate overlapping
+  another pending task's files waits or runs **solo** (scaffold tasks,
+  barrel/exports files, shared config); a task with a DIRECTORY-pinned
+  target — canonically the `test_infrastructure` task's `["tests/"]` —
+  always runs solo, or strictly serialized before its dependents, like
+  scaffold tasks. When in doubt, solo: correctness beats parallelism.
 - **The worker brief is the task packet.** Build the packet with
   `python "${CLAUDE_SKILL_DIR}/topo_order.py" --emit <qualified-id> …` — never
   by `Read`-ing the TASKS file (a shard can be hundreds of KB). It prints the
   verbatim task JSON (v1.4 embeds included) joined with a `requirement_context`
-  slice (the task's FR/NFR/WKF ids → their PRD statements), so the worker's
-  requirement grounding rides in the packet, not a per-worker PRD read. Add the
-  container tech-stack slice, the provenance-marker and
-  path-safety rules from `emit-rules.md`, the established test command, and
+  slice (the task's FR/NFR/WKF/ACR ids — `implements`, `implements_workflows`,
+  and `test_spec.covers` — resolved to their PRD statements), so every worker's
+  requirement grounding, test tasks included, rides in the packet, not a
+  per-worker PRD read. Add the
+  container tech-stack slice, the **worker digest** from `emit-rules.md`
+  (one named block — packet consumption, path safety, per-kind rendering,
+  provenance; never cherry-pick individual rules out of it), the established
+  test command, and
   the write boundary (its `target_files` + the test file, nothing else).
   Workers are **non-interactive**: no AskUserQuestion, no ledger writes, no
   reading other tasks' fresh output. A worker that hits a decision only the
@@ -99,6 +109,16 @@ toolchain), say so at the gate, record the best level actually reached
 (`static_only` for compiled/typechecked code, `static_format` for
 format-verified content, `none` only when not even a static check exists),
 and continue — generation without verification is degraded, not blocked.
+
+**Measure rings bare — never through a pipe.** Run every ring/gate command
+BARE and capture its exit code directly: `cmd | tail -5; echo $?` reports
+*tail's* exit, not the suite's — an upstream validator once ran false-green
+for a full plan cycle behind exactly that pipe, masking 294 real errors.
+When the output must be kept, redirect instead:
+`cmd > ring.out 2>&1; echo $?`. The captured numeric exit code — not a
+pass/fail paraphrase — is what goes into the ledger (`ring_exit` /
+`ring_container_exit`, see `state-and-idempotency.md`) and into any
+`failure:` record (`"exit N: …"`).
 
 A test task whose `depends_on` only reaches the scaffold (weakly linked) still
 runs at its topo position; the component ring backstops the pairing. Rings
@@ -150,7 +170,8 @@ You are healing one atomic codegen unit that failed its tests twice.
 TASK PACKET (from `topo_order.py --emit <qualified-id>`): <the task object,
   qualified id included — carries the embedded interface_contract / test_spec
   (v1.3) and the per-kind grounding slices (v1.4) — plus its requirement_context
-  (the task's FR/NFR/WKF ids resolved to their PRD statements)>
+  (the task's FR/NFR/WKF/ACR ids, `test_spec.covers` included, resolved to
+  their PRD statements)>
 INTERFACE CONTRACT: <the task's interface_contract; pre-1.3: the ARCH
   work_unit slice or the API operation schema the unit defers to>
 ACCEPTANCE: <the task's acceptance list>

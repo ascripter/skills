@@ -20,7 +20,8 @@ Validates:
        - WKF-NNN on every traces_prd_workflows entry (when present).
        Hard error in status:complete.
     4. Coverage checks (all skipped when api_kind: none):
-       - Feature coverage: every PRD must_have_features FR-NNN appears in
+       - Feature coverage: every PRD FR-NNN (the flat `features` list, or the
+         legacy must/nice union) appears in
          some resource's traces_prd_features OR in API.yaml.non_api_features.
        - Surface coverage: every data-bearing UX surface (matched by the
          SCR-NNN id) appears in some resource's traces_ux_surfaces.
@@ -638,11 +639,14 @@ def check_resource_id_formats(resource: APIResource, label: str) -> List[str]:
     return errs
 
 
-def load_prd_must_have_features(prd_path: Path) -> List[str]:
-    """Return list of FR-NNN strings from PRD.functional_requirements.must_have_features.
+def load_prd_features(prd_path: Path) -> List[str]:
+    """Return the gating FR-NNN strings from PRD.functional_requirements.
 
-    Each must_have_features entry typically starts with "FR-NNN: <description>".
-    We extract just the FR-NNN prefix for matching.
+    D2 gating subset (FR_GATE, CLAUDE.md §10): the flat `features` list when
+    present, else the legacy `must_have_features` ONLY — a legacy PRD's
+    nice_to_have backlog stays outside the coverage check, preserving pre-D2
+    behavior. Each entry typically starts with "FR-NNN: <description>"; we
+    extract just the FR-NNN prefix.
     """
     if not prd_path.exists():
         return []
@@ -659,9 +663,13 @@ def load_prd_must_have_features(prd_path: Path) -> List[str]:
 
     def _pull(node: dict) -> None:
         fr = node.get("functional_requirements") or {}
-        mhf = fr.get("must_have_features") if isinstance(fr, dict) else None
-        if isinstance(mhf, list):
-            for item in mhf:
+        if not isinstance(fr, dict):
+            return
+        feats = fr.get("features")
+        if not feats:  # legacy: must_have only (nice_to_have stays ungated)
+            feats = fr.get("must_have_features") or []
+        if isinstance(feats, list):
+            for item in feats:
                 s = str(item).strip()
                 m = _FEATURE_ID_RE.match(s)
                 if m:
@@ -928,7 +936,7 @@ def validate_all(api_path: Path) -> int:
         uncovered_surfaces: List[str] = []
         bad_entities: List[str] = []
     else:
-        prd_features = load_prd_must_have_features(prd_path)
+        prd_features = load_prd_features(prd_path)
         ux_surfaces = load_ux_data_bearing_surfaces(docs_dir)
         data_entities = load_data_model_entities(data_path)
 

@@ -117,7 +117,7 @@ code_style:
 testing_policy:
   pyramid: { unit: 0.7, integration: 0.25, e2e: 0.05 }
   coverage_floor: 0.8
-  rule: "Every must-have FR-### must trace to >=1 TST-###."
+  rule: "Every FR-### must trace to >=1 TST-###."
 ```
 
 ### `severity_rubric` — how findings/issues are graded

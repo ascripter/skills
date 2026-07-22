@@ -143,7 +143,12 @@ data_warnings: []                          # list[string] of "WRN-NNN: <msg>" it
 # `paradigm` is chosen early (Phase 4) — the agent recommends one from PRD
 # signals, the user confirms; `topology` is recommended in the same step.
 # Absence of `paradigm` defaults to `relational` so pre-paradigm files validate
-# unchanged.
+# unchanged — BUT that silent default hides a forgotten paradigm on a
+# file-native/CLI project (⚠D). From `data_model_version >= 3.0`, `paradigm` is
+# REQUIRED at `status: complete` (a blocking error); older versions keep the
+# silent default plus a validator advisory. The 3.0 floor clears the meta-corpus's
+# self-stamped versions (CLAUDE.md §10 — a new blocking check must not hard-fail
+# legacy artifacts).
 #
 #   paradigm      required blocks (besides entities + data_classification)   shape of `entities`
 #   ----------    ---------------------------------------------------------  -------------------------------------
@@ -166,8 +171,10 @@ data_warnings: []                          # list[string] of "WRN-NNN: <msg>" it
 # consistency) carry no meaning for graph/vector/file_native and may be omitted.
 # -----------------------------------------------------------------------------
 persistence:
-  paradigm: null                   # REQUIRED in practice (defaults to
-                                   # `relational` when absent). One of:
+  paradigm: null                   # REQUIRED at status:complete from
+                                   # data_model_version >= 3.0 (⚠D); below that,
+                                   # defaults to `relational` when absent (+ an
+                                   # advisory). One of:
                                    #   relational | document | key_value |
                                    #   graph | vector | file_native
   paradigm_confidence: null        # confirmed | inferred | assumption

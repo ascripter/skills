@@ -75,7 +75,7 @@ store_id).
 
 ### Pass 4 — Operational containers (from PRD)
 
-Walk `PRD.functional_requirements.must_have_features` and look for
+Walk `PRD.functional_requirements.features` and look for
 keywords that imply non-API operational work:
 
 | Keyword cluster                          | Candidate container         |
@@ -195,7 +195,7 @@ Reflect, in order, on:
    container? Is one candidate secretly two (e.g. a "backend" that both
    serves an API and runs a nightly job)?
 2. **Every upstream ID family**, not just the most direct one:
-   - **PRD `FR-NNN` must-have features** — is every must-have feature
+   - **PRD `FR-NNN` features** — is every feature
      implemented by some container in the list? An FR with no home is
      the loudest signal of a missing container (esp. operational ones).
      This is the same set the Phase 7 feature-coverage check enforces —
@@ -213,7 +213,7 @@ Reflect, in order, on:
 3. **Project-type heuristics** — CLI tool, SaaS web app, library, data
    pipeline, browser extension: each implies a characteristic container
    set (e.g. a pipeline implies ingest + transform + sink stages).
-4. **Build-time deliverables** — scan the must-have FR texts for concrete
+4. **Build-time deliverables** — scan the FR texts for concrete
    repo paths and shipped-artifact nouns (a schema/model layer, repo-root
    `tools/` validators, `templates/`, prompt/question/archetype packs,
    generated docs). Every such path must fall inside the scope of SOME

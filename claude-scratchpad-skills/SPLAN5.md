@@ -5,7 +5,56 @@ Skills touched: **setup, prd, ux, data, api, design** + the D2 downstream loader
 SK-30, SK-31, SK-32, SK-33, SK-34, SK-35 (+ api/design observations). Execute LAST
 (its CLAUDE.md delta documents conventions SPLAN1–4 introduce; its loader re-scope
 assumes SPLAN2's task-side changes landed).
-Status: **open**. Line numbers = 0.3.6; re-locate at HEAD.
+Status: **EXECUTED 2026-07-21** (Opus 4.8, after re-verifying the Sonnet-authored
+plan tail). Line numbers = 0.3.6; re-locate at HEAD.
+
+> **Execution reconciliation (2026-07-21).** Nine deviations, all verified:
+> 1. **Step 1 = MERGE, not replace (finding #1).** Ported the AICF fork's
+>    cross-ref graph + `_extract_prd_id_items`/`_extract_convention_blocks`
+>    extractors + `_ALLOWLISTED_IDS` + `--check`/`--refs`/`--find` INTO stock
+>    `docs_index.py`, KEEPING stock's JSON/shards/TASKS machinery (which the fork
+>    lacks). SCR added as a first-class symbol extractor (enhancement beyond the
+>    fork). Edge scan runs over JSON/TASKS too (plan 1b) so `referenced_by`
+>    includes task→FR — this deliberately breaks strict fork byte-parity (that IS
+>    1b's intent). `_ALLOWLISTED_IDS` empty by default, so the corpus's retired
+>    `FR-058` correctly surfaces as `dangling` (a fresh project ships empty; the
+>    corpus would add its own). Capability-version marker (v2) in the docstring.
+> 2. **OPR/AST-as-symbols DEFERRED.** Not in the fork; the meta-corpus has no
+>    `API.yaml` (none-mode) nor `DESIGN.yaml`, so they are untestable here. SCR
+>    (UX) landed; OPR/API and AST/DESIGN symbol extractors deferred to a project
+>    that exercises them (the edge graph already resolves any such id family if a
+>    def pattern is added). Recorded, not a silent drop.
+> 3. **⚠C RESOLVED = restrict — but to the PRD-minted families, not just
+>    FR/NFR/QUE.** The decision's PRINCIPLE is "ids that exist at PRD-write time";
+>    the corpus legitimately mitigates a risk with `INT-002`, so the allowlist is
+>    `{FR,NFR,QUE,INT,OOS,AIF}` (all PRD-minted). The defect being fixed is
+>    forward refs to DOWNSTREAM families (TST/SIG). Warn-level advisory (never
+>    blocks); fixture-proven (`TST-001` flagged).
+> 4. **FR_GATE gating-subset for coverage loaders (execution discovery).** The
+>    plan's step-4 "union of the legacy two lists" would hard-fail the legacy
+>    corpus: widening `data`'s BLOCKING coverage to all-FRs flips exit 0→1 on 14
+>    nice-to-have FRs with no entity trace. Corrected to the task FR_GATE
+>    precedent (finding 5) + CLAUDE.md §10: coverage loaders (ux/data/api/arch)
+>    read `features` else **must_have only** (nice_to_have stays post-MVP,
+>    ungated). Existence loaders (arch/test `load_prd_id_families`) keep the
+>    union (additive, corpus byte-identical). Single most important correction.
+> 5. **⚠D RESOLVED = require at complete, gated >= 3.0** (clears corpus 2.25).
+>    `01_valid_single_complete` already covers legacy-warn; added
+>    `22_paradigm_undeclared_v3_fail` (exit 1) + `23_paradigm_declared_v3_pass`.
+> 6. **ux corpus advisory-label delta.** The ONLY non-byte-identical corpus
+>    output: the FR-coverage advisory LABEL "must-have FR(s)" -> "FR(s)"
+>    (intended D2 prose; same 14 FR ids, exit 0). data/arch/test byte-identical.
+> 7. **prd corpus stays exit 1, byte-identical.** It fails at `model_validate`
+>    (pre-existing untyped `parking_lot` — a known meta-corpus divergence) before
+>    reaching the new advisory logic, so no new delta; the new prd behaviour
+>    (flat features, ACR-over-all-FRs, mitigation_refs) is proven by fixtures.
+> 8. **Version bumps.** Schema TEMPLATE versions left as-is (example placeholders
+>    users overwrite; bumping misleads) — the D2/⚠D changes are documented in
+>    schema prose + a `docs_index` capability-version marker.
+> 9. **Per-skill Phase-2/8 `--refs` wording consolidated** into the shared
+>    `sdlc-docs-access.md` rule + the canonical 8-phase flow in CLAUDE.md, not
+>    duplicated across 7 skills (convention #8). prd eval #4 retargeted from the
+>    removed `milestones` theme to `stakeholders`.
 
 ## Steps
 
@@ -158,10 +207,37 @@ new conventions §9 (fix-upstream-over-warn), §10 (version-gate new blocking ru
 
 ## Execution ledger
 
-- [ ] 1 setup port (a–h) + docs-access asset update
-- [ ] 2 prd flat features (schema/validator/questions/flows)
-- [ ] 3 ⚠C resolved: ___ (recommendation: restrict)
-- [ ] 4 downstream loaders re-scoped (ux/data/api/arch/+task verify/+test grep)
-- [ ] 5 small items (ux line · ⚠D resolved: ___ · design/api lines)
-- [ ] 6 CLAUDE.md delta applied
-- [ ] 7 fixtures/evals/versions · verification green
+- [x] 1 setup MERGE (a–h) — `docs_index.py` gained the cross-ref graph
+  (`referenced_by`/`dangling`), extractors NFR/WKF/INT/AIF/SCR + `conventions.*`,
+  `_ALLOWLISTED_IDS` (empty default), `--check`/`--refs`/`--find`; SK-30
+  cosmetics (header/docstring/`_TSK_LINE_RE`); `sdlc-docs-access.md` +
+  `setup/SKILL.md` updated. Stock JSON/shards kept (finding #1). OPR/AST symbols
+  deferred (reconciliation #2). Golden: `setup/_smoke/index_selftest.py` 13/13.
+- [x] 2 prd flat features — `PRD.schema.yaml` `features` list + milestones
+  removed + mitigation_refs restricted; validator `flat_features()` union +
+  ID_FAMILIES + `check_acr_coverage` all-FRs + `check_mitigation_refs`;
+  prd-questions/importance-flows features theme + parking_lot routing;
+  migrate_ids tolerant. Fixtures 09 (flat) + 10 (legacy milestones) pass.
+- [x] 3 ⚠C resolved: **restrict** to PRD-minted `{FR,NFR,QUE,INT,OOS,AIF}`
+  (reconciliation #3); warn-level, fixture-proven.
+- [x] 4 downstream loaders re-scoped — ux `load_prd_fr_ids`, data/api/arch
+  `load_prd_features`, test `load_prd_id_families` all D2-tolerant with FR_GATE
+  gating-subset semantics (reconciliation #4); task verify-only (already
+  tolerant). Flat-features loader parity 5/5; FR_GATE gating verified.
+- [x] 5 small items — ux `cli_contract` pointer (UX__SURFACE + cli-ux.md); ⚠D
+  resolved: **require paradigm at complete, gated >= 3.0** (schema prose +
+  validator + fixtures 22/23); design surface_overrides check-#15 pointer.
+- [x] 6 CLAUDE.md delta applied — E1–E4 (D2 rewordings, retirement paragraph,
+  code-row path-aware + FR/NFR/WKF/ACR) + N1–N4 (§9 fix-upstream, §10
+  version-gating, §11 measurement, §12 test→subject seam); Phase-2/8 `--refs`
+  note; setup table+prose rows.
+- [x] 7 fixtures/evals/versions · verification green — see baselines below.
+
+**Post-execution baselines (2026-07-21):** All 10 modified `.py` compile;
+cp1252 audit of new runtime strings clean. prd smoke 01–10 expected (09/10 → 0);
+data smoke incl 22 (exit 1) / 23 (exit 0) / 01 legacy-advisory. Corpus
+regression: prd exit 1 byte-identical; ux exit 0 (advisory label-only delta);
+data/arch/test byte-identical. Golden: `emit_selftest` 7/7, `index_selftest`
+13/13 (referenced_by/dangling/`--check`/`--refs`/`--find` all proven); corpus
+`--check` correctly flags the retired `FR-058` (exit 1). `must_have_features`
+grep-sweep: remaining hits are back-compat readers + legacy fixtures only.

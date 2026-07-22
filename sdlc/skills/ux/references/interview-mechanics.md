@@ -175,7 +175,7 @@ Reserved for **theme 4 (`surface_inventory`)** and **theme 11
 (`per_surface_deepdive`)** — the per-item state machines that drive the
 entire UX skill. See `references/surface-discovery.md` for the full
 per-surface state machine, the **scope-completeness sweep** (theme 4
-step e — analogous to PRD's `must_have_features` sweep in
+step e — analogous to PRD's `features` sweep in
 `importance-flows.md`), and the SCR-NNN assignment timing.
 
 The sweep is mandatory in theme 4: after the per-item loop closes, the

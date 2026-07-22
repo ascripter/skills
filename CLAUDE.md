@@ -12,7 +12,7 @@ project from a structured chain of artifacts. Skills are invoked as
 
 | Skill        | Folder              | Inputs                                                                                       | Output(s)                                            |
 |--------------|---------------------|----------------------------------------------------------------------------------------------|------------------------------------------------------|
-| `setup`      | `sdlc/skills/setup` | run ONCE before `prd`; current project root                                                  | `.claude/sdlc/docs_index.py`, docs PostToolUse hook in `.claude/settings.json` (canonical `docs/*.yaml` **and** `docs/TASKS*.json`), `.claude/rules/sdlc-docs-access.md`, `docs/INDEX.yaml`, `## SDLC Documents` pointer block in `CLAUDE.md` |
+| `setup`      | `sdlc/skills/setup` | run ONCE before `prd`; current project root                                                  | `.claude/sdlc/docs_index.py` (location map + `referenced_by`/`dangling` cross-ref graph; `--show`/`--refs`/`--check`/`--find`), docs PostToolUse hook in `.claude/settings.json` (canonical `docs/*.yaml` **and** `docs/TASKS*.json`), `.claude/rules/sdlc-docs-access.md`, `docs/INDEX.yaml`, `## SDLC Documents` pointer block in `CLAUDE.md` |
 | `prd`        | `sdlc/skills/prd`   | repo scan + ideation + interview                                                             | `docs/PRD.yaml`                                      |
 | `ux`         | `sdlc/skills/ux`    | `docs/PRD.yaml` + interview                                                                  | `docs/UX.yaml`, `docs/UX__<surface>.yaml`            |
 | `design`     | `sdlc/skills/design`| `docs/PRD.yaml` + `docs/UX.yaml` (+ `UX__*`) + interview                                     | `docs/DESIGN.yaml`, `docs/DESIGN__tokens.yaml` (token UIs), `docs/DESIGN__assets.yaml` (asset pipelines) |
@@ -34,15 +34,18 @@ acts as a **manager** that dispatches waves of up to 3 parallel, non-interactive
 worker subagents; each worker executes one work unit (implementation task + its
 test task, test-first) with a test-and-heal loop (≤3 attempts; attempt 3
 escalates to a manager-dispatched fresh opus subagent). Waves only contain
-tasks with pairwise-disjoint `target_files`; the manager is the sole ledger
+tasks with pairwise-disjoint `target_files` (path-aware: a directory entry
+contains every path beneath it, so a directory-pinned task runs solo); the
+manager is the sole ledger
 writer, and integration/container/system test rings run serialized between
 waves. Tasks are **self-contained** as of task-artifact v1.4: implementation
 tasks embed their `interface_contract` (and `unit_kind` / `unit_summary`), test
 tasks their `test_spec`, and integration/migration/design/config tasks their
 `operation_contract` / `entity_slice` / `design_spec` / `config_keys` slices,
 so codegen needs no per-task ARCH/TEST-STRATEGY/API/DATA/DESIGN lookups — the
-container's tech stack (one `ARCH__<cid>.yaml` header slice) and the PRD FR/NFR
-requirement statements are the only upstream facts, and the latter are joined
+container's tech stack (one `ARCH__<cid>.yaml` header slice) and the PRD
+FR/NFR/WKF/ACR requirement statements (implementation `implements` and test
+`test_spec.covers` alike) are the only upstream facts, and the latter are joined
 into each worker packet by the `topo_order.py --emit` builder (pulled live from
 `docs/PRD.yaml` as one-line `requirement_context`, never embedded in the task
 graph nor read whole by a worker). Three forms: `/sdlc:code`
@@ -60,15 +63,19 @@ honours the downstream-rejection rule (refuses draft/invalid task graphs) and
 never edits `docs/*.yaml` or the TASKS files.
 
 `setup` is infrastructure, not an artifact producer. It runs once before `prd`
-and wires a **generated `docs/INDEX.yaml`** — a pure line-range location map over
+and wires a **generated `docs/INDEX.yaml`** — a line-range location map over
 the large specs (`PRD.yaml`, `DATA-MODEL.yaml`, `TASKS*.json`, …) plus a `shards:`
-inventory of every `docs/*__*` sub-artifact — plus a `Write|Edit` PostToolUse
+inventory of every `docs/*__*` sub-artifact, **plus a cross-reference graph**
+(`referenced_by` inbound blast-radius + `dangling` id-integrity over both the
+YAML and JSON/TASKS docs) — plus a `Write|Edit|MultiEdit` PostToolUse
 hook that refreshes it on every canonical `docs/*.yaml` / `docs/TASKS*.json`
 edit, and the `.claude/rules/sdlc-docs-access.md` slice-don't-slurp protocol.
 Each artifact skill reads large upstream docs **by slice** via the index
-(Phase 2) and refreshes it after writing (Phase 8). The generator
+(Phase 2), checks a symbol's blast-radius with `docs_index.py --refs` before
+editing it, and refreshes the index after writing (Phase 8). The generator
 (`docs_index.py`) is stdlib-only and copied into the consumer project at
-`.claude/sdlc/docs_index.py`; re-running `/sdlc:setup` upgrades an installed copy.
+`.claude/sdlc/docs_index.py`; it also offers `--check` (a dangling-reference CI
+gate), `--refs`, and `--find`. Re-running `/sdlc:setup` upgrades an installed copy.
 
 
 ## Canonical naming
@@ -205,7 +212,7 @@ to control how they are run:
   project-defined (e.g. `prd`'s `conventions` block). Per-bucket draft-
   approve loop, validator only type-checks the top-level mapping.
 
-Reserve `critical` for scope-defining fields (e.g. MVP features in
+Reserve `critical` for scope-defining fields (e.g. the feature inventory in
 `prd`; surface inventory in `ux`).
 
 The canonical specification of all four tiers — including the sweep,
@@ -231,6 +238,16 @@ These conventions surfaced first in `prd` and `ux`, then proved generic
 enough that they belong here. Every new skill should adopt them unless
 there's a concrete reason not to. Downstream skills (`data`, `api`,
 `arch`, `test`, `task`, `deploy`) MUST adopt them.
+
+**No priority tiers, no MVP phases.** Every consumer of this skillset is built
+whole by `/sdlc:code` — an economic must/should/could split has no downstream
+consumer. PRD carries one flat `features` list (de-scoped ideas go to
+`open_questions.parking_lot`); `milestones` is retired; tests and tasks carry no
+priority field; coverage gates scope to ALL FRs. Validators still *accept* legacy
+artifacts carrying the old split/fields (parse-and-ignore; loaders union the
+legacy lists — and a **blocking** coverage gate that widens to all-FRs scopes to
+the legacy must-have subset on an old PRD so it can't hard-fail it, per §10), but
+new writes never emit them.
 
 #### 1. `metadata.changelog: Optional[List[str]]` on every artifact
 
@@ -387,8 +404,8 @@ nobody builds. So the two deferral sets must be **symmetric**:
 - If `test` **defers the test** for a behaviour (its work_unit / FR /
   component named in `TEST-STRATEGY*.test_strategy_warnings`, so no
   `TST-NNN` exists) and `task` still emits the impl task, that impl task
-  MUST be **post-MVP** (`priority: could`) or itself **deferred** in
-  `task_warnings`. Otherwise the branch is built with no test.
+  MUST itself be **deferred** in `task_warnings` (or the test restored).
+  Otherwise the branch is built with no test.
 - The two honest resolutions are **defer both** or **claim partial
   coverage** (restore the test). Never silently keep the impl.
 
@@ -483,6 +500,62 @@ Two rules, every artifact skill, every write:
   in the same write — or deletes the sentence. A propagation pass that
   changes a collection but not the prose describing it is an incomplete
   pass.
+
+#### 9. Embedded-copy drift is repaired at the SOURCE, never on the copy
+
+Several artifacts embed write-time copies of upstream slices (a task's
+`interface_contract`/`test_spec`, family and CLI contracts). When an embedded
+copy must change, **edit the upstream artifact and re-slice** — never patch the
+embed in place. A patched embed re-diverges on the next regeneration and trips
+the drift advisory (task cross-check #20) either way. Corollary: a drift
+advisory is a signal to fix the upstream, not to silence the copy. (Surfaced
+hardening the AICF corpus: patching 10 task test_specs without their TSTs
+produced 10 drift advisories; the fix was authoring the same change on the 10
+upstream TST entries.)
+
+#### 10. New blocking checks are version-gated
+
+A validator rule that can fail an artifact stamped `complete` by an earlier
+skill version must be gated on the artifact's declared `*_version`: older
+artifacts get a WARNING, artifacts at/after the version that introduced the rule
+get the ERROR. New checks over existing fields start as warnings. Precedent:
+task `interface_contract` ("REQUIRED … at artifact version >= 1.3; older
+artifacts warn instead"); the D2 `paradigm`-required gate (`data`, version >= 3.0)
+and the widened FR coverage gate (`FR_GATE` scopes to must-have on a legacy PRD)
+both follow it. **Floor above the corpus:** the AICF meta-corpus self-stamps
+versions above the stock schema (TASKS/TEST-STRATEGY at 1.8/1.9, DATA-MODEL at
+2.25), so a new blocking check's floor must CLEAR those numbers (use 3.0 for
+DATA-MODEL, 2.0 elsewhere) — "gate on the next version" is porous. Counter-example
+this rule exists to prevent: 0.3.6 hard-failed graphs 0.3.4 had stamped complete,
+while the same version's scheduler ran them fine. Validator and scheduler must
+agree on what makes a graph schedulable.
+
+#### 11. Never read an exit code after a pipe
+
+`cmd | tail -5; echo $?` reports **tail's** exit code, not the validator's. Run
+gate commands bare and capture the code directly (`cmd > out.txt 2>&1;
+echo $?`); record the numeric code, not a pass/fail impression. An upstream
+validator once ran false-green for a full fix-plan cycle behind a pipe, masking
+294 real errors.
+
+#### 12. Tests wire to their true subjects; shared test infra has one owner
+
+Cross-skill contract (test → task → code):
+
+- `test` names each unit-tier test's subject(s) in `targets_work_units`
+  (require-or-defer at `complete`), marks non-gating/eval tests with
+  `gating: false`, and declares shared test deliverables in
+  `shared_infrastructure`.
+- `task` wires each test task's `depends_on` to the impl task(s) of those
+  subjects (never to a per-component absorber or the scheduling tail), emits ONE
+  `test_infrastructure` task per container that every test depends on, and gives
+  the system scaffold ownership of the non-gating marker registration +
+  default-suite exclusion.
+- `code` relies on that edge: a worker unit is an impl task **plus the test
+  tasks whose `depends_on` reaches it** — mis-wired tests silently break
+  test-first pairing and the heal loop.
+
+Validator checks on the task side are warn-level and version-gated (§10).
 
 #### Implications for downstream skills
 
@@ -627,7 +700,10 @@ Every skill implements these phases, in order:
    the large specs (`PRD.yaml`, `DATA-MODEL.yaml`, …) are read **by line
    range via `docs/INDEX.yaml`** — the location map `setup` wires. Look up
    the section/symbol you need (or `python .claude/sdlc/docs_index.py
-   --show <symbol>`) and `Read` only that slice. Fall back to a whole-file
+   --show <symbol>`) and `Read` only that slice. Before editing an upstream
+   symbol, check its edit blast-radius with `docs_index.py --refs <symbol>`
+   (or the `referenced_by` block) so every inbound site is reconciled in the
+   same pass. Fall back to a whole-file
    read only when `INDEX.yaml` is absent (the project never ran `setup`)
    or the doc is genuinely small. See `.claude/rules/sdlc-docs-access.md`.
 3. **Pre-fill** — build a map of values that can be derived from inputs.
@@ -651,7 +727,8 @@ Every skill implements these phases, in order:
    on every `docs/*.yaml` write, but do it explicitly here too: a
    freshly-installed hook isn't active until the next session, and a write
    path the matcher missed would otherwise leave a stale index. No-op if
-   the project never ran `setup`.
+   the project never ran `setup`. Optionally run `docs_index.py --check` to
+   confirm the write introduced no dangling id references before closing.
 
 ### Merge behavior (Phase 7)
 

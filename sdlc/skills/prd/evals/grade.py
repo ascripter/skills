@@ -209,10 +209,10 @@ def grade_eval_4(tp: Path) -> List[dict]:
             f"value={_get(prd, 'business_model', 'monetization')}",
         ),
         _assert(
-            "New theme written: milestones populated",
-            isinstance(_get(prd, "milestones"), dict)
-            and any(v is not None for v in _get(prd, "milestones").values()),
-            f"milestones={_get(prd, 'milestones')}",
+            "New theme written: stakeholders populated",
+            isinstance(_get(prd, "stakeholders"), dict)
+            and any(v is not None for v in _get(prd, "stakeholders").values()),
+            f"stakeholders={_get(prd, 'stakeholders')}",
         ),
         _assert(
             "New theme written: success_metrics populated",

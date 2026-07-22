@@ -9,9 +9,11 @@ context window. This script produces ``docs/INDEX.yaml`` — a pure *location ma
 ``docs/*__*`` sub-artifact so agents can discover per-surface/container/resource
 files without reading each parent's inventory block. The index duplicates no
 field bodies, so it cannot drift in content; only line ranges move, and the
-``Write|Edit`` PostToolUse hook (installed by the ``sdlc:setup`` skill) keeps
-those current. The retrieval protocol agents follow lives in
-``.claude/rules/sdlc-docs-access.md``.
+``Write|Edit|MultiEdit`` PostToolUse hook (installed by the ``sdlc:setup`` skill)
+keeps those current. Beyond the location map it also emits a cross-reference
+graph (``referenced_by`` + ``dangling``) so an agent can look up a symbol's edit
+blast-radius and gate on id integrity (``--check``). The retrieval protocol
+agents follow lives in ``.claude/rules/sdlc-docs-access.md``.
 
 This file is dropped into a consumer project at ``.claude/sdlc/docs_index.py`` by
 ``sdlc:setup``. It is **stdlib-only by design**: a line-based scanner over the
@@ -29,13 +31,21 @@ Usage
                                              #   is a canonical doc or a shard;
                                              #   else no-op
     python docs_index.py --show <symbol>     # print one symbol's [start,end] slice
-                                             #   (entity / enum name, FR-### id,
-                                             #   TSK-### id, or a stage_dossiers
-                                             #   map key)
+                                             #   (entity / enum / convention name,
+                                             #   FR/NFR/WKF/SCR/… id, TSK-### id, or
+                                             #   a stage_dossiers map key)
+    python docs_index.py --refs <symbol>     # print a symbol's edit blast-radius
+    python docs_index.py --check             # exit non-zero on any dangling ref
+    python docs_index.py --find kind=… …     # predicate search over symbols
 
 Project root is resolved from ``--project-root``, then ``$CLAUDE_PROJECT_DIR``,
 then the current working directory. ``docs/`` is taken relative to that root
 unless ``--docs-dir`` is given explicitly.
+
+Capability version: 2 (adds the cross-reference graph — ``referenced_by`` +
+``dangling`` — the extra symbol families NFR/WKF/INT/AIF/SCR + ``conventions.*``,
+and the ``--refs`` / ``--check`` / ``--find`` subcommands over the v1 location
+map). Re-run ``/sdlc:setup`` to upgrade an installed v1 copy.
 """
 
 from __future__ import annotations
@@ -90,6 +100,56 @@ _KEY_RE = re.compile(r"^(?P<indent>\s*)(?P<key>[A-Za-z_][\w./-]*):(?:\s|$)")
 # summary of a short, single-sentence quoted FR.
 _FR_ITEM_RE = re.compile(r'^\s*-\s*(?P<q>["\']?)(?P<id>FR-\d+):\s*(?P<rest>.*)')
 
+# ---------------------------------------------------------------------------
+# Cross-reference (edge) vocabulary — the id-integrity half of the index.
+# ---------------------------------------------------------------------------
+#
+# ID families *defined* somewhere in the canonical SDLC docs — the only prefixes
+# the dangling-reference check resolves. Every other XX-### token (downstream
+# generated-app families like TST/TSK/CMP/OPR/CFG, or external standards like
+# ISO-8601) is a forward/illustrative reference, NOT a corpus symbol: mentions
+# of those are ignored and never flagged dangling. ``stage_NN`` is a special
+# form handled alongside. (Ported from the AICF navigation fork, SK-01/SK-29.)
+_CORPUS_PREFIXES: "tuple[str, ...]" = (
+    "FR", "NFR", "ENT", "INT", "AIF", "PER", "GOL", "PAN",
+    "WKF", "JTB", "EDG", "OOS", "SCR", "ACR", "WRN",
+)
+
+# A reference token: an uppercase corpus-prefix id (``FR-083``) or ``stage_NN``.
+# Case-sensitive on purpose — ids are uppercase, so prose like "per-stage" or
+# "integration" never matches "PER-"/"INT-".
+_REF_RE = re.compile(r"\b(?:" + "|".join(_CORPUS_PREFIXES) + r")-\d+\b|\bstage_\d+\b")
+
+# Corpus ids intentionally referenced without a definition — a number RESERVED
+# or RETIRED and kept in a changelog for an honest audit trail, not a typo or a
+# deleted symbol. Excluded from ``dangling`` so the ``--check`` gate stays green
+# on an otherwise-clean corpus. Keep in sync with the PRD changelog. Empty by
+# default in a fresh project; add a retired id here (with a sync comment) only
+# when its changelog documents the retirement.
+_ALLOWLISTED_IDS: "frozenset[str]" = frozenset()
+
+# Definition anchors (line-start), one per shape:
+#  - PRD list families + PRD/ARCH warnings:  ``- "FR-001: ...``  /  ``- "WRN-006: ...``
+#  - UX surfaces:                            ``- id: SCR-001``
+#  - PRD stage dossiers / inference profile: ``stage_00:`` (mapping key)
+_DEF_LISTITEM_RE = re.compile(r'^\s*-\s*"?(?P<id>(?:' + "|".join(_CORPUS_PREFIXES) + r")-\d+):")
+_DEF_SCR_RE = re.compile(r"^\s*-\s*id:\s*(?P<id>SCR-\d+)\b")
+_DEF_STAGE_RE = re.compile(r"^\s*(?P<id>stage_\d+):(?:\s|$|\s*\{)")
+
+# The PRD's other single-namespace id list items (NFR/WKF/INT/AIF/OOS/PER/…),
+# defined as ``- "NFR-004: …"`` — the same anchored shape ``_scan_definitions``
+# resolves — surfaced as addressable symbols so ``--show NFR-010`` resolves an
+# id the dangling-checker already understands. FR is handled by ``_extract_frs``.
+_SYMBOL_ITEM_PREFIXES = tuple(p for p in _CORPUS_PREFIXES if p not in ("FR", "WRN"))
+_SYMBOL_ITEM_RE = re.compile(
+    r'^\s*-\s*"?(?P<id>(?:' + "|".join(_SYMBOL_ITEM_PREFIXES) + r")-\d+):\s*(?P<rest>.*)")
+_SYMBOL_ITEM_KINDS = {
+    "NFR": "non_functional_requirement", "ENT": "entity_ref", "INT": "integration",
+    "AIF": "ai_feature", "PER": "persona", "GOL": "user_goal", "PAN": "user_frustration",
+    "WKF": "workflow", "JTB": "job_to_be_done", "EDG": "edge_case", "OOS": "out_of_scope",
+    "SCR": "surface", "ACR": "acceptance_criterion",
+}
+
 
 class SymbolSlice(NamedTuple):
     """Location of a single addressable symbol within a canonical doc."""
@@ -101,6 +161,15 @@ class SymbolSlice(NamedTuple):
     kind: str
     context: Optional[str]
     summary: str
+
+
+class Reference(NamedTuple):
+    """One mention of a corpus id at a line, attributed to its container symbol."""
+
+    id: str
+    file: str
+    line: int  # 1-based
+    container: str
 
 
 # ---------------------------------------------------------------------------
@@ -452,10 +521,131 @@ def _extract_dossiers(
     return out
 
 
+def _extract_convention_blocks(
+    lines: list[str], sections: "dict[str, tuple[int, int]]", filename: str
+) -> "list[SymbolSlice]":
+    """Index each indent-2 sub-block of ``conventions`` as an addressable symbol.
+
+    ``conventions`` is a long sequence of self-contained sub-blocks
+    (``nfr_propagation``, ``artifact_ids``, ``stage_tool_inventory``, …). The
+    named-symbol index otherwise reaches only FR-### and ``stage_NN``, so these
+    were findable only by knowing they exist; surfacing each as a ``convention``
+    symbol lets ``--show nfr_propagation`` resolve like any other symbol.
+    ``context`` carries the block's ``owning_fr``; ``summary`` its
+    ``description``/``purpose`` first sentence. ``_``-prefixed keys (navigational
+    manifests) are skipped. (Ported from the AICF fork, SK-29.)
+    """
+    conv = sections.get("conventions")
+    if conv is None:
+        return []
+    out: list[SymbolSlice] = []
+    for name, start, end in _child_keys(lines, conv, 2):
+        if name.startswith("_"):
+            continue
+        owning = _find_child_value(lines, (start, end), 4, "owning_fr")
+        descr = _find_child_value(lines, (start, end), 4, "description") or _find_child_value(
+            lines, (start, end), 4, "purpose"
+        )
+        out.append(
+            SymbolSlice(
+                file=filename,
+                path=f"conventions.{name}",
+                start=start,
+                end=end,
+                kind="convention",
+                context=_unquote(owning) if owning else None,
+                summary=_summarize(descr) if descr else "",
+            )
+        )
+    return out
+
+
+def _extract_prd_id_items(
+    lines: list[str], sections: "dict[str, tuple[int, int]]", filename: str
+) -> "list[SymbolSlice]":
+    """Index the PRD's other single-namespace id list items (NFR/WKF/INT/AIF/…).
+
+    These families are *defined* as ``- "NFR-004: …"`` list items — the same
+    anchored shape :func:`_scan_definitions` resolves for the edge graph — but
+    previously never became addressable symbols, so ``--show NFR-010`` could not
+    resolve an id the dangling-checker fully understood. ``context`` is the
+    narrowest enclosing mapping key (``core_workflows``, ``other``, …). FR items
+    are handled by :func:`_extract_frs`. (Ported from the AICF fork, SK-29.)
+    """
+    containers: list[tuple[int, int, str]] = []
+    path_of: dict[str, str] = {}
+    for name, (start, end) in sections.items():
+        containers.append((start, end, name))
+        path_of[name] = name
+        for child, c_start, c_end in _child_keys(lines, (start, end), 2):
+            containers.append((c_start, c_end, child))
+            path_of[child] = f"{name}.{child}"
+    out: list[SymbolSlice] = []
+    for i, line in enumerate(lines):
+        match = _SYMBOL_ITEM_RE.match(line)
+        if match is None:
+            continue
+        item_end = _block_end(lines, i, _indent(line), len(lines))
+        container = _locate_container(containers, i + 1)
+        parent_path = path_of.get(container or "", container) if container else filename
+        out.append(
+            SymbolSlice(
+                file=filename,
+                path=f"{parent_path}[{match.group('id')}]",
+                start=i + 1,
+                end=item_end + 1,
+                kind=_SYMBOL_ITEM_KINDS.get(match.group("id").split("-", 1)[0], "id_item"),
+                context=container,
+                summary=_summarize(match.group("rest")),
+            )
+        )
+    return out
+
+
+def _extract_surfaces(
+    lines: list[str], sections: "dict[str, tuple[int, int]]", filename: str
+) -> "list[SymbolSlice]":
+    """Index UX ``- id: SCR-NNN`` surface-inventory items as addressable symbols.
+
+    UX declares surfaces as ``- id: SCR-001`` list items (the shape
+    :func:`_scan_definitions` resolves via ``_DEF_SCR_RE``); surfacing each as a
+    ``surface`` symbol lets ``--show SCR-001`` resolve and gives the edge graph a
+    symbol container for references sitting inside a surface block. ``summary``
+    is the surface's ``name``/``purpose`` if present. (SK-29 extension.)
+    """
+    out: list[SymbolSlice] = []
+    for i, line in enumerate(lines):
+        match = _DEF_SCR_RE.match(line)
+        if match is None:
+            continue
+        item_end = _block_end(lines, i, _indent(line), len(lines))
+        name = _find_child_value(lines, (i + 1, item_end + 1), _indent(line) + 2, "name")
+        purpose = _find_child_value(lines, (i + 1, item_end + 1), _indent(line) + 2, "purpose")
+        summary = _summarize(_unquote(name or purpose)) if (name or purpose) else ""
+        out.append(
+            SymbolSlice(
+                file=filename,
+                path=f"surfaces[{match.group('id')}]",
+                start=i + 1,
+                end=item_end + 1,
+                kind="surface",
+                context=None,
+                summary=summary,
+            )
+        )
+    return out
+
+
 # Which extractors run for which canonical file (keyed by base filename).
 _EXTRACTORS = {
     "DATA-MODEL.yaml": (_extract_entities, _extract_enums),
-    "PRD.yaml": (_extract_frs, _extract_dossiers),
+    "PRD.yaml": (
+        _extract_frs,
+        _extract_prd_id_items,
+        _extract_dossiers,
+        _extract_convention_blocks,
+    ),
+    "UX.yaml": (_extract_surfaces,),
 }
 
 
@@ -465,7 +655,7 @@ _EXTRACTORS = {
 
 # A task's stable id inside a pretty-printed task object. The SDLC task artifacts
 # key this field ``tsk_id`` (TASKS.json + every TASKS__<cid>.json); it is the
-# project-wide standard — do not look for ``tsk_id``.
+# project-wide standard — do not look for a legacy ``task_id`` key.
 _TSK_LINE_RE = re.compile(r'"tsk_id"\s*:\s*"(?P<id>[A-Z]+-\d+)"')
 # A top-level JSON key line: ``  "key": ...`` (checked only at root depth).
 _JSON_KEY_RE = re.compile(r'^\s*"(?P<key>[^"]+)"\s*:')
@@ -551,6 +741,127 @@ def _scan_json(lines: "list[str]") -> "tuple[dict[str, tuple[int, int]], list[Sy
 
 
 # ---------------------------------------------------------------------------
+# Cross-reference graph (definitions, references, dangling)
+# ---------------------------------------------------------------------------
+
+
+def _id_sort_key(symbol_id: str) -> "tuple[str, int, str]":
+    """Natural sort: ``FR-83`` -> ('FR', 83, ''), ``stage_00`` -> ('stage', 0, '')."""
+    match = re.match(r"^([A-Za-z]+)[-_](\d+)$", symbol_id)
+    if match is not None:
+        return (match.group(1), int(match.group(2)), "")
+    return (symbol_id, 0, symbol_id)
+
+
+def _scan_definitions(lines: "list[str]") -> "dict[str, int]":
+    """Map every corpus id *defined* in this file to its 1-based line number.
+
+    A definition is matched by an anchored line shape (list item ``- "FR-001:``,
+    UX ``- id: SCR-001``, or a bare ``stage_NN:`` mapping key) — never an inline
+    mention — so a body that merely cites an id is not mistaken for its source.
+    """
+    found: dict[str, int] = {}
+    for i, line in enumerate(lines):
+        for pattern in (_DEF_LISTITEM_RE, _DEF_SCR_RE, _DEF_STAGE_RE):
+            match = pattern.match(line)
+            if match is not None:
+                found.setdefault(match.group("id"), i + 1)
+                break
+    return found
+
+
+def _container_ranges(
+    lines: "list[str]",
+    file_sections: "dict[str, tuple[int, int]]",
+    file_symbols: "list[SymbolSlice]",
+) -> "list[tuple[int, int, str]]":
+    """Candidate containers for reference attribution (coarse to fine).
+
+    Combines top-level sections, the indent-2 children of the large
+    ``conventions`` section (so a hit resolves to ``artifact_ids`` rather than
+    the whole ``conventions`` blob), and every extracted symbol. The narrowest
+    covering range wins in :func:`_locate_container`.
+    """
+    ranges: list[tuple[int, int, str]] = [
+        (start, end, name) for name, (start, end) in file_sections.items()
+    ]
+    conv = file_sections.get("conventions")
+    if conv is not None:
+        ranges.extend((start, end, name) for name, start, end in _child_keys(lines, conv, 2))
+    ranges.extend((sym.start, sym.end, _symbol_name(sym)) for sym in file_symbols)
+    return ranges
+
+
+def _locate_container(ranges: "list[tuple[int, int, str]]", line: int) -> Optional[str]:
+    """Return the narrowest container range covering ``line`` (1-based)."""
+    best: Optional[str] = None
+    best_width: Optional[int] = None
+    for start, end, name in ranges:
+        if start <= line <= end:
+            width = end - start
+            if best_width is None or width < best_width:
+                best, best_width = name, width
+    return best
+
+
+def _build_edges(
+    lines_by_file: "dict[str, list[str]]",
+    sections: "dict[str, dict[str, tuple[int, int]]]",
+    named_symbols: "dict[str, SymbolSlice]",
+) -> "tuple[dict[str, tuple[str, int]], dict[str, list[str]], dict[str, list[str]], list[Reference]]":
+    """Build the corpus reference graph from the scanned docs.
+
+    Returns ``(definitions, referenced_by, references_out, dangling)``:
+    ``definitions`` maps id -> ``(file, line)``; ``referenced_by`` maps a defined
+    id -> the sorted containers that mention it; ``references_out`` maps a
+    container -> the sorted defined ids it mentions; ``dangling`` lists references
+    to corpus-family ids that resolve to no definition (a typo or deleted symbol).
+    References are scanned over BOTH the YAML canonicals AND the JSON/TASKS docs,
+    so a task whose ``implements`` names a deleted FR is caught (SK-01).
+    """
+    definitions: dict[str, tuple[str, int]] = {}
+    for filename, lines in lines_by_file.items():
+        for sym_id, lineno in _scan_definitions(lines).items():
+            definitions.setdefault(sym_id, (filename, lineno))
+
+    ranges_by_file: dict[str, list[tuple[int, int, str]]] = {
+        filename: _container_ranges(
+            lines,
+            sections.get(filename, {}),
+            [s for s in named_symbols.values() if s.file == filename],
+        )
+        for filename, lines in lines_by_file.items()
+    }
+
+    referenced_by: dict[str, set[str]] = {}
+    references_out: dict[str, set[str]] = {}
+    dangling: list[Reference] = []
+    for filename, lines in lines_by_file.items():
+        ranges = ranges_by_file[filename]
+        for i, line in enumerate(lines):
+            lineno = i + 1
+            for match in _REF_RE.finditer(line):
+                ref_id = match.group(0)
+                if definitions.get(ref_id) == (filename, lineno):
+                    continue  # the token sitting on its own definition line
+                container = _locate_container(ranges, lineno) or filename
+                if container == ref_id:
+                    continue  # a symbol referencing itself
+                if ref_id in definitions:
+                    referenced_by.setdefault(ref_id, set()).add(container)
+                    references_out.setdefault(container, set()).add(ref_id)
+                elif ref_id not in _ALLOWLISTED_IDS:
+                    dangling.append(Reference(ref_id, filename, lineno, container))
+
+    return (
+        definitions,
+        {k: sorted(v, key=_id_sort_key) for k, v in referenced_by.items()},
+        {k: sorted(v, key=_id_sort_key) for k, v in references_out.items()},
+        sorted(set(dangling), key=lambda r: (_id_sort_key(r.id), r.file, r.line)),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Index assembly
 # ---------------------------------------------------------------------------
 
@@ -562,6 +873,10 @@ class DocIndex(NamedTuple):
     sections: "dict[str, dict[str, tuple[int, int]]]"
     symbols: "dict[str, SymbolSlice]"
     shards: "dict[str, list[str]]"
+    definitions: "dict[str, tuple[str, int]]"
+    referenced_by: "dict[str, list[str]]"
+    references_out: "dict[str, list[str]]"
+    dangling: "list[Reference]"
 
 
 def build_index(docs_dir: Path) -> DocIndex:
@@ -574,6 +889,9 @@ def build_index(docs_dir: Path) -> DocIndex:
     generated_from: dict[str, dict[str, object]] = {}
     sections: dict[str, dict[str, tuple[int, int]]] = {}
     symbols: dict[str, SymbolSlice] = {}
+    # Every scanned file's raw lines — fed to the reference-graph builder so the
+    # dangling check and referenced_by span YAML canonicals AND JSON/TASKS docs.
+    lines_by_file: dict[str, list[str]] = {}
 
     for filename in files:
         path = docs_dir / filename
@@ -582,6 +900,7 @@ def build_index(docs_dir: Path) -> DocIndex:
         except OSError:
             continue
         lines = text.splitlines()
+        lines_by_file[filename] = lines
         generated_from[filename] = {
             "sha256": sha256(text.encode("utf-8")).hexdigest(),
             "lines": len(lines),
@@ -611,7 +930,9 @@ def build_index(docs_dir: Path) -> DocIndex:
             text = p.read_text(encoding="utf-8")
         except OSError:
             continue
-        _shard_sections, json_symbols = _scan_json(text.splitlines())
+        shard_lines = text.splitlines()
+        lines_by_file[p.name] = shard_lines
+        _shard_sections, json_symbols = _scan_json(shard_lines)
         for sym in json_symbols:
             sym = sym._replace(file=p.name)
             symbols[sym.file + ":" + sym.path] = sym
@@ -629,11 +950,19 @@ def build_index(docs_dir: Path) -> DocIndex:
     named: dict[str, SymbolSlice] = {}
     for sym in ordered:
         named[_symbol_name(sym)] = sym
+
+    definitions, referenced_by, references_out, dangling = _build_edges(
+        lines_by_file, sections, named
+    )
     return DocIndex(
         generated_from=generated_from,
         sections=sections,
         symbols=named,
         shards=_discover_shards(docs_dir),
+        definitions=definitions,
+        referenced_by=referenced_by,
+        references_out=references_out,
+        dangling=dangling,
     )
 
 
@@ -662,11 +991,12 @@ def _symbol_name(sym: SymbolSlice) -> str:
 
 _HEADER = (
     "# GENERATED by .claude/sdlc/docs_index.py — DO NOT HAND-EDIT.\n"
-    "# Regenerated automatically by the Write|Edit PostToolUse hook on any\n"
-    "# canonical docs/*.yaml or docs/TASKS*.json edit (shard edits refresh the\n"
-    "# shards inventory). A pure location map (file + line range + one-line\n"
-    "# summary) over the large SDLC artifacts; it duplicates NO field\n"
-    "# bodies. Retrieval protocol: .claude/rules/sdlc-docs-access.md\n"
+    "# Regenerated automatically by the Write|Edit|MultiEdit PostToolUse hook on\n"
+    "# any canonical docs/*.yaml or docs/TASKS*.json edit (shard edits refresh the\n"
+    "# shards inventory). A location map (file + line range + one-line summary)\n"
+    "# PLUS a cross-reference graph (referenced_by + dangling) over the large SDLC\n"
+    "# artifacts; it duplicates NO field bodies. `docs_index.py --check` gates on\n"
+    "# an empty dangling list. Retrieval protocol: .claude/rules/sdlc-docs-access.md\n"
 )
 
 # Characters that force a scalar out of bare form inside a flow sequence.
@@ -733,7 +1063,50 @@ def render_index_yaml(index: DocIndex) -> str:
                 f"{context}, {_sq(sym.summary)}]"
             )
 
+    _render_edges(out, index)
     return "\n".join(out) + "\n"
+
+
+def _render_edges(out: "list[str]", index: DocIndex) -> None:
+    """Append the ``referenced_by`` (inbound blast-radius) and ``dangling`` blocks.
+
+    ``referenced_by`` rows are grouped by the file that DEFINES each id; only
+    defined ids with at least one inbound reference appear. ``dangling`` lists
+    corpus-family references that resolve to no definition — an empty list when
+    the corpus is clean (the state the ``--check`` gate requires).
+    """
+    out.append("")
+    out.append("# referenced_by: inbound edge map — the edit blast-radius. For each")
+    out.append("#   defined corpus id, the symbols/sections/tasks that mention it, grouped")
+    out.append("#   by the doc that DEFINES the id. Consult before editing a symbol.")
+    out.append("referenced_by:")
+    by_def_file: dict[str, list[str]] = {}
+    for ref_id in index.referenced_by:
+        def_entry = index.definitions.get(ref_id)
+        if def_entry is None:
+            continue
+        by_def_file.setdefault(def_entry[0], []).append(ref_id)
+    render_order = list(index.sections)
+    render_order += [f for f in by_def_file if f not in index.sections]
+    for fname in render_order:
+        ids = by_def_file.get(fname)
+        if not ids:
+            continue
+        out.append(f"  {fname}:")
+        for ref_id in sorted(ids, key=_id_sort_key):
+            containers = ", ".join(_flow(c) for c in index.referenced_by[ref_id])
+            out.append(f"    {ref_id}: [{containers}]")
+
+    out.append("")
+    out.append("# dangling: references whose id is a corpus family but resolves to no")
+    out.append("#   definition (a typo or a deleted symbol). Empty when the corpus is clean;")
+    out.append("#   `docs_index.py --check` exits non-zero when this list is non-empty.")
+    if not index.dangling:
+        out.append("dangling: []")
+        return
+    out.append("dangling:")
+    for ref in index.dangling:
+        out.append(f"  - {_sq(f'{ref.id} @ {ref.file}:{ref.line} (in {ref.container})')}")
 
 
 def write_index(docs_dir: Path) -> Path:
@@ -751,6 +1124,72 @@ def find_symbol_slice(docs_dir: Path, name: str) -> "Optional[tuple[Path, int, i
     if sym is None:
         return None
     return docs_dir / sym.file, sym.start, sym.end
+
+
+def find_symbol_refs(
+    docs_dir: Path, name: str
+) -> "Optional[tuple[list[str], list[str], list[Reference]]]":
+    """Resolve a symbol/id's 1-hop reference neighbourhood (the ``--refs`` query).
+
+    Returns ``(references_out, referenced_by, dangling_within)``: the defined ids
+    ``name`` mentions, the containers that mention ``name``, and any dangling
+    references located inside ``name``'s line range. ``None`` when ``name`` is
+    wholly unknown (not a symbol, a container, or a defined id).
+    """
+    index = build_index(docs_dir)
+    known = name in index.symbols or name in index.definitions or any(
+        name in cs for cs in index.referenced_by.values()
+    ) or name in index.references_out
+    if not known:
+        return None
+    out_refs = index.references_out.get(name, [])
+    in_refs = index.referenced_by.get(name, [])
+    within: list[Reference] = []
+    sym = index.symbols.get(name)
+    if sym is not None:
+        within = [
+            r for r in index.dangling
+            if r.file == sym.file and sym.start <= r.line <= sym.end
+        ]
+    return out_refs, in_refs, within
+
+
+def find_symbols(
+    docs_dir: Path,
+    *,
+    kind: "Optional[str]" = None,
+    context: "Optional[str]" = None,
+    file: "Optional[str]" = None,
+    text: "Optional[str]" = None,
+    references: "Optional[str]" = None,
+    referenced_by: "Optional[str]" = None,
+) -> "list[tuple[str, SymbolSlice]]":
+    """Predicate search over the symbol table (the ``--find`` query).
+
+    Every supplied filter must match (AND semantics): ``kind``/``context``/``file``
+    are exact (case-insensitive); ``text`` is a case-insensitive substring of the
+    summary; ``references`` keeps symbols whose container mentions that id;
+    ``referenced_by`` keeps the single defined id whose inbound set contains the
+    named container. Returns ``(name, SymbolSlice)`` pairs in index order.
+    """
+    index = build_index(docs_dir)
+    refs_out = index.references_out
+    out: list[tuple[str, SymbolSlice]] = []
+    for name, sym in index.symbols.items():
+        if kind is not None and sym.kind.lower() != kind.lower():
+            continue
+        if context is not None and (sym.context or "").lower() != context.lower():
+            continue
+        if file is not None and sym.file.lower() != file.lower():
+            continue
+        if text is not None and text.lower() not in sym.summary.lower():
+            continue
+        if references is not None and references not in refs_out.get(name, []):
+            continue
+        if referenced_by is not None and name not in index.referenced_by.get(referenced_by, []):
+            continue
+        out.append((name, sym))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -824,9 +1263,71 @@ def main(argv: "Optional[list[str]]" = None) -> int:
     ap.add_argument(
         "--show", metavar="SYMBOL", help="Print one symbol's [start,end] line slice and exit."
     )
+    ap.add_argument(
+        "--check",
+        action="store_true",
+        help="Integrity gate: rebuild the index and exit non-zero if any reference is dangling.",
+    )
+    ap.add_argument(
+        "--refs",
+        metavar="SYMBOL",
+        help="Print a symbol/id's blast-radius: outbound refs, inbound referenced_by, dangling within.",
+    )
+    ap.add_argument(
+        "--find",
+        nargs="+",
+        metavar="FILTER",
+        help="Predicate search over symbols. Filters: kind=, context=, file=, text=, references=, referenced_by=.",
+    )
     args = ap.parse_args(argv)
 
     docs_dir = _resolve_docs_dir(args)
+
+    if args.check:
+        if not docs_dir.is_dir():
+            print(f"[docs-check] no docs dir: {docs_dir}", file=sys.stderr)
+            return 2
+        index = build_index(docs_dir)
+        if index.dangling:
+            print(f"[docs-check] {len(index.dangling)} dangling reference(s):")
+            for ref in index.dangling:
+                print(f"  - {ref.id} @ {ref.file}:{ref.line} (in {ref.container})")
+            return 1
+        print("[docs-check] no dangling references.")
+        return 0
+
+    if args.refs:
+        hit = find_symbol_refs(docs_dir, args.refs)
+        if hit is None:
+            print(f"[docs-refs] unknown symbol/id: {args.refs}", file=sys.stderr)
+            return 1
+        out_refs, in_refs, within = hit
+        print(f"# refs for {args.refs}")
+        print(f"references_out: [{', '.join(out_refs)}]")
+        print(f"referenced_by: [{', '.join(in_refs)}]")
+        if within:
+            print("dangling_within:")
+            for ref in within:
+                print(f"  - {ref.id} @ {ref.file}:{ref.line}")
+        return 0
+
+    if args.find:
+        filters: dict[str, str] = {}
+        for tok in args.find:
+            if "=" not in tok:
+                print(f"[docs-find] bad filter (expected key=value): {tok}", file=sys.stderr)
+                return 2
+            key, val = tok.split("=", 1)
+            key = key.strip()
+            if key not in ("kind", "context", "file", "text", "references", "referenced_by"):
+                print(f"[docs-find] unknown filter key: {key}", file=sys.stderr)
+                return 2
+            filters[key] = val.strip()
+        matches = find_symbols(docs_dir, **filters)  # type: ignore[arg-type]
+        for name, sym in matches:
+            print(f"{name}\t{sym.file}:{sym.start}-{sym.end}\t{sym.kind}\t{sym.summary}")
+        print(f"# {len(matches)} match(es)", file=sys.stderr)
+        return 0
 
     if args.show:
         hit = find_symbol_slice(docs_dir, args.show)

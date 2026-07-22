@@ -27,6 +27,10 @@ containers:                     # per-container execution facts
   backend-api:
     test_command: "pnpm --filter backend-api test"   # established at first ring run
     ring_container_done: null | <iso8601>            # container ring passed
+    ring_container_exit: null | <int>                # captured numeric exit code of the
+                                                     #   last container-ring run — measured
+                                                     #   BARE, never after a pipe
+                                                     #   (execution-loop.md measurement rule)
 
 components_done: {}             # "<cid>/<component_id>": <iso8601> — component ring passed
 
@@ -40,6 +44,10 @@ tasks:                          # THE LEDGER — keyed by qualified task id
       - {path: "pnpm-workspace.yaml", sha256: "<64-hex>"}
     heal_attempts: 0
     escalated: false
+    ring_exit: 0                # captured numeric exit code of this task's last
+                                #   ring run (unit ring for test tasks, static
+                                #   ring otherwise) — measured BARE, never after
+                                #   a pipe (execution-loop.md measurement rule)
     verified: static_only       # unit_ring | static_only | static_format | none
                                 #   static_format = a non-code deliverable
                                 #   (JSON/YAML/CSS/SVG/MD/content) that passed
@@ -49,8 +57,10 @@ tasks:                          # THE LEDGER — keyed by qualified task id
                                 #   into CODE-MANIFEST.json files[].verified.
   "backend-api/TSK-007":
     status: failed
-    failure: "TST-006 red after 3 attempts: <last assertion error, one line>"
-    ...
+    failure: "exit 1: TST-006 red after 3 attempts: <last assertion error, one line>"
+    ...                         # failure strings LEAD with the captured exit
+                                #   code ("exit N: …") — prose paraphrase alone
+                                #   is how a false-green hides
 ```
 
 \* `blocked` is **derived** at scheduling time (a dependency is

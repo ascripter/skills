@@ -292,3 +292,14 @@ When entering theme 10, pre-fill:
 
 Surface all as `⚠ inferred` position-1 options. The user must confirm
 or correct each.
+
+## Downstream: `cli_args` is the `cli_contract` source
+
+The per-surface `cli_args` block (each `CLIArg`: name/kind/type/required/
+description/…) is the single source of truth for a CLI handler's argument
+parser. Downstream `sdlc-task` copies the whole block **verbatim** into the CLI
+handler task's `cli_contract` field, and `sdlc-code`'s worker generates the
+parser straight from that embedded slice — it never reads the UX shard. So a
+`cli_args` entry must be complete enough to code a parser from on its own:
+don't leave a required flag's `type` or `description` blank on the assumption a
+later stage will fill it. (Seam: SK-34 — the task-side `cli_contract` field.)

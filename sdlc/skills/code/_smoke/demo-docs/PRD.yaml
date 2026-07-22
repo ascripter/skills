@@ -1,0 +1,25 @@
+# Demo PRD for the sdlc-code smoke fixtures — minimal, stock-shaped.
+# Only the families the tooling reads are populated:
+#   functional_requirements.features        — FR definition lines
+#   success_metrics.acceptance_criteria     — ACR definition lines
+# Both are quoted "ID-NNN: <statement>" list items, so topo_order.py's
+# requirement line-grep AND the task validator's PRD family loader resolve
+# them. The flat `features` list marks this a post-D2 PRD (every FR gates).
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-07-20T00:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "smoke000-code-code-code-prddemoapi00"
+  status: "complete"
+
+problem_statement: "Demo item service backing the sdlc-code scheduler/emit smoke fixtures."
+
+functional_requirements:
+  features:
+    - "FR-001: A client can create an item; the created item is persisted and returned with an id."
+    - "FR-002: A client can list items; previously created items are returned."
+
+success_metrics:
+  acceptance_criteria:
+    - "ACR-001: FR-001 - creating an item returns 201 and the response carries the persisted id."
+    - "ACR-002: FR-002 - listing returns every previously created item."

@@ -150,7 +150,7 @@ Then prompt:
 After the user replies (or accepts with `ok`), run a small **idea-extraction
 pass**: probabilistically pre-fill candidate fields (`product_identity.one_liner`,
 `problem_opportunity.problem_statement`, `users_personas.primary_users`,
-possibly `functional_requirements.must_have_features`) and mark every one
+possibly `functional_requirements.features`) and mark every one
 of them as `⚠ inferred`. These join the Phase 2 pre-fill map and are
 governed by the Phase 5 hallucination guard.
 
@@ -258,7 +258,7 @@ runs it:
   batched with other questions. For scalars: agent drafts a full answer,
   shows it, user approves or iterates (max 3 rounds). For list[string]:
   per-item with one clarifying challenge round each.
-- **`critical`** (`must_have_features`, `nice_to_have_features`,
+- **`critical`** (`features`,
   `non_functional_requirements.other`): full per-item state machine —
   propose → optionally challenge → detail (with structured slots:
   input / output / dependencies / edge cases / why for FRs;

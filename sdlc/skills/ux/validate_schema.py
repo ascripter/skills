@@ -824,9 +824,12 @@ _FR_HEAD_EXTRACT_RE = re.compile(r"^(FR-\d+)(?::|\s|$)")
 _FR_TOKEN_RE = re.compile(r"\bFR-\d+\b", re.IGNORECASE)
 
 
-def load_prd_must_have_fr_ids(prd_path: Path) -> List[str]:
-    """FR-NNN ids from PRD functional_requirements.must_have_features
-    (union across products in monorepo mode). Empty when PRD is absent."""
+def load_prd_fr_ids(prd_path: Path) -> List[str]:
+    """Gating FR-NNN ids from PRD functional_requirements (union across products
+    in monorepo mode). D2 gating subset (FR_GATE, CLAUDE.md §10): the flat
+    `features` list when present, else the legacy `must_have_features` ONLY —
+    a legacy PRD's nice_to_have backlog stays outside the coverage advisory,
+    preserving pre-D2 behavior. Empty when PRD is absent."""
     if not prd_path.exists():
         return []
     try:
@@ -841,7 +844,12 @@ def load_prd_must_have_fr_ids(prd_path: Path) -> List[str]:
         if not isinstance(scope, dict):
             return
         fr = scope.get("functional_requirements") or {}
-        for entry in (fr.get("must_have_features") or []) if isinstance(fr, dict) else []:
+        if not isinstance(fr, dict):
+            return
+        entries = fr.get("features")
+        if not entries:  # legacy: must_have only (nice_to_have stays ungated)
+            entries = fr.get("must_have_features") or []
+        for entry in entries or []:
             if isinstance(entry, str):
                 m = _FR_HEAD_EXTRACT_RE.match(entry.strip())
                 if m:
@@ -858,7 +866,7 @@ def load_prd_must_have_fr_ids(prd_path: Path) -> List[str]:
 def check_fr_coverage(
     prd_fr_ids: List[str], ux: "UX", surfaces: Dict[str, UXSurface]
 ) -> List[str]:
-    """ADVISORY (never blocks) — must-have FRs no surface implements.
+    """ADVISORY (never blocks) — FRs no surface implements.
 
     Trace-or-defer: an FR is covered when some surface (file or inventory
     entry) lists it in implements_requirements, OR a ux_warnings entry names
@@ -1041,9 +1049,9 @@ def validate_all(ux_path: Path) -> int:
     # 6) Downstream-claim maturity check (advisory, never blocks)
     downstream_warnings = check_downstream_claims(ux, ux_path.parent)
 
-    # 7) FR-coverage advisory (never blocks): must-have FRs with no surface
+    # 7) FR-coverage advisory (never blocks): FRs with no surface
     # implements_requirements trace and no ux_warnings deferral.
-    fr_gaps = check_fr_coverage(load_prd_must_have_fr_ids(prd_path), ux, surfaces)
+    fr_gaps = check_fr_coverage(load_prd_fr_ids(prd_path), ux, surfaces)
 
     def _print_downstream_warnings() -> None:
         if downstream_warnings:
@@ -1051,7 +1059,7 @@ def validate_all(ux_path: Path) -> int:
             for w in downstream_warnings:
                 print(f"  - {w}")
         if fr_gaps:
-            print(f"\nAdvisory (never blocks): {len(fr_gaps)} must-have FR(s) implemented by no surface and deferred by no ux_warnings entry:")
+            print(f"\nAdvisory (never blocks): {len(fr_gaps)} FR(s) implemented by no surface and deferred by no ux_warnings entry:")
             for f in fr_gaps:
                 print(f"  - {f}")
 

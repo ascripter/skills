@@ -35,7 +35,7 @@ so the user knows what's available without seeing them as selectable buttons.
 ### Free-text-only questions
 
 For questions with no standard options (e.g. `problem_statement`,
-`must_have_features`), all 2–4 positions carry `⚠ inferred` suggestions
+`features`), all 2–4 positions carry `⚠ inferred` suggestions
 drawn from the pre-fill map or Phase 3 idea text. The user picks one or
 types their own via "Other".
 
@@ -123,7 +123,7 @@ Skippable. Stored at `<schema_path>_rationale`.
 ## Type discipline when writing answers
 
 `PRD.schema.yaml` specifies the expected type of every field. Many fields
-are *lists* (e.g. `must_have_features`, `core_workflows`, `phases`,
+are *lists* (e.g. `features`, `core_workflows`,
 `key_entities`, `regulatory_requirements`).
 
 When the user picks multiple options or types a multi-item free-text answer

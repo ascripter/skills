@@ -1,0 +1,64 @@
+# Back-compat proof for the D2 milestones removal: a LEGACY PRD that still
+# carries a `milestones:` block AND the split must_have/nice_to_have lists must
+# still validate (models are extra="allow", so the retired keys are retained on
+# read, not rejected). Expected: exit 0, [OK] complete. New writes never emit
+# either shape — 09_flat_features_valid.yaml is the go-forward form.
+metadata:
+  prd_version: "1.0"
+  last_updated: "2026-05-05T18:00:00Z"
+  generated_by: sdlc-prd
+  session_id: "10101010-1010-1010-1010-101010101010"
+  monorepo: false
+  status: "complete"
+
+prd_warnings: []
+
+product_identity:
+  name: "Legacy Tracker"
+  name_confidence: confirmed
+  one_liner: "A tracker authored before the flat-features migration."
+  one_liner_confidence: confirmed
+
+problem_opportunity:
+  problem_statement: "Predates the D2 flat-features change; exercises back-compat."
+  problem_statement_confidence: confirmed
+
+users_personas:
+  primary_users:
+    - "PER-001: Existing users"
+  primary_users_confidence: confirmed
+
+use_cases:
+  core_workflows:
+    - "WKF-001: Do the core thing"
+
+functional_requirements:
+  # LEGACY split shape — still accepted; the reader unions must then nice.
+  must_have_features:
+    - "FR-001: The must-have core feature."
+  nice_to_have_features:
+    - "FR-002: The post-MVP nice-to-have."
+
+technical_constraints:
+  primary_language: python
+  primary_language_rationale: "Existing stack."
+  primary_language_confidence: confirmed
+  runtime_platform: cli
+  runtime_platform_rationale: "Existing stack."
+  runtime_platform_confidence: confirmed
+
+# LEGACY milestones block — removed from new PRDs (D2) but retained on read.
+milestones:
+  mvp_scope: "The must-have feature, shipped first."
+  phases:
+    - "Phase 2: the nice-to-have."
+
+success_metrics:
+  acceptance_criteria:
+    - "ACR-001: FR-001 - the core feature works end to end."
+
+open_questions:
+  undecided_decisions:
+    - id: QUE-001
+      question: "Migrate to flat features on next edit?"
+      status: open

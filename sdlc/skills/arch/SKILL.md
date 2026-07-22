@@ -455,7 +455,7 @@ mode.
    (WKF-NNN), `deployment_unit`, ownership, change_cadence. Each container's
    status walks `defined → draft → confirmed`. After the per-item loop,
    run the scope-completeness sweep (see `references/container-discovery.md`).
-   Every PRD must-have `FR-NNN` must end up in some container's
+   Every PRD `FR-NNN` must end up in some container's
    `implements_requirements` or in `non_container_features` — Phase 7's
    feature-coverage check enforces this.
 4. `cross_container_edges` — `critical` synthesis. The agent derives the edge
@@ -592,7 +592,7 @@ checks emit warnings only.
 3. **DATA-store coverage** — every primary/secondary store in
    `DATA-MODEL.yaml.persistence.*` appears in some container's
    `persistence`.
-4. **PRD feature coverage** — every PRD `must_have_features` `FR-NNN`
+4. **PRD feature coverage** — every PRD `features` `FR-NNN`
    appears in some container's `implements_requirements` OR in
    `non_container_features`. Skipped if `docs/PRD.yaml` is absent.
 

@@ -135,7 +135,7 @@ when `INDEX.yaml` is absent or the doc is genuinely small. See
      - `security_compliance.auth_model` → preliminary `auth.schemes`
      - `users_personas.primary_users` + `secondary_users` →
        preliminary `auth.roles`
-     - `functional_requirements.must_have_features` (FR-NNN list) →
+     - `functional_requirements.features` (FR-NNN list) →
        feature-coverage source of truth
      - `functional_requirements.integrations_required` →
        preliminary `external_dependencies`
@@ -381,7 +381,7 @@ python "${CLAUDE_SKILL_DIR}/validate_schema.py" --path docs/API.yaml
 The validator also walks `docs/API__*.yaml` siblings and runs three
 checks (all skipped when `api_kind: none`):
 
-1. **Feature coverage**: every PRD `must_have_features` `FR-NNN` must
+1. **Feature coverage**: every PRD `features` `FR-NNN` must
    appear in some resource's `traces_prd_features` OR in
    `API.yaml.non_api_features`. Uncovered features are appended to
    `api_warnings` and force `status: draft`.
