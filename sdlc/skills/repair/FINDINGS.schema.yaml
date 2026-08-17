@@ -1,0 +1,112 @@
+# =============================================================================
+# FINDINGS.schema.yaml — canonical schema for
+#   .claude/skills-state/sdlc-findings.yaml
+# =============================================================================
+# A CROSS-SKILL QUEUE, not a per-skill state file. This is a deliberate,
+# documented exception to the `.claude/skills-state/sdlc-<skill>.state.yaml`
+# naming convention (CLAUDE.md "State file contract"): the producer and the
+# consumer are different skills, so the file belongs to neither.
+#
+#   PRODUCERS  /sdlc:code   appends FND-NNN entries for spec defects it hits
+#                           during codegen. It NEVER resolves one and NEVER
+#                           edits docs/.
+#              /sdlc:repair appends entries derived from its own doctor sweep.
+#   CONSUMER   /sdlc:repair triages, localizes, fixes at the source stage, and
+#                           writes the `resolution` block.
+#
+# WHY THIS FILE EXISTS: codegen is the stage where spec defects finally become
+# visible — a contract that does not determine behaviour, a test that
+# contradicts the thing it tests, a path that cannot exist. Before this queue
+# those observations lived only in a close report that scrolled away. The
+# queue makes them durable, reviewable, and routable to the stage that owns
+# the fix.
+#
+# ID families this artifact OWNS (writer-managed counter in `last_ids`):
+#   * FND-NNN — one per finding. Stable for the finding's lifetime; a resolved
+#               finding keeps its id (audit trail), it is never renumbered or
+#               deleted. Counter reconciliation on append: take
+#               max(last_ids.FND, highest FND-NNN present) and increment.
+# Ids it REFERENCES (never invents):
+#   * qualified task ids ("TASKS/TSK-NNN", "<container_id>/TSK-NNN")
+#   * artifact paths under docs/
+#
+# Downstream-rejection rule: this file is private cross-skill state, not a
+# published artifact. Nothing outside the sdlc plugin reads it, and no skill
+# refuses to run because of its contents — open findings are surfaced at a
+# gate, never used as a hard block.
+# =============================================================================
+
+findings_file_version: "1"                 # REQUIRED
+last_updated: <ISO-8601 UTC>               # OPTIONAL — bumped on every write
+
+last_ids:                                  # REQUIRED — writer-managed counters
+  FND: 7                                   #   highest FND id issued so far
+
+findings:                                  # REQUIRED — list[Finding]; may be empty
+  - fnd_id: FND-003                        # REQUIRED — ^FND-\d{3,}$, unique in the file
+    raised_by: sdlc-code                   # REQUIRED — sdlc-code | sdlc-repair
+    raised_at: <ISO-8601 UTC>              # REQUIRED
+    detected_by: <check or phase name>     # OPTIONAL — e.g. "arch/validate_schema",
+                                           #   "crosscheck_artifacts", "heal-escalation".
+                                           #   Used to deduplicate repeated sweeps.
+
+    # ---- where it became visible (NOT where it must be fixed) --------------
+    surfaced_at:                           # OPTIONAL
+      qualified_task: aicf-cli/TSK-118     #   the codegen task that hit it, if any
+      file: docs/ARCH__aicf-cli.yaml       #   the file the check names, if any
+      symbol: <work_unit / TST / entity>   #   the smallest thing implicated
+
+    kind:                                  # REQUIRED — one of:
+      # ---- raised by /sdlc:code during a run --------------------------------
+      #   contract_underdetermined  — the interface_contract does not determine
+      #                               the behaviour description/acceptance demands
+      #   contract_contradiction    — two upstream statements about one unit conflict
+      #   test_contradicts_contract — the test_spec cannot be realized against the
+      #                               interface_contract it exercises
+      #   missing_requirement       — behaviour is demanded with no FR/NFR behind it
+      #   missing_operation         — a call site with no API operation
+      #   missing_entity            — persisted state with no DATA-MODEL entity
+      #   missing_dependency_edge   — a prerequisite symbol was never scheduled
+      #   wrong_path                — absolute path / `..` / a target that cannot exist
+      #   impossible_acceptance     — the acceptance text is not satisfiable as written
+      #   drifted_embed             — a task embed disagrees with its upstream source
+      # ---- raised by the doctor sweep ---------------------------------------
+      #   validator_error           — a skill validator returned non-zero
+      #   crosscheck_broken_ref     — a cross-artifact reference does not resolve
+      #   dangling_reference        — docs_index --check found a dangling id
+      # ---- fallback ---------------------------------------------------------
+      #   other                     — use sparingly; a kind nobody can act on is noise
+
+    summary: <one line>                    # REQUIRED — what is wrong, stated once
+    evidence:                              # REQUIRED — list[str], 1..5 short lines.
+      - "exit 1: TST-006 red after 3 attempts"   #   the failing assertion, the
+      - "interface_contract.output: null"        #   contract excerpt, the captured
+      - "acceptance: 'returns the merged view'"  #   exit code — enough for a reader
+                                                 #   to judge it WITHOUT re-running
+
+    # ---- the raiser's GUESS at the source ----------------------------------
+    # NOT authoritative. Localization is /sdlc:repair's job and routinely lands
+    # a stage earlier than the artifact that looked wrong from the raising site.
+    # Per CLAUDE.md §9 an embedded copy is NEVER the source — the artifact it
+    # was copied from is.
+    suspected_stage: arch                  # OPTIONAL — prd|ux|design|data|api|arch|test|task|code
+    suspected_source: docs/ARCH__aicf-cli.yaml   # OPTIONAL — path
+
+    status: open                           # REQUIRED — open | triaged | resolved
+                                           #   | wontfix | duplicate
+    duplicate_of: null                     # OPTIONAL — FND-NNN, required when
+                                           #   status == duplicate
+
+    resolution: null                       # REQUIRED key; null until resolved.
+      # When set (status resolved | wontfix):
+      #   by: sdlc-repair                  # who resolved it
+      #   at: <ISO-8601 UTC>
+      #   located_stage: arch              # where the defect ACTUALLY lived
+      #   mode: surgical | re-invoke | none    # how it was fixed
+      #   artifacts_touched:               # every file edited, in edit order
+      #     - docs/ARCH__aicf-cli.yaml
+      #     - docs/TEST-STRATEGY__aicf-cli.yaml
+      #   downstream_rerun: []             # skills the user must re-invoke, in order
+      #   stale_tasks: ["aicf-cli/TSK-118"]    # tasks whose fingerprint changed —
+      #                                    #   /sdlc:code offers these for regeneration
+      #   summary: <one line>              # what changed and why

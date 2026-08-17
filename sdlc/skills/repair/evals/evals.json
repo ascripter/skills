@@ -1,0 +1,42 @@
+{
+  "skill_name": "repair",
+  "notes": "Fixtures: point the eval project's docs/ at a copy of ../../code/_smoke/demo-docs. _smoke/01_valid.yaml stages a findings queue at .claude/skills-state/sdlc-findings.yaml; 02_bad_ids.yaml / 03_bad_resolution.yaml / 04_bad_id_format.yaml stage corrupted queues. Cases 3 and 4 additionally require a hand-edit to the staged docs/ as described in the prompt.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/sdlc:repair --check",
+      "expected_output": "Read-only sweep. Runs doctor.py over docs/, reporting per check a CAPTURED NUMERIC exit code (not a pass/fail paraphrase); artifacts that do not exist yet are reported as SKIPPED, never failed. New findings are appended to .claude/skills-state/sdlc-findings.yaml. NO artifact under docs/ is edited, no AskUserQuestion is asked about fixing anything, and the report ends by naming /sdlc:repair (no flag) as the way to act on what it found.",
+      "files": ["../code/_smoke/demo-docs"]
+    },
+    {
+      "id": 2,
+      "prompt": "/sdlc:repair",
+      "expected_output": "With _smoke/01_valid.yaml staged as the findings queue: FND-001 (open, contract_underdetermined, suspected_stage arch) is triaged; FND-002 (resolved) and FND-003 (duplicate) are left untouched. For FND-001 the confirmation gate shows the WALK — surfacing site demo-api/TSK-004, stages examined, chosen source, and why — not just a verdict, and it recomputes the blast radius rather than trusting suspected_source. Because filling the gap would require deciding product behaviour, the localization reaches prd and the user is ASKED rather than told.",
+      "files": ["../code/_smoke/demo-docs", "_smoke/01_valid.yaml"]
+    },
+    {
+      "id": 3,
+      "prompt": "/sdlc:repair",
+      "expected_output": "Embed-vs-source discipline: with TASKS__demo-api.json's TSK-003 interface_contract hand-edited to disagree with the ARCH work_unit it was sliced from, the skill compares embed to source and reports the embed as STALE (upstream is fine). It fixes by re-slicing from ARCH — it never hand-patches the embed to a third value, and it never edits ARCH to match the drifted embed. Resolution records located_stage task, the artifacts touched, and the tasks whose fingerprints changed. The close report names /sdlc:code demo-api in a NEW session and says those tasks are now stale.",
+      "files": ["../code/_smoke/demo-docs"]
+    },
+    {
+      "id": 4,
+      "prompt": "/sdlc:repair",
+      "expected_output": "Structural change routes to re-invoke: with a finding that requires ADDING a work_unit (changing the SET of downstream items, not the content of an existing one), the skill fixes the source artifact and then STOPS, printing the exact downstream command sequence in pipeline order (/sdlc:arch demo-api then /sdlc:test demo-api then /sdlc:task demo-api). It does not attempt the downstream edits itself and does not invoke another skill. The finding is left triaged, not resolved.",
+      "files": ["../code/_smoke/demo-docs"]
+    },
+    {
+      "id": 5,
+      "prompt": "/sdlc:repair",
+      "expected_output": "With _smoke/02_bad_ids.yaml staged as the findings queue: validate_findings.py exits 1 (duplicate FND-002; FND-009 exceeds last_ids.FND). The skill REFUSES to edit any artifact under docs/, shows the validator's errors, and offers to repair the queue file itself first. No localization or fix is attempted against a corrupted queue.",
+      "files": ["../code/_smoke/demo-docs", "_smoke/02_bad_ids.yaml"]
+    },
+    {
+      "id": 6,
+      "prompt": "/sdlc:repair FND-002",
+      "expected_output": "With _smoke/01_valid.yaml staged: FND-002 is already resolved, so the skill says so and stops rather than re-fixing it. It does not run the sweep (named-findings form), does not touch FND-001 or FND-003, and does not edit any artifact.",
+      "files": ["../code/_smoke/demo-docs", "_smoke/01_valid.yaml"]
+    }
+  ]
+}

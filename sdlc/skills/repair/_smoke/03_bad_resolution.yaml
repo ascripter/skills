@@ -1,0 +1,54 @@
+# INTENTIONALLY BROKEN — resolution-integrity failures the validator must catch:
+#   * FND-001 claims `resolved` with no resolution block (a resolution nobody
+#     can audit is worse than an open finding)
+#   * FND-002 is still `open` but carries a resolution block
+#   * FND-003 is `duplicate` with no duplicate_of
+#   * FND-004 points duplicate_of at a finding that is not in this file
+findings_file_version: "1"
+
+last_ids:
+  FND: 4
+
+findings:
+  - fnd_id: FND-001
+    raised_by: sdlc-code
+    raised_at: "2026-08-17T08:31:00Z"
+    kind: contract_underdetermined
+    summary: "createItem's contract declares no output shape."
+    evidence: ["interface_contract.output: null"]
+    status: resolved
+    resolution: null
+
+  - fnd_id: FND-002
+    raised_by: sdlc-code
+    raised_at: "2026-08-17T08:32:00Z"
+    kind: impossible_acceptance
+    summary: "Acceptance demands a latency budget the container cannot measure."
+    evidence: ["acceptance: 'p99 under 5ms'"]
+    status: open
+    resolution:
+      by: sdlc-repair
+      at: "2026-08-17T09:00:00Z"
+      located_stage: prd
+      mode: surgical
+      artifacts_touched: ["docs/PRD.yaml"]
+      summary: "Relaxed NFR-004."
+
+  - fnd_id: FND-003
+    raised_by: sdlc-repair
+    raised_at: "2026-08-17T08:33:00Z"
+    kind: dangling_reference
+    summary: "docs_index --check reports a dangling WKF ref."
+    evidence: ["exit 1: WKF-014 referenced by UX.yaml, defined nowhere"]
+    status: duplicate
+    resolution: null
+
+  - fnd_id: FND-004
+    raised_by: sdlc-repair
+    raised_at: "2026-08-17T08:34:00Z"
+    kind: crosscheck_broken_ref
+    summary: "X3 TASKS -> TEST unresolved TST id."
+    evidence: ["exit 1: TST-099 resolves to no tests[].tst_id"]
+    status: duplicate
+    duplicate_of: FND-042
+    resolution: null

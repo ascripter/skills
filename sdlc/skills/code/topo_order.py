@@ -12,16 +12,23 @@ Run from the project root:
     python sdlc/skills/code/topo_order.py --next
     python sdlc/skills/code/topo_order.py --fingerprints
     python sdlc/skills/code/topo_order.py --emit build-sandbox/TSK-004 build-sandbox/TSK-006
+    python sdlc/skills/code/topo_order.py --emit build-sandbox/TSK-004 --out-dir .claude/skills-state/sdlc-code/packets
     python sdlc/skills/code/topo_order.py --overlap build-sandbox/TSK-004 build-sandbox/TSK-006
 
 The `--emit` mode is the **worker-packet builder**: it prints the verbatim task
 object(s) for the requested qualified id(s), each joined with a
 `requirement_context` slice (the task's FR/NFR/WKF/ACR ids — from `implements`,
 `implements_workflows`, and `test_spec.covers` — resolved to their one-line
-PRD statements). The manager builds a wave from the schedule, then calls `--emit`
-for exactly those ids and pipes the result into each worker's brief — so neither
-the manager nor a worker ever reads a whole (potentially hundreds-of-KB) TASKS
-shard or the whole PRD to assemble one task's context.
+PRD statements) — so neither the manager nor a worker ever reads a whole
+(potentially hundreds-of-KB) TASKS shard or the whole PRD to assemble one task's
+context.
+
+`--out-dir DIR` is how the manager SHOULD call it: instead of printing the packet
+JSON to stdout (where it lands in the manager's context and is then re-emitted as
+output tokens into the worker brief), it writes one packet file per id to
+DIR/<file>__TSK-NNN.json and prints only the paths. The worker brief then NAMES
+the packet path and the worker Reads it. On a several-hundred-task graph this is
+the difference between the manager emitting ~300 lines per dispatch and ~15.
 
 Scheduling policy (see references/execution-loop.md):
     Among READY tasks (all depends_on satisfied), a ready `test` task always
@@ -345,8 +352,14 @@ def resolve_qid(g: Graph, raw: str) -> Optional[str]:
     return None
 
 
-def emit_packets(g: Graph, docs: Path, raw_ids: List[str]) -> int:
-    """Print a self-contained worker packet per requested task, as one JSON array.
+def packet_filename(qid: str) -> str:
+    """``build-sandbox/TSK-004`` -> ``build-sandbox__TSK-004.json`` (flat, safe on
+    every platform; the qualified id round-trips from the packet's own field)."""
+    return qid.replace("/", "__").replace("\\", "__") + ".json"
+
+
+def emit_packets(g: Graph, docs: Path, raw_ids: List[str], out_dir: Optional[Path] = None) -> int:
+    """Build a self-contained worker packet per requested task.
 
     Each packet is ``{qualified_id, task, requirement_context}`` where
     ``requirement_context`` maps the task's ``implements`` (FR/NFR),
@@ -354,6 +367,11 @@ def emit_packets(g: Graph, docs: Path, raw_ids: List[str]) -> int:
     test task's requirement ids live there, not in ``implements``) to their
     PRD statements — so a worker builds from the packet alone, without reading
     the (large) TASKS shard or PRD.
+
+    Without ``out_dir`` the packets print to stdout as one JSON array (the
+    original behaviour). With ``out_dir`` each packet is written to its own file
+    and only the paths are printed — the manager passes the PATH to the worker
+    instead of pasting the payload into the brief.
     """
     reqs = load_requirements(docs)
     packets: List[Dict[str, Any]] = []
@@ -387,7 +405,26 @@ def emit_packets(g: Graph, docs: Path, raw_ids: List[str]) -> int:
             # worker can fall back to an on-demand PRD read for just these ids.
             packet["requirement_context_unresolved"] = unresolved
         packets.append(packet)
-    print(json.dumps(packets, indent=2, ensure_ascii=False))
+
+    if out_dir is not None:
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            print(f"[emit] cannot create --out-dir {out_dir}: {e}", file=sys.stderr)
+            return 2
+        for packet in packets:
+            target = out_dir / packet_filename(packet["qualified_id"])
+            try:
+                target.write_text(
+                    json.dumps(packet, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+                )
+            except OSError as e:
+                print(f"[emit] cannot write {target}: {e}", file=sys.stderr)
+                return 2
+            print(target.as_posix())
+    else:
+        print(json.dumps(packets, indent=2, ensure_ascii=False))
+
     if missing:
         print(
             f"[emit] unresolved task id(s): {', '.join(missing)} — "
@@ -426,6 +463,14 @@ def main() -> int:
         "(e.g. build-sandbox/TSK-004), each with a requirement_context slice from "
         "PRD — the worker packet builder. Never Read the TASKS file to slice a task.",
     )
+    ap.add_argument(
+        "--out-dir",
+        default=None,
+        metavar="DIR",
+        help="With --emit: write one packet file per id to DIR/<file>__TSK-NNN.json "
+        "and print only the paths, instead of printing the packet JSON. This is the "
+        "form the manager uses — the packet never enters its context.",
+    )
     args = ap.parse_args()
 
     scope = None if args.scope in (None, "all") else args.scope
@@ -437,7 +482,12 @@ def main() -> int:
         return 0
 
     if args.emit:
-        return emit_packets(g, Path(args.docs), args.emit)
+        out_dir = Path(args.out_dir) if args.out_dir else None
+        return emit_packets(g, Path(args.docs), args.emit, out_dir)
+
+    if args.out_dir:
+        print("[FAIL] --out-dir is only meaningful with --emit", file=sys.stderr)
+        return 2
 
     if args.overlap:
         return check_overlap(g, args.overlap)
@@ -445,7 +495,7 @@ def main() -> int:
     if g.errors:
         for e in g.errors:
             print(f"  [ERR] {e}")
-        print("[FAIL] graph errors — re-run: python sdlc/skills/task/validate_schema.py")
+        print('[FAIL] graph errors — re-run: python "${CLAUDE_SKILL_DIR}/../task/validate_schema.py"')
         return 1
 
     if scope and scope not in set(g.file_of.values()):

@@ -1,0 +1,39 @@
+{
+  "_comment": [
+    "Smoke fixture for breadcrumb resume. Stage it at",
+    ".claude/skills-state/sdlc-code/inflight/demo-api__TSK-003.json to simulate a",
+    "session killed mid-unit: the implementation file was written and passed the",
+    "static ring, the test file was written, the unit ring ran RED, and one heal",
+    "attempt had already moved the failure — then the window ended.",
+    "",
+    "Correct behaviour: Phase-1 reconcile finds this breadcrumb, re-verifies the",
+    "files against disk, and dispatches a RESUME brief that starts at heal",
+    "attempt 2 with the recorded attempt-1 diff in hand. It must NOT re-author",
+    "createItem, and it must NOT restart the heal ladder at attempt 1."
+  ],
+  "qualified_id": "demo-api/TSK-003",
+  "worker_started_at": "2026-07-07T11:12:00Z",
+  "phase": "heal_1",
+  "files_written": [
+    {
+      "path": "services/demo-api/src/controllers/items.ts",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "path": "services/demo-api/tests/items.create.test.ts",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ],
+  "ring": {
+    "static_exit": 0,
+    "unit_exit": 1
+  },
+  "failure_tail": "FAIL tests/items.create.test.ts\n  createItem > responds 201 with the created item id\n    expected 201, received 200\n    at tests/items.create.test.ts:14:20\n1 failed, 0 passed",
+  "heals": [
+    {
+      "attempt": 1,
+      "summary": "set the success status to 201 in createItem",
+      "moved_failure": true
+    }
+  ]
+}

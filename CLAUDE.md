@@ -21,7 +21,8 @@ project from a structured chain of artifacts. Skills are invoked as
 | `arch`       | `sdlc/skills/arch`  | `docs/PRD.yaml` + `docs/UX.yaml` (+ `UX__*`) + `docs/DATA-MODEL.yaml` (+ `docs/API.yaml` (+ `API__*`)) + interview                              | `docs/ARCH.yaml`, `docs/ARCH__<container>.yaml`      |
 | `test`       | `sdlc/skills/test`  | `docs/PRD.yaml` + `docs/DATA-MODEL.yaml` + `docs/ARCH.yaml` (+ `docs/ARCH__<container>.yaml` in container mode) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) + interview | `docs/TEST-STRATEGY.yaml` (system mode), `docs/TEST-STRATEGY__<container>.yaml` (container mode) |
 | `task`       | `sdlc/skills/task`  | **system:** `docs/ARCH.yaml` + `docs/TEST-STRATEGY.yaml` + interview; **container:** `docs/ARCH__<container>.yaml` + `docs/TEST-STRATEGY__<container>.yaml` (+ `docs/DATA-MODEL.yaml`) (+ `docs/API.yaml`) (+ `docs/UX.yaml`) (+ `docs/DESIGN.yaml` (+ `DESIGN__*`)) + interview; both read `docs/PRD.yaml` for FR/NFR id resolution. UX/API/DATA/DESIGN drive the surface/operation/entity/design coverage gates | `docs/TASKS.json` (system mode), `docs/TASKS__<container>.json` (container mode) |
-| `code`       | `sdlc/skills/code`  | `docs/TASKS.json` + `docs/TASKS__<container>.json` (must be `complete` + task-validator-green; v1.4 tasks are self-contained) + `docs/ARCH__<container>.yaml` (tech-stack slice; full contract fallback for pre-1.4 artifacts) (+ `docs/PRD.yaml` for the `requirement_context` FR/NFR lines joined into each worker packet by `topo_order.py --emit`) (+ `docs/TEST-STRATEGY__<container>.yaml` pre-1.3) (+ `docs/DATA-MODEL.yaml` entity slices pre-1.4) — **no interview** | generated source files at each task's `target_files`, `docs/CODE-MANIFEST.json`, execution ledger in `.claude/skills-state/sdlc-code.state.yaml` |
+| `code`       | `sdlc/skills/code`  | `docs/TASKS.json` + `docs/TASKS__<container>.json` (must be `complete` + task-validator-green; v1.4 tasks are self-contained) + `docs/ARCH__<container>.yaml` (tech-stack slice; full contract fallback for pre-1.4 artifacts) (+ `docs/PRD.yaml` for the `requirement_context` FR/NFR lines joined into each worker packet by `topo_order.py --emit`) (+ `docs/TEST-STRATEGY__<container>.yaml` pre-1.3) (+ `docs/DATA-MODEL.yaml` entity slices pre-1.4) — **no interview** | generated source files at each task's `target_files`, `docs/CODE-MANIFEST.json`, execution ledger in `.claude/skills-state/sdlc-code.state.yaml`, worker breadcrumbs in `.claude/skills-state/sdlc-code/inflight/`, `FND-NNN` entries appended to `.claude/skills-state/sdlc-findings.yaml` |
+| `repair`     | `sdlc/skills/repair`| open `FND-NNN` findings + a doctor sweep over every readable `docs/` artifact (+ `docs/INDEX.yaml` for the `--refs` blast radius) — **no fixed question inventory** | edits to whichever `docs/*` artifact actually holds the defect, resolutions in `.claude/skills-state/sdlc-findings.yaml` |
 | `deploy`     | `sdlc/skills/deploy` *(planned — not yet implemented)* | `docs/ARCH.yaml` + interview                                                | `docs/DEPLOY.yaml`                                   |
 
 **Downstream consumers of every output are AI agents, not humans.** Optimize artifacts for unambiguous machine consumption (typed enums, no prose blobs, explicit `null` for unanswered fields).
@@ -30,15 +31,28 @@ Inputs in round brackets `()` are optional to each skill and taken if present.
 `code` is an **execution skill**, not an interview skill — the Stage-14 half of
 the factory. It consumes the task graph and *writes the actual source files*
 each task's provenance pins (`target_files` / `target_symbol`). The session
-acts as a **manager** that dispatches waves of up to 3 parallel, non-interactive
-worker subagents; each worker executes one work unit (implementation task + its
-test task, test-first) with a test-and-heal loop (≤3 attempts; attempt 3
-escalates to a manager-dispatched fresh opus subagent). Waves only contain
-tasks with pairwise-disjoint `target_files` (path-aware: a directory entry
-contains every path beneath it, so a directory-pinned task runs solo); the
-manager is the sole ledger
-writer, and integration/container/system test rings run serialized between
-waves. Tasks are **self-contained** as of task-artifact v1.4: implementation
+acts as a **manager** that dispatches non-interactive worker subagents — one
+work unit each (implementation task + its test task, test-first) with a
+test-and-heal loop (≤3 attempts; attempt 3 escalates to a manager-dispatched
+fresh opus subagent). Dispatch is **serial by default**: under a per-window
+token cap, concurrency buys no throughput (the same units complete per window,
+the budget just burns faster) and only multiplies what an interruption loses, so
+`--parallel N` (N≤3, rolling refill rather than batched waves) is an opt-in for
+when the cap is not binding. Concurrent units must still have pairwise-disjoint
+`target_files`, checked against the whole in-flight set (path-aware: a directory
+entry contains every path beneath it, so a directory-pinned task runs solo). The
+manager is the sole ledger writer, and integration/container/system test rings
+run serialized after a drain. **Workers write breadcrumbs**
+(`.claude/skills-state/sdlc-code/inflight/`) after every phase, so an
+interrupted unit resumes at its last completed phase instead of being
+regenerated — the difference between ~5k and ~100k tokens per killed worker.
+Packets, the worker digest and tech-stack slices travel to workers as **file
+paths**, never pasted into briefs, because manager output tokens count against
+the same window budget. The run **checkpoints at every component boundary**
+(summary + `doctor.py --quick` + an adaptive gate that stops only on a closed
+set of attention triggers) as well as every container boundary, and every stop
+prints a **resume card** naming the exact command and stating that a fresh
+session — never `/resume` — is the cheap way back in. Tasks are **self-contained** as of task-artifact v1.4: implementation
 tasks embed their `interface_contract` (and `unit_kind` / `unit_summary`), test
 tasks their `test_spec`, and integration/migration/design/config tasks their
 `operation_contract` / `entity_slice` / `design_spec` / `config_keys` slices,
@@ -49,18 +63,44 @@ FR/NFR/WKF/ACR requirement statements (implementation `implements` and test
 into each worker packet by the `topo_order.py --emit` builder (pulled live from
 `docs/PRD.yaml` as one-line `requirement_context`, never embedded in the task
 graph nor read whole by a worker). Three forms: `/sdlc:code`
-(container-by-container through `build_order`, pausing at each container
-boundary with a continue/stop gate), `/sdlc:code <container>` (one subgraph,
-then stop), `/sdlc:code --next` (next incomplete unit in `build_order`). Its
+(container-by-container through `build_order`, checkpointing at each
+component and container boundary), `/sdlc:code <container>` (one subgraph,
+then stop), `/sdlc:code --next` (next incomplete unit in `build_order`); any
+form takes `--parallel N`. Its
 per-task execution ledger (`.claude/skills-state/sdlc-code.state.yaml`) makes
 every invocation resumable and idempotent; generated symbols carry greppable
 `sdlc-code: <cid>/TSK-NNN` markers; `docs/CODE-MANIFEST.json` is the
 machine-readable ledger (with per-file `verified` level) downstream
 verify/deploy stages consume. Like `setup`, it is exempt from the interview
-contract below (no themes, no questions file) — HITL is a plan-approval gate,
-container-boundary gates, conflict/failure gates, and a close report. It
+contract below (no themes, no questions file) — HITL is a plan-approval gate
+(which also sets the session budget and checkpoint policy), component and
+container checkpoint gates, conflict/failure gates, and a close report. It
 honours the downstream-rejection rule (refuses draft/invalid task graphs) and
-never edits `docs/*.yaml` or the TASKS files.
+never edits `docs/*.yaml` or the TASKS files — a spec defect it discovers
+becomes an `FND-NNN` finding for `repair`, never a patch (§13).
+
+`repair` is the pipeline's only **backward-walking** skill. Every other skill
+consumes upstream artifacts and produces one more; `repair` starts from a defect
+that surfaced late — almost always during `code`, which is where
+under-specification finally becomes visible — and localizes it to the *earliest*
+artifact whose content is actually wrong, fixes it there, then forward-propagates
+along the blast radius `docs_index.py --refs` computes. Two fix modes: **surgical**
+when only the content of existing items changes (edit the source, bump its
+version + changelog, re-slice every task embed copied from the changed symbol,
+walk the rest of the `--refs` set), and **re-invoke** when the *set* of downstream
+items changes — then it fixes the source and prints the exact downstream command
+sequence, because those stages are interviews the user owns and each already
+carries the §7 delta-review for exactly this. Three forms: `/sdlc:repair` (full
+flow), `/sdlc:repair --check` (read-only doctor sweep, edits nothing — the CI and
+pre-flight form), `/sdlc:repair FND-003 FND-005` (named findings only). Its
+`doctor.py` is shared: `--quick` (the cross-artifact linter alone) is what `code`
+runs at every component boundary. Like `setup` and `code` it is exempt from the
+interview contract — its questions are derived per finding, not from a fixed
+inventory — and it owns no `docs/` artifact, so it injects no CLAUDE.md pointer.
+Hard boundaries: it never writes source code, never runs another skill, never
+edits `code`'s ledger, and never deletes an artifact item implicitly. The handback
+needs no new mechanism: editing a task artifact changes its `task_fingerprint`,
+which `code` already classifies as `stale` and gates at its plan approval.
 
 `setup` is infrastructure, not an artifact producer. It runs once before `prd`
 and wires a **generated `docs/INDEX.yaml`** — a line-range location map over
@@ -130,6 +170,12 @@ allowed-tools: Read Write(CLAUDE.md) Write(docs/<OUTPUT>.yaml) Write(.claude/ski
 
 `allowed-tools` is **space-separated** (per Anthropic skill docs) or a YAML
 list. Never comma-separated.
+
+**Calling a sibling skill's script.** Use
+`python "${CLAUDE_SKILL_DIR}/../<skill>/<script>.py"`, never a repo-relative
+`sdlc/skills/<skill>/…` path: the latter exists only in this repo, not in a
+consumer project where the plugin is installed under `~/.claude/plugins/`. Own-skill
+scripts keep the plain `"${CLAUDE_SKILL_DIR}/<script>.py"` form.
 
 ### Skill directory layout
 
@@ -557,6 +603,42 @@ Cross-skill contract (test → task → code):
 
 Validator checks on the task side are warn-level and version-gated (§10).
 
+#### 13. Spec defects found downstream go to a findings queue, never a patch
+
+The stage that *discovers* a spec defect is almost never the stage that can fix
+it. Codegen is where under-specification finally becomes visible — a contract
+that doesn't determine behaviour, a test that contradicts the thing it tests, an
+acceptance nobody can satisfy — and a codegen agent left to itself will patch
+what it can reach: the task embed, or the generated code. Both re-diverge on the
+next regeneration while the real defect stays upstream, invisible.
+
+So the contract is **capture, don't fix**:
+
+- **`.claude/skills-state/sdlc-findings.yaml`** is a cross-skill queue with its
+  own `FND-NNN` family (writer-managed counter, reconciled to
+  `max(last_ids.FND, highest id present)` on append, per §2). Schema:
+  `sdlc/skills/repair/FINDINGS.schema.yaml`. It is a **documented exception** to
+  the `sdlc-<skill>.state.yaml` naming rule in "State file contract" — producer
+  and consumer are different skills, so the file belongs to neither.
+- **`code` appends, never resolves**, and never edits `docs/`. Its raising
+  conditions are a **closed set** (`code/references/execution-loop.md` →
+  "Raising a finding"): a contract-level `blocked` report, a failed escalation
+  whose diagnosis names an upstream contradiction, an unrealizable `test_spec`,
+  an underdetermined `interface_contract`, a bad path / unsatisfiable acceptance
+  / missing dependency edge, and a red doctor check. Nothing else — an ordinary
+  red test is a `failed` task, and a queue full of those is a queue nobody reads.
+- **`repair` localizes, fixes, and resolves.** A finding's `suspected_stage` is
+  the raiser's guess and explicitly **not** authoritative; localization walks
+  backwards to the earliest artifact whose content is actually wrong. Per §9 an
+  embed is never that artifact.
+- **The handback needs no new mechanism.** Editing a task artifact changes each
+  affected task's `task_fingerprint`, which `code` already classifies as `stale`
+  and gates at its plan approval.
+
+Any future skill that consumes artifacts and can discover an upstream defect
+should append to this queue rather than inventing its own reporting channel —
+and, like `code`, should never fix upstream itself.
+
 #### Implications for downstream skills
 
 Any new skill that consumes the PRD (directly or indirectly via UX,
@@ -816,6 +898,7 @@ repo by default.
 - `sdlc/skills/<skill>/` — per-skill folder (see "Skill directory layout" above).
 - `sdlc/skills/<skill>/_smoke/` — YAML fixtures for the validator (one valid + several intentionally-broken).
 - `sdlc/skills/<skill>/evals/` — eval prompts (`evals.json`), fixtures, and grader scripts.
+- `.claude/skills-state/sdlc-findings.yaml` — cross-skill `FND-NNN` queue (§13); produced at the CONSUMER project's root, not here.
 - `.claude/settings.json` — project Claude Code settings (permissions, MCP servers).
 - `pyproject.toml` / `uv.lock` — Python toolchain.
 - `sdlc-*-handoff-draft.md` (root) — scratch handoff drafts; not skill assets.

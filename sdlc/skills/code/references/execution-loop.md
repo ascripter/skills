@@ -1,8 +1,8 @@
-# Execution loop — scheduling, waves, rings, heal, escalation (sdlc-code)
+# Execution loop — scheduling, dispatch, rings, heal, escalation (sdlc-code)
 
 Read this on entering Phase 4. It defines the order tasks run in, the
-manager/worker wave protocol, the verification rings, the heal loop, and the
-opus escalation.
+manager/worker dispatch protocol, the verification rings, the heal loop, the
+opus escalation, and how a spec defect becomes a finding instead of a patch.
 
 ---
 
@@ -26,7 +26,7 @@ implementation task(s) it exercises, a test task becomes ready the moment its
 last implementation lands — so the emergent order is
 `impl → its tests → heal → next impl`, without any pairing table. The
 component-locality tie-break keeps one component's work contiguous, which is
-what makes the component ring boundary meaningful.
+what makes the component checkpoint meaningful.
 
 Never hand-compute the order. Run the tool; it also diffs against the ledger:
 
@@ -34,53 +34,151 @@ Never hand-compute the order. Run the tool; it also diffs against the ledger:
 python "${CLAUDE_SKILL_DIR}/topo_order.py" --scope all --state .claude/skills-state/sdlc-code.state.yaml
 ```
 
-## Waves & workers (the manager protocol)
+## Dispatch — serial default, rolling parallel opt-in
 
 The session is the **manager**; source files are written by **worker
-subagents** dispatched in parallel waves. The rules that make this safe:
+subagents**. Subagents are used at every concurrency level, including 1 —
+their purpose is **context isolation**, not speed. A worker's file reads, ring
+output and heal transcript stay in the worker; only its capped report comes
+back.
 
-- **Wave composition.** From the ready set, pick up to **3 work units** — a
-  work unit is one implementation task plus the test task(s) whose
-  `depends_on` reaches it (impl + its tests heal together, so they share a
-  worker). The units' combined `target_files` (+ test files) must be
-  **pairwise disjoint**, and overlap is **path-aware**: a directory entry
-  contains every path beneath it (`tests/` overlaps `tests/unit/test_x.py`).
-  `topo_order.py --overlap <qid> <qid> …` checks a candidate wave
-  mechanically (exit 0 disjoint / 1 overlapping). A candidate overlapping
-  another pending task's files waits or runs **solo** (scaffold tasks,
-  barrel/exports files, shared config); a task with a DIRECTORY-pinned
-  target — canonically the `test_infrastructure` task's `["tests/"]` —
-  always runs solo, or strictly serialized before its dependents, like
-  scaffold tasks. When in doubt, solo: correctness beats parallelism.
-- **The worker brief is the task packet.** Build the packet with
-  `python "${CLAUDE_SKILL_DIR}/topo_order.py" --emit <qualified-id> …` — never
-  by `Read`-ing the TASKS file (a shard can be hundreds of KB). It prints the
-  verbatim task JSON (v1.4 embeds included) joined with a `requirement_context`
-  slice (the task's FR/NFR/WKF/ACR ids — `implements`, `implements_workflows`,
-  and `test_spec.covers` — resolved to their PRD statements), so every worker's
-  requirement grounding, test tasks included, rides in the packet, not a
-  per-worker PRD read. Add the
-  container tech-stack slice, the **worker digest** from `emit-rules.md`
-  (one named block — packet consumption, path safety, per-kind rendering,
-  provenance; never cherry-pick individual rules out of it), the established
-  test command, and
-  the write boundary (its `target_files` + the test file, nothing else).
-  Workers are **non-interactive**: no AskUserQuestion, no ledger writes, no
-  reading other tasks' fresh output. A worker that hits a decision only the
-  user can make reports `blocked: <question>` instead of guessing.
-- **Worker verification**: static ring, then unit ring, heal **≤2 attempts**
-  inline, then stop and report: files written (+ sha256), ring outcomes,
-  heal count, failure output if red.
-- **Integration**: as each worker returns, the manager verifies the reported
-  hashes against disk, writes the ledger (manager is the **sole ledger
-  writer**), and refills the wave. Attempt 3 (opus) is always
-  manager-dispatched — see "The escalation brief".
-- **Serialization points**: component/container/system rings run in the
-  manager between waves (never inside workers — parallel suites collide on
-  ports/DBs/fixtures). A container boundary additionally carries the bare-run
-  continue/stop gate.
-- **Fallback**: no Agent tool → execute units inline one at a time with the
-  identical per-unit protocol; say so in the close report.
+### Why the default is one worker
+
+Under a per-window token cap, three workers complete the **same** number of
+units per window as one — they burn the budget three times faster and then wait
+for the reset. Concurrency does not buy throughput against that cap. What it
+does buy is a larger blast radius when the window ends mid-flight: every
+in-flight worker's un-integrated work is at risk. Breadcrumbs (below) shrink
+that loss from "regenerate the unit" to "re-run its ring", but one unit at risk
+still beats three.
+
+`--parallel N` (N ≤ 3) is therefore the **opt-in**, for when the cap is not the
+binding constraint: small graphs, API billing, or plain wall-clock pressure.
+
+### The serial loop (default)
+
+```
+pick ready unit → --emit --out-dir → dispatch worker → integrate
+   → ledger-write → delete breadcrumb → pick next
+```
+
+### The rolling loop (`--parallel N`)
+
+**Rolling, not batched.** Keep N units in flight; dispatch a replacement the
+moment one returns. Do NOT spawn a batch of N and wait for all N to finish —
+that idles workers on the tail of the slowest unit and lengthens the window
+during which an abort is expensive.
+
+- Dispatch workers with `run_in_background: true` and refill on each completion
+  notification: integrate → ledger-write → delete breadcrumb → dispatch the
+  next ready unit.
+- **The disjointness invariant widens.** It is no longer "the batch is pairwise
+  disjoint" but *"every newly dispatched unit's `target_files` are disjoint
+  from every unit currently in flight"*. Overlap is **path-aware**: a directory
+  entry contains every path beneath it (`tests/` overlaps
+  `tests/unit/test_x.py`). Check it mechanically over the in-flight set plus the
+  candidate — the tool takes any number of ids:
+
+  ```bash
+  python "${CLAUDE_SKILL_DIR}/topo_order.py" --overlap <in-flight qid>... <candidate qid>
+  ```
+
+  Exit 0 = disjoint, 1 = overlapping. A candidate that overlaps waits.
+- **Solo tasks**: a task touching shared files (scaffold, barrel/exports, a
+  config file another pending task also writes) or carrying a DIRECTORY-pinned
+  target — canonically `test_infrastructure`'s `["tests/"]` — drains the
+  in-flight set first and then runs alone. When in doubt, solo: correctness
+  beats parallelism.
+- **Drain points**: before any serialized ring, at every component and
+  container boundary, when the session budget is reached, and on any drain
+  trigger from `session-and-limits.md`. Draining means "stop dispatching, let
+  in-flight units finish" — never "kill in-flight units".
+
+### The worker brief
+
+The brief is made of **pointers, not pasted content**. Every byte the manager
+types into a brief is a manager *output* token, and output tokens count against
+the same window budget whose exhaustion ends the run. On a several-hundred-task
+graph, pasting the digest plus the packet into each brief is the single largest
+avoidable cost in the skill.
+
+Build the packet as a file first:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/topo_order.py" --emit <qualified-id> [...] --out-dir .claude/skills-state/sdlc-code/packets
+```
+
+It prints only the paths. Then the brief, in full:
+
+```
+Execute one sdlc-code work unit. Non-interactive: never ask the user anything.
+
+PACKET(S):        <path>                      ← Read these first. The packet is
+                                                 the whole task context: the
+                                                 verbatim task object (v1.4
+                                                 embeds) + requirement_context.
+WORKER DIGEST:    <abs path to references/emit-rules.md>
+                  Read the block from "## Worker digest" to
+                  "*End of worker digest.*" WHOLE. Never cherry-pick it.
+TECH STACK:       <path to .claude/skills-state/sdlc-code/stack/<cid>.md>
+TEST COMMAND:     <the recorded ring command, or "not yet established">
+WRITE BOUNDARY:   <target_files> + <test file>. Nothing else. Ever.
+BREADCRUMB:       .claude/skills-state/sdlc-code/inflight/<cid>__TSK-NNN.json
+                  Create it before your first write and update it after EVERY
+                  phase (schema in state-and-idempotency.md). It is the only
+                  thing that survives an aborted session.
+
+DO: emit per the digest's kind table → run the static ring → run the unit ring
+    → heal at most 2 attempts inline → STOP and report.
+DO NOT: write the ledger, ask questions, read other tasks' fresh output, or
+    touch a file outside the write boundary. If a decision needs the user,
+    report STATUS: blocked with the question.
+
+REPORT in exactly this format, nothing else: <the capped report block below>
+```
+
+If a needed fact is genuinely absent from the packet, the digest names the one
+sanctioned fallback (DATA-MODEL entity slices via `docs/INDEX.yaml`). Everything
+else is a `blocked` report, not a guess.
+
+### The capped worker report
+
+Workers answer in exactly this block. No prose outside the fields, no restating
+the task, no summarizing the code — hundreds of units of worker prose is how a
+manager's context dies mid-container.
+
+```
+UNIT: <qualified-id>
+FILES: <path> <sha256[:16]>          (one line per file)
+STATIC: exit <n>
+UNIT_RING: exit <n>
+HEALS: <n>
+STATUS: green | red | blocked
+NOTES: <at most 3 lines>
+FAILURE: <at most 20 lines, verbatim tail — only when red>
+BLOCKED_ON: <the one question — only when blocked>
+```
+
+`STATIC`/`UNIT_RING` carry the **captured numeric exit code**, never a
+pass/fail paraphrase (measurement rule below). A ring that could not be run at
+all reports `exit -` with the reason on a NOTES line.
+
+### Breadcrumbs — what makes an interrupted unit cheap
+
+The worker writes one small JSON file per unit and updates it after each phase.
+This does not violate the sole-ledger-writer rule: it is a separate namespace,
+written by the worker, read by the manager, and deleted by the manager the
+moment it ledgers the unit. Schema and the resume matrix:
+`state-and-idempotency.md`.
+
+Two worker-side rules make it pay off:
+
+- **Write the deliverable to disk as soon as you have it.** Never hold
+  generated code in context while reasoning about the next step. Code on disk
+  survives an abort; code in a context window does not.
+- **Update the breadcrumb after each phase** — one small Write, negligible cost,
+  and it is the difference between a resumed run re-running a ring (~5k tokens)
+  and re-authoring a deliverable that is already on disk (~100k).
 
 ## The verification rings
 
@@ -98,6 +196,11 @@ and blast radius differ.
 
 (The system ring is just the unit ring applied to system-level test tasks; it
 is listed for completeness, not as a separate mechanism.)
+
+The static and unit rings run **inside the worker**. The component, container
+and system rings run **in the manager, after a drain** — parallel suites collide
+on ports, DBs and fixtures, and even in serial mode the wider rings are the
+checkpoint the manager reports on.
 
 How to *run* tests: derive the command from the container's stack — the
 scaffold task's outputs/acceptance usually name it (`pnpm --filter X test`,
@@ -125,6 +228,60 @@ runs at its topo position; the component ring backstops the pairing. Rings
 never re-run green suites redundantly: component/container rings run once at
 their boundary, not after every member task.
 
+## The checkpoint ladder
+
+Three widening checkpoints: **unit** (ledger write, every unit) → **component**
+→ **container**. The component checkpoint is where a long run becomes
+reviewable: a container in a real corpus can hold hundreds of tasks across
+dozens of components, so a container-only seam means one review after everything
+is already built.
+
+At every component boundary: **drain** → component ring → component summary →
+doctor check → gate policy.
+
+Component summary — one compact block, no prose:
+
+```
+component 'prompt-registry' — 10 tasks (7 impl, 3 test) · ring exit 0
+heals 2 · escalations 0 · findings 0
+budget 23/next-component · session 2h11m · aicf-cli 312/414
+```
+
+Doctor check — cheap, catches drift a mid-run hand-edit or a repair pass
+introduced. Run **bare**, capture the numeric exit:
+
+```bash
+python "${CLAUDE_SKILL_DIR}/../repair/doctor.py" --quick --docs-dir docs
+```
+
+Gate policy `adaptive` (the default) stops and asks only when one of these
+**attention triggers** fires — a closed set:
+
+1. component ring exit ≠ 0;
+2. a task in the component is `failed`, or was escalated;
+3. a new `FND-NNN` was raised during the component;
+4. the session budget is reached;
+5. the doctor check exits ≠ 0;
+6. it is also a container boundary in the bare-run form.
+
+Otherwise: print the summary line and continue. When a trigger fires, gate with
+one AskUserQuestion: *continue / stop and run `/sdlc:repair` / stop here* — and
+print the resume card (`session-and-limits.md`) with the stop options.
+Policy `every component` always gates; `containers only` gates only at trigger 6.
+
+At every **container boundary** (bare-run form): the same, plus the
+continue/stop gate naming the next container.
+
+Two properties worth preserving when editing this logic:
+
+- The **doctor check is cheap on purpose** (`doctor.py --quick` is a thin
+  wrapper over `crosscheck_artifacts.py`). The full validator sweep belongs to
+  `/sdlc:repair --check`; running it at every component boundary would trade the
+  cost this design is trying to save.
+- The **triggers are a closed set**. Adding "interesting-looking" stop
+  conditions turns the adaptive policy back into `every component` and the user
+  stops reading the summaries.
+
 ## The heal loop
 
 On a red ring (attempts 1–2 run **inside the worker** for unit-ring failures,
@@ -136,7 +293,8 @@ manager-dispatched):
   (pre-1.3: the ARCH work_unit / deferred API schema) plus the task's
   `acceptance` are the truth. Fix the implementation when it violates the
   contract; fix the **test** only when the test contradicts the contract or
-  the embedded `test_spec`. Re-run the ring.
+  the embedded `test_spec`. Re-run the ring. Record the attempt in the
+  breadcrumb.
 - **Attempt 2 (inline, sonnet).** Same, with the previous diff in mind. If
   attempt 1's fix didn't move the failure at all, revert it first — don't
   stack speculative patches.
@@ -150,7 +308,8 @@ manager-dispatched):
   transitive dependents `blocked`, continue with independent tasks. Every
   `failed`/`blocked` item appears in the close report — this mirrors the
   demo's FR-084 "flag at the Stage-14 HITL gate" rather than halting the whole
-  factory for one stubborn unit.
+  factory for one stubborn unit. If the exhausted diagnosis names an upstream
+  contradiction, raise a finding (below) as well.
 
 Component/container/system rings use the same ladder; their heals may touch
 any file inside the ring's scope, but never outside it.
@@ -162,28 +321,28 @@ and the manifest's file entries (telemetry — mirrors the demo's
 ## The escalation brief (attempt 3)
 
 The subagent gets everything it needs and nothing else — it must not need to
-re-derive project context:
+re-derive project context. Like a worker brief, it points at files rather than
+pasting them wherever a file exists:
 
 ```
 You are healing one atomic codegen unit that failed its tests twice.
 
-TASK PACKET (from `topo_order.py --emit <qualified-id>`): <the task object,
-  qualified id included — carries the embedded interface_contract / test_spec
-  (v1.3) and the per-kind grounding slices (v1.4) — plus its requirement_context
-  (the task's FR/NFR/WKF/ACR ids, `test_spec.covers` included, resolved to
-  their PRD statements)>
-INTERFACE CONTRACT: <the task's interface_contract; pre-1.3: the ARCH
-  work_unit slice or the API operation schema the unit defers to>
-ACCEPTANCE: <the task's acceptance list>
-CURRENT FILES: <path + full content of target_files and the test file(s)>
-FAILURE OUTPUT: <the current failing run, verbatim>
-PRIOR ATTEMPTS: <diff + one-line outcome of attempts 1 and 2>
-TEST COMMAND: <the recorded ring command>
+TASK PACKET:      <path written by `topo_order.py --emit --out-dir`> — the task
+  object (embedded interface_contract / test_spec + the per-kind grounding
+  slices) plus its requirement_context (FR/NFR/WKF/ACR statements).
+INTERFACE CONTRACT: the packet's `interface_contract`; pre-1.3: the ARCH
+  work_unit slice or the API operation schema the unit defers to.
+ACCEPTANCE:       the packet's `acceptance` list.
+CURRENT FILES:    <paths of target_files and the test file(s)> — read them.
+BREADCRUMB:       <path> — carries the prior attempts' diffs and outcomes.
+FAILURE OUTPUT:   <the current failing run, verbatim>
+TEST COMMAND:     <the recorded ring command>
 
 Fix the implementation (or the test, only if it contradicts the contract).
 Run the test command. Iterate until green or you are confident the failure is
-not fixable at this scope — then say exactly why. Report: what you changed,
-final test output.
+not fixable at this scope — then say exactly why, naming the upstream artifact
+and symbol you believe is wrong.
+Report: what you changed, final test output.
 ```
 
 Run it with `run_in_background: false` — the loop needs the verdict before
@@ -193,6 +352,46 @@ changed. If the Agent tool is unavailable, run attempt 3 inline instead —
 but first re-read the contract slices from disk and explicitly re-derive the
 diagnosis from scratch (reset-assumptions protocol), and note the degradation
 in the close report.
+
+## Raising a finding
+
+Codegen is where spec defects finally become visible: a contract that doesn't
+determine behaviour, a test that contradicts the thing it tests, a path that
+cannot exist. **This skill never fixes them** — it never edits `docs/`. It
+records them so `/sdlc:repair` can localize the defect to its source stage and
+fix it there.
+
+Append an `FND-NNN` entry to `.claude/skills-state/sdlc-findings.yaml` (schema:
+`../../repair/FINDINGS.schema.yaml`) when — and only when — one of these fires:
+
+1. a worker reports `STATUS: blocked` with a question about the **contract**
+   (not about the environment or the toolchain);
+2. attempt-3 escalation fails **and** its diagnosis names an upstream
+   contradiction;
+3. a `test_spec` cannot be realized as written because it contradicts the
+   `interface_contract` it exercises (`edge-cases.md`);
+4. an `interface_contract` genuinely underdetermines the behaviour the task's
+   `description`/`acceptance` demands;
+5. `target_files` contains an absolute path or `..`, or the task's `acceptance`
+   is not satisfiable as written, or a dependency edge is missing (the ring
+   fails because a prerequisite symbol was never scheduled);
+6. the component-boundary doctor check exits non-zero.
+
+Nothing else. This list is closed on purpose: a findings queue that fills with
+every ordinary red test is a queue nobody reads. A failing unit is a `failed`
+task; a failing *specification* is a finding.
+
+Each entry carries the evidence that made it visible — the failing assertion,
+the contract excerpt, the captured exit code — and a `suspected_stage` /
+`suspected_source` guess. **The guess is not authoritative**: localization is
+`/sdlc:repair`'s job, and it will often land a stage earlier than the one that
+looked wrong from here. Counter-signal to respect: the artifact that *looks*
+wrong from inside codegen is usually a task embed, and per CLAUDE.md §9 an
+embed is never the source — the upstream it was copied from is.
+
+Reconcile the `FND` counter the way every sdlc skill reconciles an id counter:
+on append, take `max(last_ids.FND on disk, highest FND-NNN present)` and
+increment from there.
 
 ## Failure containment
 

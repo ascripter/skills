@@ -1,11 +1,11 @@
 {
   "skill_name": "code",
-  "notes": "Fixtures: point the eval project's docs/ at a copy of ../_smoke/demo-docs (a complete, task-validator-green graph: 1 system + 1 container file, 2 work_units, 2 unit TSTs, 1 e2e TST). demo-state.yaml stages the resume/idempotency case.",
+  "notes": "Fixtures: point the eval project's docs/ at a copy of ../_smoke/demo-docs (a complete, task-validator-green graph: 1 system + 1 container file, 2 work_units, 2 unit TSTs, 1 e2e TST). demo-state.yaml stages the resume/idempotency case. demo-inflight/ stages the breadcrumb-resume case — copy its files to .claude/skills-state/sdlc-code/inflight/.",
   "evals": [
     {
       "id": 1,
       "prompt": "/sdlc:code demo-api",
-      "expected_output": "Plan-approval gate quoting topo_order.py output (6 container tasks pending, test-first order: scaffold, migration, createItem, its TST-001 tests, listItems, its TST-002 tests). After approval: files created at the exact target_files paths (services/demo-api/...), every generated symbol carrying an 'sdlc-code: demo-api/TSK-NNN' marker, ledger entries written after every task, docs/CODE-MANIFEST.json emitted and validator-green. Cross-file dep on TASKS/TSK-001 surfaced up front with the execute-blocking-tasks-first option.",
+      "expected_output": "Plan-approval gate quoting topo_order.py output (6 container tasks pending, test-first order: scaffold, migration, createItem, its TST-001 tests, listItems, its TST-002 tests), stating dispatch mode 'serial', and asking for a session budget (default: next component) and checkpoint policy (default: adaptive). After approval: files created at the exact target_files paths (services/demo-api/...), every generated symbol carrying an 'sdlc-code: demo-api/TSK-NNN' marker, ledger entries written after every unit, docs/CODE-MANIFEST.json emitted and validator-green. Cross-file dep on TASKS/TSK-001 surfaced up front with the execute-blocking-tasks-first option. A resume card is printed at the end.",
       "files": ["_smoke/demo-docs"]
     },
     {
@@ -18,6 +18,30 @@
       "id": 3,
       "prompt": "/sdlc:code --next",
       "expected_output": "Fresh project (no ledger): resolves to the system head unit (TASKS/TSK-001 repo scaffold), confirms the target with one question before executing anything, executes only that unit, then reports that --next would continue with container demo-api.",
+      "files": ["_smoke/demo-docs"]
+    },
+    {
+      "id": 4,
+      "prompt": "/sdlc:code demo-api",
+      "expected_output": "Dispatch economy: the worker packet is built with `topo_order.py --emit ... --out-dir .claude/skills-state/sdlc-code/packets` and packet FILES appear there — the packet JSON is never pasted into the worker brief and never dumped into the manager's own output. The brief REFERENCES the emit-rules.md worker digest by absolute path rather than quoting it, references a tech-stack slice under .claude/skills-state/sdlc-code/stack/demo-api.md, names the breadcrumb path, and quotes the capped report format (UNIT/FILES/STATIC/UNIT_RING/HEALS/STATUS). Exactly one worker is in flight at a time (no --parallel given). Ring exit codes recorded in the ledger are captured numbers, not pass/fail prose.",
+      "files": ["_smoke/demo-docs"]
+    },
+    {
+      "id": 5,
+      "prompt": "/sdlc:code demo-api",
+      "expected_output": "With _smoke/demo-inflight/demo-api__TSK-003.json staged at .claude/skills-state/sdlc-code/inflight/: Phase-1 reconcile reports demo-api/TSK-003 as an interrupted unit recovered from its breadcrumb (phase heal_1), the plan gate offers resume-at-phase (default) / regenerate from scratch, and on resume the dispatched brief starts at heal attempt 2 carrying the recorded attempt-1 diff. createItem is NOT re-authored from scratch and the heal ladder does NOT restart at attempt 1. The breadcrumb is deleted when the unit is ledgered.",
+      "files": ["_smoke/demo-docs", "_smoke/demo-inflight"]
+    },
+    {
+      "id": 6,
+      "prompt": "/sdlc:code demo-api",
+      "expected_output": "Component checkpoint: when the last task with component_ref 'items-controller' completes, the run drains, runs the component ring, prints the compact component summary (tasks, ring exit code, heals, escalations, findings, budget, elapsed, absolute progress), and runs `doctor.py --quick`. With everything green and no findings, it does NOT stop — it logs one line and continues (adaptive policy). It stops only on an attention trigger; the default next_component budget being reached is one such trigger and produces a resume card naming `/sdlc:code demo-api` in a NEW session.",
+      "files": ["_smoke/demo-docs"]
+    },
+    {
+      "id": 7,
+      "prompt": "/sdlc:code demo-api",
+      "expected_output": "Spec defect during codegen: with ARCH__demo-api.yaml hand-edited so createItem's work_unit no longer determines its return shape, the run does NOT patch the task embed and does NOT invent behaviour. It appends an FND-NNN entry to .claude/skills-state/sdlc-findings.yaml (kind contract_underdetermined, evidence carrying the captured exit code and the contract excerpt, suspected_stage arch), marks the task failed after the heal ladder, and surfaces the finding at the component gate with a 'stop and run /sdlc:repair' option. docs/ is never edited.",
       "files": ["_smoke/demo-docs"]
     }
   ]

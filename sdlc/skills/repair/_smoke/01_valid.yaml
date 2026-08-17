@@ -1,0 +1,73 @@
+# Valid findings queue: one open (raised by codegen), one resolved (fixed at
+# the source stage, which is NOT the stage the raiser suspected), one duplicate.
+findings_file_version: "1"
+last_updated: "2026-08-17T09:12:00Z"
+
+last_ids:
+  FND: 3
+
+findings:
+  - fnd_id: FND-001
+    raised_by: sdlc-code
+    raised_at: "2026-08-17T08:31:00Z"
+    detected_by: heal-escalation
+    surfaced_at:
+      qualified_task: demo-api/TSK-004
+      file: docs/ARCH__demo-api.yaml
+      symbol: items-controller/createItem
+    kind: contract_underdetermined
+    summary: "createItem's interface_contract declares no output shape, but acceptance requires returning the created item's id."
+    evidence:
+      - "exit 1: TST-001 red after 3 attempts"
+      - "interface_contract.output: null"
+      - "acceptance: 'responds 201 with the created item id'"
+    suspected_stage: arch
+    suspected_source: docs/ARCH__demo-api.yaml
+    status: open
+    resolution: null
+
+  - fnd_id: FND-002
+    raised_by: sdlc-code
+    raised_at: "2026-08-17T08:44:00Z"
+    detected_by: unit-ring
+    surfaced_at:
+      qualified_task: demo-api/TSK-006
+      symbol: TST-002
+    kind: test_contradicts_contract
+    summary: "TST-002 asserts listItems paginates, but the operation contract exposes no page parameter."
+    evidence:
+      - "exit 1: assert 'next_page' in body"
+      - "operation_contract.parameters: [limit]"
+    # The raiser guessed `test`; localization found the real gap one stage
+    # earlier, in the API operation the test was written against.
+    suspected_stage: test
+    suspected_source: docs/TEST-STRATEGY__demo-api.yaml
+    status: resolved
+    resolution:
+      by: sdlc-repair
+      at: "2026-08-17T09:10:00Z"
+      located_stage: api
+      mode: surgical
+      artifacts_touched:
+        - docs/API__items.yaml
+        - docs/TEST-STRATEGY__demo-api.yaml
+        - docs/TASKS__demo-api.json
+      downstream_rerun: []
+      stale_tasks:
+        - demo-api/TSK-006
+      summary: "Added the page parameter to listItems and re-sliced the embed into TSK-006."
+
+  - fnd_id: FND-003
+    raised_by: sdlc-repair
+    raised_at: "2026-08-17T09:11:00Z"
+    detected_by: crosscheck_artifacts
+    surfaced_at:
+      file: docs/TEST-STRATEGY__demo-api.yaml
+    kind: crosscheck_broken_ref
+    summary: "Same pagination gap, re-detected by the doctor sweep after the run."
+    evidence:
+      - "exit 1: X1 TEST -> ARCH targets_work_unit unresolved"
+    suspected_stage: test
+    status: duplicate
+    duplicate_of: FND-002
+    resolution: null

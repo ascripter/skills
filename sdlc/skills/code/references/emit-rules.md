@@ -29,10 +29,51 @@ paths and note the rung in the ledger entry (`path_source`):
 
 ## Worker digest
 
-Everything from here to *End of worker digest* is included **verbatim in
-every worker brief** (and in the attempt-3 escalation brief) — it is the
-complete rule set a worker needs to turn its packet into files. The manager
-never excerpts individual rules out of it.
+Everything from here to *End of worker digest* is the complete rule set a
+worker needs to turn its packet into files.
+
+**The worker READS this block; the manager never pastes it.** The brief names
+this file's absolute path and the worker opens it — pasting ~180 lines into
+every brief would cost the manager the same text in *output* tokens once per
+unit, which on a several-hundred-task graph is the single largest avoidable
+expense in the skill (`execution-loop.md` → "The worker brief").
+
+Read the block **whole**. It is a rule set, not a menu: the path-safety rules
+and the merge rules only work together, and a worker that skims to the kind
+table will write outside its boundary sooner or later. The same applies to the
+attempt-3 escalation brief.
+
+### Your two obligations to the manager
+
+Beyond writing the deliverable, a worker owes the manager exactly two things.
+Both exist because the manager must survive an interruption and hundreds of
+units without drowning.
+
+**1. Keep your breadcrumb current.** The brief names a path under
+`.claude/skills-state/sdlc-code/inflight/`. Create it before your first write
+and update it after every phase — `packet_read`, `impl_written`, `static_green`,
+`test_written`, `unit_ring_run`, `heal_1`, `heal_2`, `reported` — recording the
+files written (with sha256), the captured ring exit codes, and one line per heal
+attempt (what you changed, whether it moved the failure). Schema:
+`state-and-idempotency.md`.
+
+It is a few hundred bytes and one Write per phase. It is also the only thing
+that survives if the session is killed: with it, a later run re-runs your ring;
+without it, a later run re-authors everything you already wrote.
+
+Corollary, and the reason the breadcrumb works at all: **write the deliverable
+to disk as soon as you have it.** Never hold generated code in context while
+reasoning about the next step. Code on disk survives; code in a context window
+does not.
+
+**2. Answer in the capped report format.** The exact block is in the brief (and
+in `execution-loop.md`). Fill the fields and stop — no preamble, no restating
+the task, no summarizing the code you just wrote, no explaining your reasoning.
+`STATIC:` and `UNIT_RING:` carry the **captured numeric exit code**, never a
+paraphrase: a ring you describe as "passing" without its exit code is how a
+false-green reaches the ledger. When you are blocked, report
+`STATUS: blocked` with one question in `BLOCKED_ON:` — never guess, and never
+ask the user directly.
 
 ### Packet consumption — requirements and entities
 
@@ -150,7 +191,8 @@ v1.3), never from imagination:
   description; provenance via file headers, not symbol markers. Every
   `kind: test` task depends on it, so it lands before the container's first
   test ring — and its directory pin means it runs **solo**, never inside a
-  parallel wave (see the path-aware overlap rule in `execution-loop.md`).
+  parallel dispatch under `--parallel` (see the path-aware overlap rule in
+  `execution-loop.md`).
 - **`integration`** — the wiring the edge describes: register routes into the
   app, bind DI, or build the consumer-side client against the provider's
   contract — method/path/schemas from the task's embedded `operation_contract`

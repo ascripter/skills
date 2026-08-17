@@ -1,0 +1,36 @@
+# INTENTIONALLY BROKEN — id-integrity failures the validator must catch:
+#   * FND-002 appears twice
+#   * FND-009 exceeds last_ids.FND (the counter fell behind — the exact
+#     condition under which two skills reissue the same id)
+findings_file_version: "1"
+
+last_ids:
+  FND: 2
+
+findings:
+  - fnd_id: FND-002
+    raised_by: sdlc-code
+    raised_at: "2026-08-17T08:32:00Z"
+    kind: missing_entity
+    summary: "The repository writes a Session row with no DATA-MODEL entity behind it."
+    evidence: ["touches_entities: []"]
+    status: open
+    resolution: null
+
+  - fnd_id: FND-002
+    raised_by: sdlc-code
+    raised_at: "2026-08-17T08:33:00Z"
+    kind: missing_entity
+    summary: "Duplicate id."
+    evidence: ["same defect, second entry"]
+    status: open
+    resolution: null
+
+  - fnd_id: FND-009
+    raised_by: sdlc-repair
+    raised_at: "2026-08-17T08:34:00Z"
+    kind: validator_error
+    summary: "arch/validate_schema exit 1."
+    evidence: ["exit 1: FR-001 unresolved"]
+    status: open
+    resolution: null

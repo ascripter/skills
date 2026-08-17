@@ -1,0 +1,17 @@
+# INTENTIONALLY BROKEN - a malformed FND id. Pydantic rejects this at field
+# level, before the cross-checks run, so it lives in its own fixture: with it
+# present in 02_bad_ids the duplicate/counter checks would never be reached.
+findings_file_version: "1"
+
+last_ids:
+  FND: 1
+
+findings:
+  - fnd_id: FND-1
+    raised_by: sdlc-code
+    raised_at: "2026-08-17T08:31:00Z"
+    kind: wrong_path
+    summary: "target_files contains an absolute path."
+    evidence: ["target_files[0]: /etc/app/config.yaml"]
+    status: open
+    resolution: null
